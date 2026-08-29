@@ -1,0 +1,29 @@
+{
+  "$schema": "Somnium Engine QMS trace matrix — requirement → spec → task → test → verification",
+  "repo": "Somnium Engine (PoC)",
+  "date": "2026-08-30",
+  "entries": [
+    {
+      "requirement_id": "req-001",
+      "requirement_title": "Deterministic counterfactual narrative engine (architecture spec)",
+      "requirement_source": "qms/records/requirements/2026-08-30T03-46-07-req-001-architecture-somnium.json",
+      "spec": [
+        "docs/ARCHITECTURE-RECONNAISSANCE.md"
+      ],
+      "tasks": [
+        "canon model (types, hash, Verrin seed library)",
+        "derive core (status lattice + monotone fixpoint + memoized derive())",
+        "timeline (rewind points, universe/genealogy)",
+        "diff (typed WorldDiff + projections)",
+        "acceptance suite (all 10 PoC capabilities)"
+      ],
+      "tests": [
+        "tests/acceptance/poc-acceptance.test.ts"
+      ],
+      "verification": [
+        "verify-facts (scripts/verify-facts.ts)"
+      ],
+      "status": "in-progress"
+    }
+  ]
+}
