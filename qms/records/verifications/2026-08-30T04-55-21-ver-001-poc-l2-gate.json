@@ -1,0 +1,22 @@
+{
+  "verification_id": "ver-001",
+  "title": "Somnium Engine PoC — L2 verifier gate (acceptance suite + determinism audit)",
+  "category": "records/verifications",
+  "trace_id": "somnium-verifier-gate",
+  "date": "2026-08-30T04-55-21Z",
+  "result": "APPROVE",
+  "description": "Independent L2 verifier review of the Somnium PoC (branch poc, commit 737d668, baseline 6dae363) per AGENTS.md L2+ gate.",
+  "checks": [
+    { "id": 1, "name": "Change scoping", "result": "PASS", "evidence": "37 files, all SE-scoped; zero Kronos Engine paths touched" },
+    { "id": 2, "name": "Type check", "result": "PASS", "evidence": "tsc --noEmit exit 0" },
+    { "id": 3, "name": "Test suite", "result": "PASS", "evidence": "94/94 tests, 9 files, incl. acceptance 14/14" },
+    { "id": 4, "name": "Acceptance asserts 10 capabilities", "result": "PASS", "evidence": "no skips; capabilities 1-10 mapped to t1-t14 with concrete assertions; derive() real pipeline (world-state.ts:181), fixpoint over sorted ids (propagation.ts:103,285), REQUIRES from=prerequisite/to=dependent (propagation.ts:134)" },
+    { "id": 5, "name": "Determinism", "result": "PASS", "evidence": "no Math.random/Date.now/performance.now in src; created metadata never hashed (hash.ts:64-71, world-state.ts:205-214)" },
+    { "id": 6, "name": "No silent contradiction repair", "result": "PASS", "evidence": "contradictions.ts returns records; WorldState surfaces them and hashes them; t12 asserts CONTRADICTORY + records" },
+    { "id": 7, "name": "No LLM/network in core", "result": "PASS", "evidence": "no fetch/axios/openai/llm imports in src" }
+  ],
+  "linked_tasks": [
+    "P-001 PoC build (4 lanes: scaffold, canon+Verrin, derive core, timeline/diff/query/cli)"
+  ],
+  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium-poc\\tests\\acceptance\\poc-acceptance.test.ts"
+}
