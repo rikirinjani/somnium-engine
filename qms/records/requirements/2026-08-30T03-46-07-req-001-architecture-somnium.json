@@ -1,0 +1,33 @@
+{
+  "requirement_id": "req-001",
+  "title": "Somnium Engine — deterministic counterfactual narrative engine (architecture spec)",
+  "category": "requirements/architecture",
+  "source": "docs/ARCHITECTURE-RECONNAISSANCE.md (2026-08-30, DRAFT v0.1)",
+  "trace_id": "somnium-arch-recon",
+  "date": "2026-08-30T03-46-07Z",
+  "status": "draft",
+  "description": "Somnium Engine (SE) is a sibling project of Kronos Engine (KE) that models fictional canons as structured worlds (entities, facts, causal edges, constraints) and derives the consequences of canon interventions deterministically. Core question: what happens to a fictional world when something in its canon changes? KE is an architectural ancestor only; no code is shared; KE is not modified.",
+  "key_decisions": [
+    "World state is derived, not stored: Branch stores canonId + ordered Intervention[]; derive(canon, interventions) is a pure memoized function.",
+    "Narrative time is a partial order over events via PRECEDES edges; no tick loop, no wall clock.",
+    "Causal edges are typed (REQUIRES, ENABLES, MOTIVATES, PRECEDES, EXCLUDES, INVARIANT) evaluated by a monotone fixpoint over a status lattice.",
+    "Status lattice: UNKNOWN < UNSUPPORTED < CONTINGENT < ESTABLISHED; EXCLUDED incomparable; CONTRADICTORY at top. ALTERED is NOT a status; alteredness lives in the diff.",
+    "Rewind Points are canonical cuts (downward-closed event sets) anchored to a canon event, with derived-hash tamper detection.",
+    "Counterfactual depth = genealogical depth (parent chain) + divergence score (structural change); inheritance of depth-N state is structural via derive().",
+    "Interventions are a closed typed vocabulary (negateEvent, forceEvent, setFact, retractFact, severEdge, addEdge, relocate) to enable future minimum-intervention search.",
+    "Zero stochasticity in v1 core: no RNG, no Monte Carlo statistics, no LLM. LLM allowed only at canon ingestion boundary and optional narration of computed diffs.",
+    "Contradictions are first-class ContradictionRecords with provenance; never auto-repaired.",
+    "One generic typed WorldDiff with typed projections (CharacterDiff, EventDiff, RelationshipDiff, LocationDiff, FactionDiff, WorkDiff, CanonDiff)."
+  ],
+  "acceptance_criteria": [
+    "derive(canon, interventions) is deterministic: same canon + same interventions => identical WorldState (replay test).",
+    "Depth-N world inherits complete state of depth-N-1 except explicit intervention overrides.",
+    "Contradiction fixtures yield CONTRADICTORY status + ContradictionRecord; engine never silently repairs.",
+    "Core package has zero LLM/network imports (CI-enforced).",
+    "Verrin seed-library PoC demonstrates all 10 capabilities: baseline canon, one Rewind Point, one intervention, causal propagation, changed character state, changed event reachability, branch genealogy, world diff, multi-depth intervention, deterministic replay."
+  ],
+  "references": [
+    "C:\\Users\\think\\Project_v2\\Kronos Engine\\ (ancestor, read-only; not modified)",
+    "C:\\Users\\think\\Project_v2\\Somnium Engine\\docs\\ARCHITECTURE-RECONNAISSANCE.md"
+  ]
+}
