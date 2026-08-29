@@ -29,6 +29,18 @@ distributed via git.
 
 ### Completed
 
+- **2026-08-30** — **P-001 PoC build — COMPLETED + VERIFIED.** All four lanes
+  delivered: scaffold (README/HANDOFF/qms/self-harness/verify-facts/CI), canon
+  (loader/validator + Verrin seed), derive core (deterministic fixpoint,
+  contradictions), timeline/diff/query/cli. Integrated: **94/94 tests pass**
+  incl. 14 acceptance tests covering all 10 PoC capabilities; `tsc --noEmit`
+  clean; `verify-facts` gate 3/3 PASS; CLI baseline/intervene/chain works.
+  L2 verifier **APPROVED** (7/7 checks). Known integration fix during
+  reconciliation: REQUIRES edge direction corrected in Verrin seed to match the
+  documented convention (from=prerequisite, to=dependent). Verrin demonstrates
+  do(blight never happens) => exodus UNSUPPORTED, Vara stays in Valdar,
+  work/verrin-ashfall IMPOSSIBLE, genealogy U-BASELINE→U-001→U-002,
+  deterministic replay, and forceEvent+negate => CONTRADICTORY surfaced.
 - **2026-08-30** — **P-001 PoC build (4 lanes: scaffold, canon+Verrin,
   derive core, timeline/diff/query/cli) — ACTIVE.** Scaffold lane delivered:
   README.md, HANDOFF.md, `qms/trace-matrix.json`,
