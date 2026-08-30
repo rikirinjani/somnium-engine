@@ -1,0 +1,35 @@
+{
+  "ncr_id": "ncr-002",
+  "title": "Refuted claim survived in code documentation across three remediation attempts",
+  "category": "records/nonconformities",
+  "trigger": "L2 verifier gate on P-003 returned REJECT twice on the same defect class",
+  "severity": "major",
+  "trace_ids": [
+    "somnium-verifier-p003",
+    "somnium-verifier-p003-recheck",
+    "somnium-verifier-p003-recheck2"
+  ],
+  "agent": "orchestrator (scoping) + fixer (implementation)",
+  "role": "P-003 causal semantics adversarial pass",
+  "date": "2026-08-31T02-46-51Z",
+  "status": "closed",
+  "recurrence_of": "ncr-001",
+  "description": "P-003 established that intervention commutativity is not uniform. The change shipped claiming severEdge + addEdge commute, backed by a passing test, and hashed them as a commutative set via GRAPH_KINDS. Both the claim and the hash treatment were wrong: severEdge/addEdge are sequential edge-set writes (resolveEdges applies them in order), so on a canon where the edge is load-bearing the orders diverge outright — with ev/q REQUIRES ev/p and p negated, [sever, add] yields ev/q UNSUPPORTED while [add, sever] yields ESTABLISHED. Because the hash folded both into a sorted set, those two genuinely different worlds shared one hash while carrying different `interventions` arrays: a hash-keyed memo could return a state whose intervention provenance is false. This is the exact unsoundness section 17.7 claimed to have fixed, reintroduced one table row lower.",
+  "why_the_test_passed": "The commutativity test targeted edge/adv-exodus-requires-blight, whose removal is invisible: ev/adv-exodus is a declared root either way, so two different edge sets derived the same world and the assertion held for the wrong reason. A green assertion over a degenerate fixture is not evidence.",
+  "root_cause": "Two distinct causes, both mine as orchestrator. (1) SUBSTANTIVE: I wrote the commutation table into the fixer's brief as established fact after probing only the adversarial canon, where the sever/add edge happens not to be load-bearing. I supplied a measured-looking table that was an artifact of one fixture and the lane implemented it faithfully. Handing a specialist an unverified table as ground truth is worse than asking it to measure, because it converts my sampling error into their specification. (2) PROCESS: ncr-001's preventive action required that remediation of a refuted-premise defect be scoped as a repo-wide claim search rather than a file list. I scoped the first remediation as a file list again, so gate 2 found a surviving hit (world-state.ts:312-313) inside a file the remediation had already edited — the refuted claim sat twelve lines from the constant contradicting it.",
+  "corrective_action": [
+    "fa572f7: SET_LIKE_KINDS reduced to {negateEvent, forceEvent}; canonicalInterventions returns {setLike sorted set, ordered actual-order}; ordering.test.ts rebuilt around a load-bearing fixture plus a provenance-distinctness test for the case where derived content coincides; report 17.7 rewritten as a three-class split disclosing the correction rather than quietly editing the table.",
+    "5bd65a9: removed the surviving two-class claim at world-state.ts:312-313; reconciled propagation.ts's defect count with the report (six total, four in that module).",
+    "Third gate confirmed by independent execution: load-bearing orders diverge with different hashes; non-load-bearing orders keep distinct hashes despite identical content; set-like marks still share one identity; no-op chain still distinct from baseline."
+  ],
+  "preventive_action": [
+    "Never hand a specialist a measured table as specification unless the measurement covered the case that would falsify it. For commutativity specifically, the falsifying case is a fixture where the mutated element is load-bearing — a degenerate fixture cannot distinguish commuting from non-commuting.",
+    "Escalate ncr-001's preventive action: a refuted-premise remediation must run the claim search as a grep over the WHOLE repo including the files being edited, and the verifier brief must require the search be reproduced independently with a per-hit judgement of accurate / historical / surviving. Gates 2 and 3 both used that form and gate 3 caught what gate 2's narrower reading missed.",
+    "When a test asserts an invariance (X and Y commute, A equals B), check whether the fixture could distinguish the two sides at all before treating the pass as evidence."
+  ],
+  "linked_records": [
+    "qms/records/nonconformities/2026-08-30T13-40-00-ncr-001-doc-contradicts-change.json",
+    "qms/records/verifications/2026-08-31T02-46-51-ver-003-p003-l2-gate.json"
+  ],
+  "notes": "No functional regression at any point: 223 then 225 tests green, tsc clean, verify-facts 3/3 throughout. The defect was a false claim plus a hash-identity unsoundness, not a broken behaviour — which is precisely why only an adversarial gate caught it. Cited in code at src/derive/world-state.ts (SET_LIKE_KINDS docstring) and in docs/ARCHITECTURE-RECONNAISSANCE.md section 17.7."
+}

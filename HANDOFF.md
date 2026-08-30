@@ -29,6 +29,35 @@ distributed via git.
 
 ### Completed
 
+- **2026-08-31** — **P-003 causal semantics adversarial pass — COMPLETED +
+  VERIFIED.** Attacked the causal model rather than extending it. Six defects
+  confirmed by construction (report §17.1): conjunction-only support; the status
+  "lattice" was not a lattice and conflated four axes; the "monotone fixpoint"
+  was not monotone and had a silent pass cap; ENABLES behaved as necessity;
+  bootstrap cycles reported as UNKNOWN; `causalReach` misnamed.
+  Rebuilt on Belnap FOUR + Kleene connectives + well-founded semantics:
+  `src/derive/judgment.ts` (truth × support × forced × negated, `EventStatus`
+  demoted to a lossy projection), staged propagation with an asserted
+  monotonicity `throw` and a throwing pass cap, disjunctive support via
+  `CausalEdge.group`, `temporalViolations` for PRECEDES cycles, adversarial
+  annex canon + cases A–K.
+  **225/225 tests** (was 138), `tsc --noEmit` clean, `verify-facts` 3/3.
+  L2 gate: **REJECT** (`834c1ff`), **REJECT** (`fa572f7`), **APPROVE**
+  (`5bd65a9`, ver-003) — both rejections on the ncr-001 defect class.
+  Findings worth carrying forward:
+  (a) **A green test can be evidence about the fixture, not the code.** The
+  claim that `severEdge`+`addEdge` commute passed only because the test targeted
+  an edge whose removal was invisible. On a load-bearing edge the orders diverge
+  (`ev/q` UNSUPPORTED vs ESTABLISHED), and the commutative hash collided two
+  different worlds carrying different provenance — ncr-002.
+  (b) **Do not hand a specialist a measured table as specification** unless the
+  measurement covered the case that would falsify it. I probed commutativity on
+  one canon and shipped my sampling error into a lane's brief.
+  (c) Absence of knowledge must never become falsehood: an undeclared
+  prerequisite keeps its dependents UNKNOWN, while a bootstrap cycle is
+  UNSUPPORTED. Both asserted side by side in one world (case J vs K).
+  Next: **P-004 — a second seed canon** (§17.10). Genericity is currently
+  asserted, not demonstrated.
 - **2026-08-30** — **P-002 depth / divergence / chain experiments — COMPLETED +
   VERIFIED.** Two lanes (depth metrics, experiment runner) plus one remediation
   lane. Delivered: `src/depth/` (genealogicalDepth vs interventionCount vs

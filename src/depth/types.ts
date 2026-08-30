@@ -36,12 +36,22 @@ export interface DivergenceScore {
    * graph (directed prerequisite -> dependent), from any intervention target to
    * any changed-status node. An intervention target itself is distance 0.
    * 0 when nothing changed.
+   *
+   * This is a STRUCTURAL DISTANCE over the support graph — pure graph
+   * connectivity, deliberately independent of truth. It is NOT:
+   *   - logical reachability — it never asks whether a derivation exists for a
+   *     reached node, only whether an edge path exists;
+   *   - executability — a graph-connected node can be UNKNOWN, UNSUPPORTED or
+   *     CONTRADICTORY (i.e. never actually happens in this world); the metric
+   *     says nothing about whether the node occurs;
+   *   - causal influence — ENABLES edges are counted on equal footing with
+   *     REQUIRES, but an enabler never grounds anything.
    */
-  causalReach: number;
+  graphDistance: number;
   /**
    * Deterministic weighted composite:
    *   changedStatusCount * 1 + changedStateCount * 1 + changedFactCount * 0.5
-   *   + impactedWorkCount * 2 + causalReach * 1
+   *   + impactedWorkCount * 2 + graphDistance * 1
    */
   score: number;
 }

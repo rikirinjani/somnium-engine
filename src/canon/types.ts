@@ -49,6 +49,22 @@ export interface CausalEdge {
   kind: EdgeKind;
   from: string; // entity id (event or fact)
   to: string; // entity id (event or fact)
+  /**
+   * Support-set label for REQUIRES edges (P-003). REQUIRES edges sharing a
+   * target AND a group are CONJUNCTS of one sufficient set; distinct groups are
+   * ALTERNATIVE sufficient sets, evaluated disjunctively.
+   *
+   *   A --REQUIRES(g1)--> C        C is supported by (A AND B) OR (D)
+   *   B --REQUIRES(g1)--> C
+   *   D --REQUIRES(g2)--> C
+   *
+   * Omitted => the default group "0", so a canon that never sets `group` is
+   * pure conjunction — the pre-P-003 behaviour, bit-for-bit (an absent key is
+   * absent from the content hash).
+   *
+   * Ignored on non-REQUIRES edges.
+   */
+  group?: string;
   note?: string;
 }
 

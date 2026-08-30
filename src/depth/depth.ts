@@ -7,7 +7,7 @@
  *   1. genealogicalDepth — length of the parent chain from the baseline
  *      universe. Pure bookkeeping.
  *   2. divergence — a STRUCTURAL measure of how far the world actually moved,
- *      computed over the WorldDiff plus a causal-reach BFS over the
+ *      computed over the WorldDiff plus a graph-distance BFS over the
  *      post-intervention REQUIRES ∪ ENABLES graph. Five no-op interventions
  *      score 0; one world-altering intervention scores high.
  *
@@ -54,14 +54,24 @@ function resolveEdges(canon: Canon, interventions: Intervention[]): CausalEdge[]
 /**
  * Maximum shortest-path distance, over the post-intervention REQUIRES ∪ ENABLES
  * graph (directed prerequisite -> dependent, i.e. edge from -> to), from ANY
- * intervention target to ANY changed-status node.
+ * intervention target to ANY changed-status node. This is a STRUCTURAL DISTANCE
+ * over the support graph — pure graph connectivity.
+ *
+ * It is NOT:
+ *   - logical reachability — it never asks whether a derivation exists for the
+ *     reached node, only whether an edge path exists;
+ *   - executability — a graph-connected node can be UNKNOWN, UNSUPPORTED or
+ *     CONTRADICTORY (i.e. never actually happens in this world); the metric
+ *     says nothing about whether the node occurs;
+ *   - causal influence — ENABLES edges are counted on equal footing with
+ *     REQUIRES, but an enabler never grounds anything.
  *
  * Multi-source BFS seeded from every intervention target that is a node in the
  * graph (sorted for determinism); an intervention target that is itself changed
  * is at distance 0. The maximum is taken over finite distances to changed-status
  * nodes only — unreachable changed nodes are ignored. 0 when nothing changed.
  */
-function causalReach(
+function graphDistance(
   canon: Canon,
   interventions: Intervention[],
   changedNodes: ReadonlySet<string>
@@ -136,12 +146,14 @@ function causalReach(
  *                        (a work missing on one side differs only when the
  *                        other side is not UNKNOWN; the UNKNOWN default does
  *                        exactly that)
- *   causalReach        — max shortest-path distance from any intervention
+ *   graphDistance       — max shortest-path distance from any intervention
  *                        target to any changed-status node, over the
- *                        post-intervention REQUIRES ∪ ENABLES graph
+ *                        post-intervention REQUIRES ∪ ENABLES graph (structural
+ *                        connectivity, deliberately independent of whether the
+ *                        reached nodes actually execute)
  *   score              — changedStatusCount*1 + changedStateCount*1
  *                        + changedFactCount*0.5 + impactedWorkCount*2
- *                        + causalReach*1
+ *                        + graphDistance*1
  */
 export function computeDivergence(
   canon: Canon,
@@ -188,7 +200,7 @@ export function computeDivergence(
   }
 
   const changedNodes = new Set(diff.statusChanges.map((s) => s.entityId));
-  const reach = causalReach(canon, interventions, changedNodes);
+  const reach = graphDistance(canon, interventions, changedNodes);
 
   const score =
     changedStatusCount * 1 +
@@ -202,7 +214,7 @@ export function computeDivergence(
     changedStateCount,
     changedFactCount,
     impactedWorkCount,
-    causalReach: reach,
+    graphDistance: reach,
     score,
   };
 }

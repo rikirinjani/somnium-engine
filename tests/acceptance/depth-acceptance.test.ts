@@ -41,7 +41,7 @@ describe("divergence: structural, not bookkeeping", () => {
     expect(d.changedStatusCount).toBe(0);
     expect(d.changedFactCount).toBe(0);
     expect(d.impactedWorkCount).toBe(0);
-    expect(d.causalReach).toBe(0);
+    expect(d.graphDistance).toBe(0);
     expect(d.score).toBe(0);
   });
 
@@ -65,8 +65,8 @@ describe("divergence: structural, not bookkeeping", () => {
     expect(d.changedStatusCount).toBeGreaterThan(0);
     expect(d.changedFactCount).toBeGreaterThan(0);
     expect(d.impactedWorkCount).toBeGreaterThan(0);
-    // the blight is the root of a multi-hop REQUIRES chain, so reach exceeds 1
-    expect(d.causalReach).toBeGreaterThan(1);
+    // the blight is the root of a multi-hop REQUIRES chain, so distance exceeds 1
+    expect(d.graphDistance).toBeGreaterThan(1);
   });
 
   it("is deterministic", () => {

@@ -197,12 +197,24 @@ describe("derive: work statuses", () => {
     expect(Object.keys(ws.workStatuses).sort()).toEqual(["work/chain", "work/cycle", "work/soft", "work/team"]);
   });
 
-  it("baseline: REQUIRES chain PRESERVED, team IMPOSSIBLE, cycle UNKNOWN, soft UNREACHABLE", () => {
+  it("baseline: chain PRESERVED, team IMPOSSIBLE, bootstrap cycle and its dependent IMPOSSIBLE", () => {
     const ws = derive(makeCanon(), []);
     expect(ws.workStatuses["work/chain"]).toBe("PRESERVED");
     expect(ws.workStatuses["work/team"]).toBe("IMPOSSIBLE"); // team-a/b contradictory
-    expect(ws.workStatuses["work/cycle"]).toBe("UNKNOWN"); // REQUIRES cycle
-    expect(ws.workStatuses["work/soft"]).toBe("UNREACHABLE"); // only ENABLES path
+    // P-003 CHANGE (was UNKNOWN). A REQUIRES bootstrap cycle with no external
+    // ground is an unfounded set: well-founded semantics rejects it as false,
+    // so its events are UNSUPPORTED and the work is IMPOSSIBLE. The old
+    // UNKNOWN encoded "we don't know", which was wrong — there is no grounding
+    // derivation, and that is knowable.
+    expect(ws.workStatuses["work/cycle"]).toBe("IMPOSSIBLE");
+    // P-003 CHANGE (was UNREACHABLE). ev/soft REQUIRES ev/cyc-a, which the
+    // unfounded-set rejection now makes FALSE, so soft's hard support is
+    // genuinely REFUTED. Its ENABLES edge from ev/root1 cannot resurrect it:
+    // an enabling condition is not a sufficient cause. Under the old model
+    // cyc-a was UNKNOWN, so soft floated at CONTINGENT — that reading depended
+    // entirely on the cycle bug.
+    expect(ws.workStatuses["work/soft"]).toBe("IMPOSSIBLE");
+    expect(ws.statuses["ev/soft"]).toBe("UNSUPPORTED");
   });
 
   it("negating the chain root makes the work IMPOSSIBLE", () => {
@@ -218,13 +230,28 @@ describe("derive: work statuses", () => {
 });
 
 describe("derive: contradiction records surface, never auto-repaired", () => {
-  it("carries the canonical EXCLUDES contradiction records", () => {
+  it("carries every canonical constraint violation with provenance", () => {
     const ws = derive(makeCanon(), []);
     expect(ws.statuses["ev/team-a"]).toBe("CONTRADICTORY");
     expect(ws.statuses["ev/team-b"]).toBe("CONTRADICTORY");
+    // P-003 CHANGE (was 2 records). Contradiction is LOCALIZED, not propagated:
+    // ev/doomed's support is evaluated against team-a's classical truth, so
+    // doomed occurs, which then violates the INVARIANT from ev/root1 and is
+    // flagged in its own right. The old code cascaded team-a's contradiction
+    // into doomed as UNSUPPORTED, which silently suppressed the invariant
+    // violation — a contradiction hiding another contradiction.
     expect(ws.contradictions.map((c) => c.id).sort()).toEqual([
+      "contra:edge/invariant-doomed:invariant:ev/doomed",
       "contra:edge/team-excludes:excludes:ev/team-a",
       "contra:edge/team-excludes:excludes:ev/team-b",
     ]);
+  });
+
+  it("keeps each record's provenance distinguishable (canon vs intervention)", () => {
+    const ws = derive(makeCanon(), [forceEvent("ev/child1"), negateEvent("ev/child1")]);
+    const canonRecords = ws.contradictions.filter((c) => c.source === "canon");
+    const ivRecords = ws.contradictions.filter((c) => c.source !== "canon");
+    expect(canonRecords.length).toBeGreaterThan(0);
+    expect(ivRecords.map((c) => c.source)).toContain("forceEvent:ev/child1");
   });
 });

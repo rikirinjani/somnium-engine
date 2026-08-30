@@ -57,6 +57,46 @@
         "qms/records/nonconformities/2026-08-30T13-40-00-ncr-001-doc-contradicts-change.json"
       ],
       "status": "verified"
+    },
+    {
+      "requirement_id": "req-003",
+      "requirement_title": "Causal semantics adversarial pass — formalize every relation, attack the status model, prove the fixpoint",
+      "requirement_source": "docs/ARCHITECTURE-RECONNAISSANCE.md §17",
+      "spec": [
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §17 (authoritative; supersedes §5, §6, §8.1 where they disagree)",
+        "src/derive/judgment.ts (Belnap FOUR truth × support × forced × negated; EventStatus becomes a lossy projection)",
+        "src/derive/propagation.ts header (staged pipeline: positive fixpoint / unfounded set / soft support / constraints)",
+        "src/canon/types.ts (CausalEdge.group — alternative sufficient support sets)"
+      ],
+      "tasks": [
+        "judgment model: orthogonal truth / support / intervention-input dimensions",
+        "disjunctive support via REQUIRES groups (alternative sufficient causes)",
+        "staged propagation with asserted monotonicity and a throwing pass cap",
+        "well-founded rejection of bootstrap cycles, distinguished from under-specification",
+        "ENABLES cannot refute; MOTIVATES and PRECEDES removed from propagation",
+        "temporal layer: PRECEDES cycles among occurring events as temporalViolations",
+        "contradictions rendered from pipeline conflicts with provenance, never auto-repaired",
+        "adversarial annex canon + cases A–K covering every relation",
+        "rename causalReach → graphDistance (it measures support-graph connectivity only)",
+        "intervention commutativity: three-class split encoded in the content hash",
+        "remediation: sever/addEdge do not commute (ncr-002); repo-wide refuted-claim search"
+      ],
+      "tests": [
+        "tests/acceptance/causal-acceptance.test.ts",
+        "src/derive/judgment.test.ts",
+        "src/derive/propagation.test.ts",
+        "src/derive/world-state.test.ts",
+        "src/derive/ordering.test.ts",
+        "src/depth/depth.test.ts"
+      ],
+      "verification": [
+        "qms/records/verifications/2026-08-31T02-46-51-ver-003-p003-l2-gate.json",
+        "verify-facts (scripts/verify-facts.ts)"
+      ],
+      "nonconformities": [
+        "qms/records/nonconformities/2026-08-31T02-46-51-ncr-002-refuted-claim-survived.json"
+      ],
+      "status": "verified"
     }
   ]
 }
