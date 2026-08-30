@@ -10,8 +10,12 @@
  *
  * Key semantic split (do not conflate):
  *   - `diff` is against the IMMEDIATE PARENT depth (worldDiff(world[N-1], world[N])).
- *   - `depth.divergence` is measured against the BASELINE world (accumulates along
- *     the chain and grows monotonically for genuinely-altering chains).
+ *   - `depth.divergence` is measured against the BASELINE world. It is a DISTANCE,
+ *     not an accumulator: it does NOT grow monotonically along a chain. An
+ *     intervention that restores a canonical value moves the world back toward
+ *     baseline and legitimately lowers it (Verrin depths 1-3 score 26 / 25 / 26).
+ *     What strictly increases along a chain is genealogicalDepth, never divergence.
+ *     See docs/ARCHITECTURE-RECONNAISSANCE.md §8.1(b).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
