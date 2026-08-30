@@ -17,10 +17,12 @@ function makeState(overrides: Partial<WorldState>): WorldState {
     canonId: "canon/test",
     interventions: [],
     rpId: null,
+    judgments: {},
     statuses: {},
     facts: [],
     workStatuses: {},
     contradictions: [],
+    temporalViolations: [],
     hash: "00000000",
     ...overrides,
   };

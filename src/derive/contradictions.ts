@@ -1,26 +1,27 @@
 /**
- * Somnium Engine — contradiction detection.
+ * Somnium Engine — contradiction records (P-003).
  *
  * Contradictions are first-class records, NEVER auto-repaired: the world is
- * returned WITH them so the diff lane can surface them. Detection runs over
- * the post-fixpoint status map, scanning in sorted order, so record ids and
- * ordering are deterministic.
+ * returned WITH them so the diff lane can surface them.
  *
- * Sources of contradiction:
- *   1. A FORCED event whose REQUIRES source is EXCLUDED (the intervention
- *      asserts an impossible event). source = the forcing intervention id.
- *   2. EXCLUDES both-established (mutual exclusion violated). One record per
- *      endpoint; source = "canon".
- *   3. INVARIANT violated (source established while target also established).
- *      One record per edge; source = "canon".
+ * P-003 change: detection no longer re-derives contradictions by scanning a
+ * status map. The propagation pipeline already knows exactly which conflict
+ * produced each BOTH judgment and why, so it emits `ConflictNote`s and this
+ * module renders them as records. That removes a class of bug where the record
+ * text and the actual judgment could disagree.
+ *
+ * Provenance is preserved per record:
+ *   - intervention conflicts  -> source = the forcing intervention's id
+ *   - constraint violations   -> source = "canon"
+ *
+ * Unfoundedness is NOT a contradiction. A bootstrap cycle with no external
+ * ground is simply unsupported (well-founded semantics), so it produces no
+ * record — the world is consistent, it just does not contain those events.
  */
 import type { ContradictionRecord } from "../diff/types";
-import type { EventStatus } from "./lattice";
-import type { DerivationModel } from "./propagation";
+import type { ConflictNote } from "./propagation";
 
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
-
-const ESTABLISHEDISH: ReadonlySet<EventStatus> = new Set(["ESTABLISHED", "CONTRADICTORY"]);
 
 /** Deterministic record constructor. */
 export function buildContradiction(
@@ -34,68 +35,53 @@ export function buildContradiction(
   return { id, a, b, detail, source, detectedAt };
 }
 
-/** Detect all contradictions in a stabilized world and return them sorted by id. */
-export function detectContradictions(
-  model: DerivationModel,
-  statuses: Record<string, EventStatus>
-): ContradictionRecord[] {
-  const records: ContradictionRecord[] = [];
-  const statusOf = (node: string): EventStatus => statuses[node] ?? "UNKNOWN";
-
-  // 1. Forced event with an EXCLUDED REQUIRES source.
-  for (const node of model.nodeIds) {
-    const forceId = model.forcedBy.get(node);
-    if (forceId === undefined) continue;
-    if (statusOf(node) !== "CONTRADICTORY") continue;
-    for (const source of model.requiresIn.get(node) ?? []) {
-      if (statusOf(source) === "EXCLUDED") {
-        records.push(
-          buildContradiction(
-            `contra:${node}:force-vs-excluded`,
-            node,
-            source,
-            `event ${node} is forced but its prerequisite ${source} is excluded`,
-            forceId,
-            node
-          )
-        );
-      }
-    }
-  }
-
-  // 2. EXCLUDES both-established: one record per endpoint.
-  for (const edge of model.excludesEdges) {
-    const fromStatus = statusOf(edge.from);
-    const toStatus = statusOf(edge.to);
-    if (fromStatus === "CONTRADICTORY" && toStatus === "CONTRADICTORY") {
-      const detail = `mutually exclusive events ${edge.from} and ${edge.to} are both established`;
-      records.push(
-        buildContradiction(`contra:${edge.id}:excludes:${edge.from}`, edge.from, edge.to, detail, "canon", edge.from)
+function render(note: ConflictNote): ContradictionRecord {
+  switch (note.kind) {
+    case "forced-vs-negated":
+      return buildContradiction(
+        `contra:${note.node}:force-vs-negate`,
+        note.node,
+        note.node,
+        `event ${note.node} is both forced to happen and negated`,
+        note.source,
+        note.node
       );
-      records.push(
-        buildContradiction(`contra:${edge.id}:excludes:${edge.to}`, edge.to, edge.from, detail, "canon", edge.to)
+    case "forced-vs-refuted":
+      return buildContradiction(
+        `contra:${note.node}:force-vs-excluded`,
+        note.node,
+        note.other,
+        `event ${note.node} is forced but its prerequisite ${note.other} does not hold`,
+        note.source,
+        note.node
       );
-    }
-  }
-
-  // 3. INVARIANT violated: source established while target also established.
-  for (const edge of model.invariantEdges) {
-    const sourceStatus = statusOf(edge.from);
-    const targetStatus = statusOf(edge.to);
-    if (ESTABLISHEDISH.has(sourceStatus) && targetStatus === "CONTRADICTORY") {
-      records.push(
-        buildContradiction(
-          `contra:${edge.id}:invariant:${edge.to}`,
-          edge.from,
-          edge.to,
-          `invariant violated: ${edge.from} is established while ${edge.to} is also established`,
-          "canon",
-          edge.to
-        )
+    case "excludes":
+      return buildContradiction(
+        `contra:${note.edgeId ?? "excludes"}:excludes:${note.node}`,
+        note.node,
+        note.other,
+        `mutually exclusive events ${note.node} and ${note.other} both occur`,
+        note.source,
+        note.node
       );
-    }
+    case "invariant":
+      return buildContradiction(
+        `contra:${note.edgeId ?? "invariant"}:invariant:${note.node}`,
+        note.other,
+        note.node,
+        `invariant violated: ${note.other} occurs, which prohibits ${note.node}, but ${note.node} also occurs`,
+        note.source,
+        note.node
+      );
   }
+}
 
-  records.sort(byId);
-  return records;
+/** Render the pipeline's conflicts as sorted, deduplicated records. */
+export function detectContradictions(conflicts: ConflictNote[]): ContradictionRecord[] {
+  const byKey = new Map<string, ContradictionRecord>();
+  for (const note of conflicts) {
+    const record = render(note);
+    if (!byKey.has(record.id)) byKey.set(record.id, record);
+  }
+  return [...byKey.values()].sort(byId);
 }

@@ -6,36 +6,53 @@
  * => identical WorldState (same hash). No randomness, no Date.now(), no LLM,
  * no network — everything is a deterministic function of the inputs.
  *
- * Pipeline:
+ * Pipeline (P-003):
  *   1. buildModel(canon, interventions)  — post-intervention causal graph
- *      (sever/add edges applied in order; negate/force pre-marks collected).
- *   2. propagateStatuses(model)          — monotone fixpoint over the lattice.
- *   3. Effective facts: canon facts whose validity window is satisfied by the
- *      final event statuses, then fact interventions (setFact/relocate/
+ *      (sever/add edges applied in order; negate/force targets collected;
+ *      REQUIRES grouped into alternative sufficient support sets).
+ *   2. propagateJudgments(model)         — staged evaluation producing a
+ *      `Judgment` per node (truth × support × forced × negated) plus the
+ *      conflicts that justify every contradiction. See propagation.ts for the
+ *      phase structure and why it is monotone.
+ *   3. `statuses` is the LOSSY PROJECTION of judgments via projectStatus, kept
+ *      because every downstream consumer (diff, query, depth, work statuses)
+ *      reads it. The engine itself reasons over `judgments`, never over this.
+ *   4. Effective facts: canon facts whose validity window is satisfied by the
+ *      final judgments (`occurs`), then fact interventions (setFact/relocate/
  *      retractFact) applied in order.
- *   4. Work statuses from member-event statuses + fact overrides.
- *   5. Contradiction records (never auto-repaired).
- *   6. Content hash over the deterministic projection of everything above.
+ *   5. Work statuses from member-event statuses + fact overrides.
+ *   6. Contradiction records (never auto-repaired) + temporal violations.
+ *   7. Content hash over the deterministic projection of everything above.
  */
 import type { Canon, Fact } from "../canon/types";
 import { hashState, canonicalJson } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
-import { buildModel, propagateStatuses } from "./propagation";
+import type { Judgment } from "./judgment";
+import { occurs, projectStatus } from "./judgment";
+import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
+import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
 
 export interface WorldState {
   canonId: string;
   interventions: Intervention[]; // full ordered chain from baseline
   rpId: string | null;
-  /** event id / work id / constraint node -> status */
+  /**
+   * The engine's actual verdicts: node id -> Judgment (sorted keys).
+   * P-003 replaced the single-axis status with these orthogonal dimensions.
+   */
+  judgments: Record<string, Judgment>;
+  /** event id / fact-constraint node -> projected status (lossy, for reporting) */
   statuses: Record<string, EventStatus>;
   /** effective facts in this world (validity windows applied) */
   facts: FactView[];
   /** canonical Work -> classification in this world */
   workStatuses: Record<string, WorkStatus>;
   contradictions: ContradictionRecord[];
+  /** PRECEDES cycles among occurring events — unsatisfiable timelines */
+  temporalViolations: TemporalViolation[];
   /** content hash of the world (memoization key / replay fingerprint) */
   hash: string;
 }
@@ -53,22 +70,31 @@ export interface FactView {
   validTo?: string | null;
 }
 
-const ESTABLISHEDISH: ReadonlySet<EventStatus> = new Set(["ESTABLISHED", "CONTRADICTORY"]);
-
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
 
-/** A canon fact is effective when its validity window is satisfied. */
-function isEffective(fact: Fact, statuses: Record<string, EventStatus>): boolean {
-  const fromOk = fact.validFrom === null || ESTABLISHEDISH.has(statuses[fact.validFrom] ?? "UNKNOWN");
-  const toViolated = fact.validTo !== null && ESTABLISHEDISH.has(statuses[fact.validTo] ?? "UNKNOWN");
+/**
+ * A canon fact is effective when its validity window is satisfied.
+ *
+ * P-003: this now tests `occurs(judgment)` rather than membership of an
+ * ESTABLISHED|CONTRADICTORY status set. Same observable behaviour, sound basis —
+ * "did the boundary event happen in this world?" is a truth question, and
+ * `occurs` answers exactly that (TRUE or BOTH).
+ */
+function isEffective(fact: Fact, judgments: Map<string, Judgment>): boolean {
+  const happened = (node: string): boolean => {
+    const j = judgments.get(node);
+    return j !== undefined && occurs(j);
+  };
+  const fromOk = fact.validFrom === null || happened(fact.validFrom);
+  const toViolated = fact.validTo !== null && happened(fact.validTo);
   return fromOk && !toViolated;
 }
 
 /** Effective canon facts (validity windows applied), sorted by id. */
-function computeEffectiveFacts(canon: Canon, statuses: Record<string, EventStatus>): FactView[] {
+function computeEffectiveFacts(canon: Canon, judgments: Map<string, Judgment>): FactView[] {
   const out: FactView[] = [];
   for (const fact of canon.facts) {
-    if (isEffective(fact, statuses)) {
+    if (isEffective(fact, judgments)) {
       out.push({
         id: fact.id,
         subject: fact.subject,
@@ -174,6 +200,15 @@ function sortedInterventions(interventions: Intervention[]): Intervention[] {
   });
 }
 
+/** Map -> sorted-key record, so hashing and equality are order-independent. */
+function toSortedRecord<T>(map: Map<string, T>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const key of [...map.keys()].sort()) {
+    out[key] = map.get(key) as T;
+  }
+  return out;
+}
+
 /**
  * Pure deterministic derivation: canon + ordered interventions + optional
  * rewind point => WorldState. The single entry point of the simulation core.
@@ -184,20 +219,30 @@ export function derive(
   rp?: RewindPoint
 ): WorldState {
   const model = buildModel(canon, interventions);
-  const statuses = propagateStatuses(model);
-  const facts = applyFactInterventions(computeEffectiveFacts(canon, statuses), interventions);
+  const { judgments, conflicts } = propagateJudgments(model);
+
+  const statusMap = new Map<string, EventStatus>();
+  for (const [node, judgment] of judgments) {
+    statusMap.set(node, projectStatus(judgment));
+  }
+
+  const facts = applyFactInterventions(computeEffectiveFacts(canon, judgments), interventions);
+  const statuses = toSortedRecord(statusMap);
   const workStatuses = computeWorkStatuses(canon, statuses, facts);
-  const contradictions = detectContradictions(model, statuses);
+  const contradictions = detectContradictions(conflicts);
+  const violations = temporalViolations(model, judgments);
   const rpId = rp?.id ?? null;
 
   const world: WorldState = {
     canonId: canon.canonId,
     interventions: [...interventions], // full ordered chain from baseline
     rpId,
+    judgments: toSortedRecord(judgments),
     statuses,
     facts,
     workStatuses,
     contradictions,
+    temporalViolations: violations,
     hash: "",
   };
 
@@ -207,10 +252,12 @@ export function derive(
     canonHash: canon.hash,
     interventions: sortedInterventions(interventions),
     rpId,
+    judgments: world.judgments,
     statuses,
     facts,
     workStatuses,
     contradictions,
+    temporalViolations: violations,
   });
 
   return world;
