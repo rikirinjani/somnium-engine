@@ -183,6 +183,30 @@ interface RewindPoint {
 
 Ship both in the PoC; defer information-theoretic divergence until real canons exist. Document explicitly: **depth is not a scalar of interventions**.
 
+### 8.1 Divergence as implemented (P-002, corrected)
+
+```
+score = changedStatusCount * 1
+      + changedStateCount  * 1
+      + changedFactCount   * 0.5
+      + impactedWorkCount  * 2
+      + causalReach        * 1
+```
+
+- `changedStatusCount` — entities whose `EventStatus` differs from baseline.
+- `changedStateCount` — **narrative state change**: effective facts compared by `(subject, predicate)` where the object *value* differs (absent-vs-present counts). This is what actually changed in the world.
+- `changedFactCount` — fact-*record* churn by id (additions + removals + overrides). Retained as a secondary signal at half weight.
+- `impactedWorkCount` — canonical Works whose classification differs.
+- `causalReach` — max shortest-path distance from any intervention target to any changed-status node over the post-intervention REQUIRES ∪ ENABLES graph (multi-source BFS, `from`=prerequisite → `to`=dependent).
+
+**Two corrections were forced by implementation, and both matter:**
+
+**(a) Record churn is not state change.** The first implementation counted only `changedFactCount`, which returned an identical 23 at depths 1, 2 and 3 of the Verrin chain `[negate(blight), setFact(vara→thornhollow), relocate(vara→stonehall)]` — three genuinely different worlds, one number. Fact-record churn stayed at 4 while value-aware state change was 3/2/3. Hence `changedStateCount`.
+
+**(b) Divergence is a DISTANCE from baseline, not a monotone accumulator.** The original acceptance test asserted that divergence grows monotonically along a chain. That premise is **false**, and it only passed because the metric was insensitive. An intervention that restores a canonical value moves the world *back toward* baseline and legitimately lowers divergence. Verrin depths 1→2→3 score 26 → **25** → 26: depth 2 sets Vara back to her canonical `loc/thornhollow`, reducing distance. What strictly increases along a chain is *genealogical depth*, never divergence. The acceptance suite now asserts `scores[2] < scores[1]` explicitly as a regression guard.
+
+Known v1 limitation: multiple effective facts sharing one `(subject, predicate)` collapse in the state map. Acceptable for the PoC; revisit when a canon needs multi-valued predicates.
+
 ## 9. Proposed diff model
 
 **Research Q D â€” what should the comparison outputs be?**

@@ -5,6 +5,7 @@
  *   npm run dev -- baseline
  *   npm run dev -- intervene negateEvent:ev/blight-begins
  *   npm run dev -- chain negateEvent:ev/blight-begins setFact:char/vara:located_in:loc/thornhollow
+ *   npm run dev -- experiment demo negateEvent:ev/blight-begins
  *   npm run dev -- --help
  *
  * Deterministic output: all object keys are sorted recursively before printing.
@@ -12,6 +13,7 @@
 import { verrinCanon, verrinRewindPoint } from "../canon/verrin";
 import { derive } from "../derive/world-state";
 import { worldDiff } from "../diff/diff";
+import { runChain, writeExperimentSet } from "../experiment/runner";
 import type { Intervention } from "../timeline/types";
 import { forceEvent, negateEvent, relocate, retractFact, setFact, severEdge } from "../timeline/types";
 
@@ -74,6 +76,8 @@ Usage:
   baseline                      print canon id + hash + baseline work statuses
   intervene <spec>              apply one intervention, print the WorldDiff JSON
   chain <spec> <spec> ...       apply interventions sequentially; print each world hash + the final diff
+  experiment <label> <spec> ... run a multi-depth chain experiment; write the JSON artifact to
+                                experiment-results/ and print per-depth summary lines
   --help                        this help
 
 Intervention spec: <kind>:<target> (extras for parameterized kinds)
@@ -125,6 +129,22 @@ function main(): void {
       }
       const final = derive(canon, chain, rp);
       print({ steps, diff: worldDiff(baseline, final) });
+      break;
+    }
+    case "experiment": {
+      const label = rest[0];
+      const specs = rest.slice(1);
+      if (label === undefined || specs.length === 0)
+        throw new Error("experiment requires a label and at least one intervention spec");
+      const chain = specs.map(parseIntervention);
+      const set = runChain(canon, rp, chain, label);
+      const filePath = writeExperimentSet(set, "experiment-results");
+      for (const run of set.runs) {
+        console.log(
+          `depth=${run.depth.genealogicalDepth} genealogicalDepth=${run.depth.genealogicalDepth} interventionCount=${run.depth.interventionCount} divergence=${run.depth.divergence.score} worldHash=${run.worldHash} diffHash=${run.diff.hash}`
+        );
+      }
+      console.log(`artifact=${filePath}`);
       break;
     }
     default: {
