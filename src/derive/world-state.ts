@@ -23,9 +23,20 @@
  *   5. Work statuses from member-event statuses + fact overrides.
  *   6. Contradiction records (never auto-repaired) + temporal violations.
  *   7. Content hash over the deterministic projection of everything above.
+ *
+ * INTERVENTION ORDER IS PART OF THE WORLD'S IDENTITY. Fact-level interventions
+ * (setFact / retractFact / relocate) are sequential ASSIGNMENTS to the same
+ * (subject, predicate) cell — the last write wins — so they do NOT commute.
+ * The content hash therefore never folds the intervention list back into a
+ * sorted, commutative form (P-001 did): it is computed over the derived
+ * projection, which already reflects the ACTUAL application order. Two orders
+ * of a non-commuting chain yield different worlds and different hashes; two
+ * orders of a commuting chain (graph-level negate/force/sever/add, which are
+ * set-like and idempotent) yield the same world and the same hash. The
+ * `interventions` field on the WorldState keeps the full ordered chain.
  */
 import type { Canon, Fact } from "../canon/types";
-import { hashState, canonicalJson } from "../canon/hash";
+import { canonicalJson, hashState } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
@@ -187,19 +198,6 @@ function computeWorkStatuses(
   return result;
 }
 
-/** Deterministic sort of interventions for hashing: by id + params. */
-function sortKey(iv: Intervention): string {
-  return canonicalJson({ id: iv.id, kind: iv.kind, target: iv.target, params: iv.params ?? {} });
-}
-
-function sortedInterventions(interventions: Intervention[]): Intervention[] {
-  return [...interventions].sort((a, b) => {
-    const ka = sortKey(a);
-    const kb = sortKey(b);
-    return ka < kb ? -1 : ka > kb ? 1 : 0;
-  });
-}
-
 /** Map -> sorted-key record, so hashing and equality are order-independent. */
 function toSortedRecord<T>(map: Map<string, T>): Record<string, T> {
   const out: Record<string, T> = {};
@@ -209,9 +207,54 @@ function toSortedRecord<T>(map: Map<string, T>): Record<string, T> {
   return out;
 }
 
+/** Graph-level interventions are set-like: idempotent and order-free. */
+const GRAPH_KINDS: ReadonlySet<string> = new Set(["negateEvent", "forceEvent", "severEdge", "addEdge"]);
+
+function interventionKey(iv: Intervention): string {
+  return canonicalJson({ kind: iv.kind, target: iv.target, params: iv.params ?? {} });
+}
+
+/**
+ * Canonical form of an intervention list, mirroring the measured commutation
+ * semantics (see src/derive/ordering.test.ts):
+ *
+ *   - graph-level (negateEvent / forceEvent / severEdge / addEdge) are SET-like:
+ *     idempotent, order-free. Sorted and deduplicated, so two orders of the same
+ *     graph interventions are one identity.
+ *   - fact-level (setFact / relocate / retractFact) are ASSIGNMENTS: sequential
+ *     writes to the same cell, last write wins. Kept in ACTUAL order.
+ *
+ * This is what makes `hash` a sound identity. Hashing the raw ordered list would
+ * split worlds that are genuinely identical; hashing only the derived content
+ * (the P-003 interim state) collided a no-op intervention chain with the
+ * baseline, so a hash-keyed memo could return a state carrying the wrong
+ * `interventions` provenance.
+ */
+function canonicalInterventions(interventions: Intervention[]): {
+  graph: string[];
+  facts: string[];
+} {
+  const graph = new Set<string>();
+  const facts: string[] = [];
+  for (const iv of interventions) {
+    const key = interventionKey(iv);
+    if (GRAPH_KINDS.has(iv.kind)) graph.add(key);
+    else facts.push(key);
+  }
+  return { graph: [...graph].sort(), facts };
+}
+
 /**
  * Pure deterministic derivation: canon + ordered interventions + optional
  * rewind point => WorldState. The single entry point of the simulation core.
+ *
+ * The intervention list is consumed IN ORDER, and order is part of the world's
+ * identity for fact-level interventions: graph-level interventions are set-like
+ * (negateEvent / forceEvent / severEdge / addEdge — idempotent, order-free), but
+ * fact-level interventions are assignments (setFact / relocate / retractFact —
+ * last write wins), so derive(c, [setFact v1, setFact v2]) and
+ * derive(c, [setFact v2, setFact v1]) are genuinely different worlds. The hash
+ * encodes exactly that distinction via `canonicalInterventions`.
  */
 export function derive(
   canon: Canon,
@@ -247,10 +290,16 @@ export function derive(
   };
 
   // Content hash over the deterministic projection (canonicalJson sorts keys).
+  // `canonicalInterventions` folds the intervention list in under its MEASURED
+  // commutation semantics: graph-level interventions as a sorted set (they
+  // commute), fact-level ones in actual order (they do not). Hashing the derived
+  // content alone collided a no-op intervention chain with the baseline, which
+  // would let a hash-keyed memo hand back a state carrying the wrong
+  // `interventions` provenance.
   world.hash = hashState({
     canonId: canon.canonId,
     canonHash: canon.hash,
-    interventions: sortedInterventions(interventions),
+    interventions: canonicalInterventions(interventions),
     rpId,
     judgments: world.judgments,
     statuses,

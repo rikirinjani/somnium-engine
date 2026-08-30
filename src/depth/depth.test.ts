@@ -3,15 +3,16 @@
  *
  * Focused coverage for the structural divergence metrics and genealogical depth
  * (docs/ARCHITECTURE-RECONNAISSANCE.md §8). Uses the Verrin canon for real-world
- * shape plus small inline fixture canons to pin causalReach on known-length
+ * shape plus small inline fixture canons to pin graphDistance on known-length
  * REQUIRES/ENABLES chains and the exact weighted-score arithmetic.
  */
 import { describe, expect, it } from "vitest";
 import { verrinCanon, verrinRewindPoint } from "../canon/verrin";
+import { ADV_IDS, verrinAdversarialCanon } from "../canon/verrin-adversarial";
 import { hashCanon } from "../canon/hash";
 import type { Canon, CausalEdge, Entity, Fact, WorkBinding } from "../canon/types";
 import { derive } from "../derive/world-state";
-import { addEdge, negateEvent, relocate, retractFact, setFact, severEdge } from "../timeline/types";
+import { addEdge, forceEvent, negateEvent, relocate, retractFact, setFact, severEdge } from "../timeline/types";
 import { computeDepth, computeDivergence } from "./depth";
 
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
@@ -114,24 +115,24 @@ describe("computeDivergence: no-op and baseline cases", () => {
     expect(d.changedStateCount).toBe(0);
     expect(d.changedFactCount).toBe(0);
     expect(d.impactedWorkCount).toBe(0);
-    expect(d.causalReach).toBe(0);
+    expect(d.graphDistance).toBe(0);
     expect(d.score).toBe(0);
   });
 
   it("baseline vs itself with no interventions is all zeros", () => {
     const baseline = derive(canon, []);
     const d = computeDivergence(canon, baseline, baseline, []);
-    expect(d).toEqual({ changedStatusCount: 0, changedStateCount: 0, changedFactCount: 0, impactedWorkCount: 0, causalReach: 0, score: 0 });
+    expect(d).toEqual({ changedStatusCount: 0, changedStateCount: 0, changedFactCount: 0, impactedWorkCount: 0, graphDistance: 0, score: 0 });
   });
 
-  it("reports zero causalReach when nothing changed even with a real graph", () => {
+  it("reports zero graphDistance when nothing changed even with a real graph", () => {
     // severing a real edge that both worlds share changes nothing in the diff
     const baseline = derive(CHAIN_A, []);
     const branch = derive(CHAIN_A, [severEdge("edge/r2")], rp);
     const d = computeDivergence(CHAIN_A, baseline, branch, [severEdge("edge/r2")]);
     expect(d.changedStatusCount).toBe(0);
     expect(d.changedStateCount).toBe(0);
-    expect(d.causalReach).toBe(0);
+    expect(d.graphDistance).toBe(0);
     expect(d.score).toBe(0);
   });
 });
@@ -155,7 +156,7 @@ describe("computeDivergence: component counts on the Verrin blight removal", () 
     // all three canonical Works flip PRESERVED -> IMPOSSIBLE
     expect(d.impactedWorkCount).toBe(3);
     // blight -> kael-oath -> wardens-arrive -> treaty-of-ash -> valdar-rebuilds
-    expect(d.causalReach).toBe(4);
+    expect(d.graphDistance).toBe(4);
     // 11*1 + 3*1 + 4*0.5 + 3*2 + 4*1
     expect(d.score).toBe(26);
   });
@@ -223,7 +224,7 @@ describe("computeDivergence: changedStateCount discriminates worlds the fact-chu
   });
 });
 
-describe("computeDivergence: causalReach over a known-length REQUIRES chain", () => {
+describe("computeDivergence: graphDistance over a known-length REQUIRES chain", () => {
   it("negating the root of a 3-hop REQUIRES chain reaches distance 3", () => {
     const baseline = derive(CHAIN_A, []);
     const branch = derive(CHAIN_A, [negateEvent("ev/a")], rp);
@@ -233,7 +234,7 @@ describe("computeDivergence: causalReach over a known-length REQUIRES chain", ()
     expect(d.changedStateCount).toBe(0); // no facts in this canon
     expect(d.changedFactCount).toBe(0);
     expect(d.impactedWorkCount).toBe(0);
-    expect(d.causalReach).toBe(3); // ev/a -> ev/b -> ev/c -> ev/d
+    expect(d.graphDistance).toBe(3); // ev/a -> ev/b -> ev/c -> ev/d
     expect(d.score).toBe(7); // 4*1 + 0*1 + 0*0.5 + 0*2 + 3*1
   });
 
@@ -246,7 +247,7 @@ describe("computeDivergence: causalReach over a known-length REQUIRES chain", ()
     expect(d.changedStatusCount).toBe(2);
     expect(d.changedStateCount).toBe(0); // fact/fl is effective in both worlds
     // ev/x is reached ONLY through the ENABLES edge ev/a -> ev/x
-    expect(d.causalReach).toBe(1);
+    expect(d.graphDistance).toBe(1);
     expect(d.score).toBe(3); // 2*1 + 0*1 + 0*0.5 + 0*2 + 1*1
   });
 
@@ -259,13 +260,71 @@ describe("computeDivergence: causalReach over a known-length REQUIRES chain", ()
     // char/v|located_in is present in baseline but absent in the branch
     expect(d.changedStateCount).toBe(1);
     expect(d.changedFactCount).toBe(1);
-    expect(d.causalReach).toBe(0);
+    expect(d.graphDistance).toBe(0);
     expect(d.score).toBe(1.5); // 0*1 + 1*1 + 1*0.5 + 0*2 + 0*1
   });
 });
 
+// ---------------------------------------------------------------------------
+// P-003 regression guards: graphDistance is a STRUCTURAL DISTANCE over the
+// support graph, deliberately independent of truth. A node that is graph-
+// connected to an intervention target contributes even when it does NOT
+// execute — its status can be UNKNOWN (never established) or UNSUPPORTED
+// (refuted). graphDistance is connectivity, not a claim about the world.
+// Uses the adversarial canon (src/canon/verrin-adversarial.ts) for the
+// ENABLES soft cycle (case E) and the REQUIRES blight chain (case A).
+// ---------------------------------------------------------------------------
+describe("computeDivergence: graphDistance is connectivity, not executability", () => {
+  const adv = verrinAdversarialCanon();
+  const { blight, exodus, ashfall } = ADV_IDS.A;
+  const { softA, softB, groundA, groundB } = ADV_IDS.E;
+
+  it("counts a graph-connected UNKNOWN node — connectivity without executability", () => {
+    // Baseline FORCES soft-a, so soft-b's enabler occurs: soft-b is CONTINGENT
+    // (truth NEITHER, soft support).
+    const baseline = derive(adv, [forceEvent(softA)]);
+    // Removing soft-a removes the ENABLES route. That never refutes a node (an
+    // enabler is not a necessity): soft-b loses its soft support and returns to
+    // UNKNOWN — truth NEITHER, i.e. it does NOT happen in this world.
+    const branch = derive(adv, [negateEvent(softA)]);
+    const d = computeDivergence(adv, baseline, branch, [negateEvent(softA)]);
+
+    expect(branch.statuses[softB]).toBe("UNKNOWN"); // never established
+    expect(branch.judgments[softB]?.truth).toBe("NEITHER"); // never executes
+    // soft-a (EXCLUDED) and soft-b (UNKNOWN) both changed...
+    expect(d.changedStatusCount).toBe(2);
+    // ...and soft-b sits at distance 1 along the ENABLES edge soft-a -> soft-b.
+    // Correct because the metric is a structural distance over the support
+    // graph: the soft cycle case is a REQUIRES/ENABLES connection, and the
+    // metric never asks whether the reached node has a derivation.
+    expect(d.graphDistance).toBe(1);
+    expect(d.score).toBe(3); // 2*1 + 0*1 + 0*0.5 + 0*2 + 1*1
+  });
+
+  it("counts graph-connected UNSUPPORTED nodes — distance, not truth", () => {
+    const baseline = derive(adv, []);
+    const branch = derive(adv, [negateEvent(blight)]);
+    const d = computeDivergence(adv, baseline, branch, [negateEvent(blight)]);
+
+    // blight EXCLUDED; its REQUIRES dependents cascade to UNSUPPORTED
+    expect(branch.statuses[exodus]).toBe("UNSUPPORTED");
+    expect(branch.statuses[ashfall]).toBe("UNSUPPORTED");
+    // the grounded REQUIRES cycle loses its external support and goes UNKNOWN
+    expect(branch.statuses[groundA]).toBe("UNKNOWN");
+    expect(branch.statuses[groundB]).toBe("UNKNOWN");
+    // blight + exodus + ashfall + vow + ground-a + ground-b
+    expect(d.changedStatusCount).toBe(6);
+    // The maximum distance 2 is attained by ashfall (UNSUPPORTED) at
+    // blight -> exodus -> ashfall — and equally by ground-b (UNKNOWN) around
+    // the grounded cycle. Both count: graphDistance measures graph connectivity
+    // and is deliberately silent on whether any reached node actually happens.
+    expect(d.graphDistance).toBe(2);
+    expect(d.score).toBe(12); // 6*1 + 1*1 + 2*0.5 + 1*2 + 2*1
+  });
+});
+
 describe("computeDivergence: severEdge / addEdge reshape the reach graph", () => {
-  it("an added REQUIRES edge extends causalReach past the original chain", () => {
+  it("an added REQUIRES edge extends graphDistance past the original chain", () => {
     const added = addEdge(req("edge/r4", "ev/d", "ev/d2"));
     const branchInterventions = [added, negateEvent("ev/a")];
     const baseline = derive(CHAIN_C, []);
@@ -273,11 +332,11 @@ describe("computeDivergence: severEdge / addEdge reshape the reach graph", () =>
 
     const d = computeDivergence(CHAIN_C, baseline, branch, branchInterventions);
     expect(d.changedStatusCount).toBe(5); // a,b,c,d + the new leaf ev/d2
-    expect(d.causalReach).toBe(4); // a -> b -> c -> d -> d2
+    expect(d.graphDistance).toBe(4); // a -> b -> c -> d -> d2
 
     // control: without the added edge the same negation reaches only 3
     const control = computeDivergence(CHAIN_C, baseline, derive(CHAIN_C, [negateEvent("ev/a")], rp), [negateEvent("ev/a")]);
-    expect(control.causalReach).toBe(3);
+    expect(control.graphDistance).toBe(3);
   });
 
   it("a severed REQUIRES edge removes the downstream reach entirely", () => {
@@ -288,12 +347,12 @@ describe("computeDivergence: severEdge / addEdge reshape the reach graph", () =>
     const d = computeDivergence(CHAIN_C, baseline, branch, branchInterventions);
     // b/c/d are now roots: only ev/a itself changes
     expect(d.changedStatusCount).toBe(1);
-    expect(d.causalReach).toBe(0);
+    expect(d.graphDistance).toBe(0);
 
     // control: without the sever the same negation changes all four nodes
     const control = computeDivergence(CHAIN_C, baseline, derive(CHAIN_C, [negateEvent("ev/a")], rp), [negateEvent("ev/a")]);
     expect(control.changedStatusCount).toBe(4);
-    expect(control.causalReach).toBe(3);
+    expect(control.graphDistance).toBe(3);
   });
 });
 

@@ -421,7 +421,11 @@ describe("fixpoint properties", () => {
     const ab = derive(canon, [negateEvent("ev/root1"), negateEvent("ev/root2")]);
     const ba = derive(canon, [negateEvent("ev/root2"), negateEvent("ev/root1")]);
     expect(ab.statuses).toEqual(ba.statuses);
-    expect(ab.hash).toBe(ba.hash); // interventions are sorted for hashing
+    // Two negateEvent marks are a set: both orders produce the identical world,
+    // and the content hash (which reflects actual order via the derived
+    // projection — no sorted-intervention multiset) agrees. P-003: the hash is
+    // order-faithful, so it is identical exactly when the worlds are.
+    expect(ab.hash).toBe(ba.hash);
   });
 
   it("converges without hitting the pass cap on a deep chain", () => {
