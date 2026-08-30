@@ -1,0 +1,21 @@
+{
+  "ncr_id": "ncr-001",
+  "title": "Delivered code documented the premise the change was made to refute",
+  "category": "records/nonconformities",
+  "trigger": "L2 verifier gate on P-002 returned REJECT",
+  "severity": "minor",
+  "trace_id": "somnium-verifier-p002",
+  "agent": "fixer",
+  "role": "implementation lane (experiment-runner)",
+  "date": "2026-08-30T13-40-00Z",
+  "status": "closed",
+  "detected_in": "src/experiment/runner.ts:13-14 (commit 351b228)",
+  "description": "The chain-experiment runner's module docstring asserted that depth.divergence 'accumulates along the chain and grows monotonically for genuinely-altering chains'. P-002 was specifically the change that refuted this premise: divergence is a distance from the baseline world, so an intervention restoring a canonical value lowers it (Verrin depths 1-3 score 26 / 25 / 26). The false claim survived in the docstring of the very module that produces those numbers, contradicting docs/ARCHITECTURE-RECONNAISSANCE.md section 8.1(b), src/depth/types.ts, and both acceptance test files.",
+  "root_cause": "The experiment-runner lane was dispatched in parallel with the depth-metrics lane and wrote its docstring against the ORIGINAL (incorrect) divergence semantics stated in its own task brief. When the orchestrator later discovered the metric defect and dispatched a remediation lane, that lane's scope was defined as the metric plus its tests; prose in a sibling module that encoded the same false premise was not enumerated in the remediation scope. Root cause is therefore an incomplete blast-radius analysis by the orchestrator when scoping the fix: the defect class was 'the refuted premise is asserted somewhere', but the fix scope was written as a file list rather than as a repo-wide claim search.",
+  "corrective_action": "Docstring corrected in commit 0e009d2 to state that divergence is a distance and does NOT grow monotonically, citing the 26/25/26 evidence and referencing section 8.1(b). Re-verification gate instructed to grep the entire src/ tree and the design document for any surviving monotonicity claim rather than checking only the reported line.",
+  "preventive_action": "When a change refutes a previously-documented premise, the remediation scope must include a repo-wide search for assertions of that premise (code comments, docstrings, tests, design docs), not just the files implementing the corrected behaviour. Verifier briefs should ask for the claim search explicitly.",
+  "linked_records": [
+    "qms/records/verifications/ver-002 (P-002 L2 gate)"
+  ],
+  "notes": "No functional defect: 138/138 tests, tsc clean, verify-facts 3/3 at the time of REJECT. The gate correctly refused to admit 'the code is right, the doc in it is wrong' on the exact axis the change corrected."
+}

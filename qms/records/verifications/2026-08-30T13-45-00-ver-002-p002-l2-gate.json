@@ -1,0 +1,40 @@
+{
+  "verification_id": "ver-002",
+  "title": "Somnium Engine P-002 — L2 verifier gate (depth, divergence, chain experiments)",
+  "category": "records/verifications",
+  "trace_id": "somnium-verifier-p002-recheck",
+  "date": "2026-08-30T13-45-00Z",
+  "result": "APPROVE",
+  "description": "Independent L2 verifier review of P-002 (branch depth, commits 351b228 + remediation 0e009d2, on merged baseline d5a35f0). First gate returned REJECT on a single blocking documentation defect; re-verification after remediation returned APPROVE.",
+  "gate_history": [
+    {
+      "trace_id": "somnium-verifier-p002",
+      "commit": "351b228",
+      "result": "REJECT",
+      "blocking_defect": "src/experiment/runner.ts:13-14 docstring asserted divergence 'accumulates along the chain and grows monotonically' — the exact premise P-002 refutes. All other checks (1-9) PASS.",
+      "ncr": "qms/records/nonconformities/2026-08-30T13-40-00-ncr-001-doc-contradicts-change.json"
+    },
+    {
+      "trace_id": "somnium-verifier-p002-recheck",
+      "commit": "0e009d2",
+      "result": "APPROVE",
+      "note": "Remediation scoped to one file (+6/-2), docstring-only. Repo-wide claim search confirms the refuted premise survives nowhere: 7 hits for monotonic/accumulat/grow are either explicit negations of the premise or refer to unrelated accurate accumulation (universe genealogy, propagation pre-mark sets)."
+    }
+  ],
+  "checks": [
+    { "id": 1, "name": "Change scoping", "result": "PASS", "evidence": "9 files cumulative, all under src/tests/docs; zero Kronos Engine paths; remediation commit touches only runner.ts docstring" },
+    { "id": 2, "name": "Type check", "result": "PASS", "evidence": "tsc --noEmit exit 0" },
+    { "id": 3, "name": "Test suite, no P-001 regression", "result": "PASS", "evidence": "138/138 across 12 files; poc-acceptance 14/14; depth-acceptance 14/14" },
+    { "id": 4, "name": "verify-facts gate", "result": "PASS", "evidence": "ALL CHECKS PASSED (3/3)" },
+    { "id": 5, "name": "Formula agreement code/types/doc", "result": "PASS", "evidence": "depth.ts:193-198 == types.ts:43-44 == report §8.1:187-192; changedStateCount value-aware with absent-sentinel (depth.ts:163-177); sorted iteration, no Math.random/Date.now" },
+    { "id": 6, "name": "Runner semantics unconflated, no statistical layer", "result": "PASS", "evidence": "runner.ts:88 worldDiff(parentWorld, world) vs runner.ts:87 computeDepth(canon, baseline, ...); no seed/replicates/ci95/cohensD; runId/setId timestamp-free" },
+    { "id": 7, "name": "Acceptance test genuinely corrected", "result": "PASS", "evidence": "depth-acceptance.test.ts:167-184 asserts scores[2] < scores[1] and scores[3] > scores[2]; no skip/todo/only; depth-N inheritance via hash equality retained at :154-156" },
+    { "id": 8, "name": "Independent numeric reproduction", "result": "PASS", "evidence": "CLI divergence 0/26/25/26, worldHashes a3ee76c4/5449ff05/2f586329/819c9e05 stable across invocations" },
+    { "id": 9, "name": "Design doc accuracy, no overclaiming", "result": "PASS", "evidence": "§8.1 matches code component-for-component; records the fact-churn defect and the multi-fact-collapse v1 limitation" }
+  ],
+  "verifier_finding_on_scope_deviation": "The remediation lane also edited src/experiment/runner.test.ts, outside its stated file list. Verifier judged this legitimate: the file is new in the same commit (nothing pre-existing was loosened), and the replacement assertion is strictly stronger than the false monotonicity assertion it removed, pinning direction in both directions and adding a parent-relative diff-hash check.",
+  "linked_tasks": [
+    "P-002 depth/divergence/chain-experiments (req-002)"
+  ],
+  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium Engine\\tests\\acceptance\\depth-acceptance.test.ts"
+}

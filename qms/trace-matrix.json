@@ -1,6 +1,6 @@
 {
   "$schema": "Somnium Engine QMS trace matrix — requirement → spec → task → test → verification",
-  "repo": "Somnium Engine (PoC)",
+  "repo": "Somnium Engine",
   "date": "2026-08-30",
   "entries": [
     {
@@ -21,9 +21,42 @@
         "tests/acceptance/poc-acceptance.test.ts"
       ],
       "verification": [
+        "qms/records/verifications/2026-08-30T04-55-21-ver-001-poc-l2-gate.json",
         "verify-facts (scripts/verify-facts.ts)"
       ],
-      "status": "in-progress"
+      "status": "verified"
+    },
+    {
+      "requirement_id": "req-002",
+      "requirement_title": "Counterfactual depth, structural divergence, and multi-depth chain experiments",
+      "requirement_source": "docs/ARCHITECTURE-RECONNAISSANCE.md §8, §8.1, §11, §16 step 10",
+      "spec": [
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §8 (depth model)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §8.1 (divergence as implemented, corrected)",
+        "src/depth/types.ts (DepthMetrics, DivergenceScore contract)",
+        "src/experiment/types.ts (ExperimentRun, ExperimentSet — no statistical layer)"
+      ],
+      "tasks": [
+        "depth metrics (genealogicalDepth vs interventionCount vs divergence)",
+        "divergence (value-aware changedStateCount, status/fact/work counts, multi-source BFS causalReach)",
+        "chain experiment runner (one run per depth; diff vs immediate parent, divergence vs baseline)",
+        "deterministic JSON artifact persistence",
+        "CLI experiment command",
+        "remediation: correct runner docstring asserting the refuted monotonicity premise"
+      ],
+      "tests": [
+        "tests/acceptance/depth-acceptance.test.ts",
+        "src/depth/depth.test.ts",
+        "src/experiment/runner.test.ts"
+      ],
+      "verification": [
+        "qms/records/verifications/2026-08-30T13-45-00-ver-002-p002-l2-gate.json",
+        "verify-facts (scripts/verify-facts.ts)"
+      ],
+      "nonconformities": [
+        "qms/records/nonconformities/2026-08-30T13-40-00-ncr-001-doc-contradicts-change.json"
+      ],
+      "status": "verified"
     }
   ]
 }

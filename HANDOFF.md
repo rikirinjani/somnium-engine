@@ -29,6 +29,23 @@ distributed via git.
 
 ### Completed
 
+- **2026-08-30** — **P-002 depth / divergence / chain experiments — COMPLETED +
+  VERIFIED.** Two lanes (depth metrics, experiment runner) plus one remediation
+  lane. Delivered: `src/depth/` (genealogicalDepth vs interventionCount vs
+  divergence), `src/experiment/` (chain runner + deterministic JSON artifacts,
+  no statistical layer), `experiment` CLI command, report §8.1.
+  **138/138 tests** (was 94), `tsc --noEmit` clean, `verify-facts` 3/3.
+  L2 gate: **REJECT** on `351b228` (runner docstring asserted the refuted
+  monotonicity premise — ncr-001), remediated in `0e009d2`, **APPROVE** on
+  re-verification (ver-002).
+  Two findings worth carrying forward:
+  (a) the first divergence implementation counted fact-record churn and scored
+  an identical 23 at depths 1/2/3 of the Verrin chain — three different worlds,
+  one number; fixed with value-aware `changedStateCount` (26/25/26).
+  (b) divergence is a **distance from baseline, not a monotone accumulator** —
+  an intervention restoring a canonical value legitimately lowers it. An
+  acceptance test asserting monotonicity encoded a false premise and was
+  replaced; only `genealogicalDepth` strictly increases along a chain.
 - **2026-08-30** — **P-001 PoC build — COMPLETED + VERIFIED.** All four lanes
   delivered: scaffold (README/HANDOFF/qms/self-harness/verify-facts/CI), canon
   (loader/validator + Verrin seed), derive core (deterministic fixpoint,
