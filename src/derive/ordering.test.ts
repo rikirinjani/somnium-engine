@@ -2,26 +2,35 @@
  * Somnium Engine — P-003: intervention ordering is part of the world's identity.
  *
  * Executable specification of the commutation result measured on the
- * adversarial canon (src/canon/verrin-adversarial.ts). The rule:
+ * adversarial canon (src/canon/verrin-adversarial.ts). The rule is a three-way
+ * split, NOT the two-way "graph vs fact" split first written here:
  *
- *   GRAPH-LEVEL interventions are SET-LIKE. negateEvent, forceEvent, severEdge
- *   and addEdge mark a node or edge idempotently (a set of negated targets, a
- *   map of forced targets, a set of present edges). Order never matters:
+ *   SET-LIKE MARKS. negateEvent and forceEvent mark a node idempotently (a set
+ *   of negated targets, a map of forced targets). Applying either twice equals
+ *   applying it once, and order between them never matters:
  *   derive(c, [X, Y]) and derive(c, [Y, X]) produce the same world.
  *
- *   FACT-LEVEL interventions are ASSIGNMENTS. setFact, retractFact and
- *   relocate write to the same (subject, predicate) cell, so the LAST write
- *   wins: derive(c, [set v1, set v2]) and derive(c, [set v2, set v1]) are
+ *   SEQUENTIAL EDGE-SET WRITES. severEdge and addEdge MUTATE the edge set in
+ *   order (resolveEdges in propagation.ts): sever-then-add leaves the edge
+ *   present, add-then-sever leaves it absent. On a canon where the edge is
+ *   load-bearing those are DIFFERENT WORLDS. The first version of this file
+ *   claimed they commuted, having tested them on an edge whose removal was
+ *   invisible — see the regression test below.
+ *
+ *   ASSIGNMENTS. setFact, retractFact and relocate write to the same
+ *   (subject, predicate) cell, so the LAST write wins:
+ *   derive(c, [set v1, set v2]) and derive(c, [set v2, set v1]) are
  *   GENUINELY DIFFERENT worlds.
  *
- * The content hash (WorldState.hash) is computed over the derived projection,
- * which already reflects the ACTUAL application order (facts are last-write-wins),
- * so it is identical for commuting orders and distinct for non-commuting ones.
- * P-001 hashed a SORTED intervention list, silently assuming commutativity that
- * does not hold; that assumption is gone.
+ * The content hash folds the intervention list in under exactly that split
+ * (canonicalInterventions in world-state.ts): set-like marks as a sorted
+ * deduplicated set, every sequential kind in actual order. P-001 hashed a fully
+ * sorted list, silently assuming commutativity that does not hold.
  */
 import { describe, expect, it } from "vitest";
 import { ADV_IDS, verrinAdversarialCanon } from "../canon/verrin-adversarial";
+import type { Canon, CausalEdge, Entity } from "../canon/types";
+import { hashCanon } from "../canon/hash";
 import { derive } from "./world-state";
 import {
   addEdge,
@@ -47,8 +56,34 @@ function locatedIn(ws: ReturnType<typeof derive>): string | undefined {
   return ws.facts.find((f) => f.subject === vara && f.predicate === "located_in")?.object?.toString();
 }
 
+/**
+ * Minimal canon where one REQUIRES edge is genuinely load-bearing:
+ * `ev/q REQUIRES ev/p`. Negating `ev/p` refutes `ev/q` only while the edge is
+ * present, so severing/adding that edge changes the outcome.
+ */
+function loadBearingCanon(): Canon {
+  const entities: Entity[] = [
+    { id: "ev/p", kind: "Event", name: "P" },
+    { id: "ev/q", kind: "Event", name: "Q" },
+  ];
+  const edges: CausalEdge[] = [{ id: "edge/e", kind: "REQUIRES", from: "ev/p", to: "ev/q" }];
+  const canon: Canon = {
+    canonId: "canon/load-bearing",
+    version: "1.0.0",
+    entities,
+    facts: [],
+    edges,
+    workBindings: [],
+    hash: "",
+  };
+  canon.hash = hashCanon(canon);
+  return canon;
+}
+
+const LOAD_BEARING_EDGE: CausalEdge = { id: "edge/e", kind: "REQUIRES", from: "ev/p", to: "ev/q" };
+
 describe("intervention ordering", () => {
-  describe("graph-level interventions commute (set semantics)", () => {
+  describe("set-like marks commute (negateEvent, forceEvent)", () => {
     it("negateEvent(a) + negateEvent(b): identical world in either order", () => {
       const ab = derive(adv, [negateEvent(A.blight), negateEvent(A.exodus)]);
       const ba = derive(adv, [negateEvent(A.exodus), negateEvent(A.blight)]);
@@ -69,22 +104,46 @@ describe("intervention ordering", () => {
       expect(ab.hash).toBe(ba.hash);
     });
 
-    it("severEdge(e) + addEdge(e) with the same edge id: identical world in either order", () => {
-      // [sever, add] leaves the edge present; [add, sever] leaves it absent —
-      // but the exodus is a declared root either way, so the derived world is
-      // bit-identical (statuses, facts, hash all agree).
-      const edge = { id: EDGES.exodusRequiresBlight, kind: "REQUIRES" as const, from: A.blight, to: A.exodus };
-      const ab = derive(adv, [severEdge(edge.id), addEdge(edge)]);
-      const ba = derive(adv, [addEdge(edge), severEdge(edge.id)]);
-      expect(ab.statuses[A.exodus]).toBe("ESTABLISHED");
-      expect(ba.statuses[A.exodus]).toBe("ESTABLISHED");
-      expect(ab.statuses).toEqual(ba.statuses);
-      expect(ab.facts).toEqual(ba.facts);
-      expect(ab.hash).toBe(ba.hash);
+    it("marks are idempotent: negating twice equals negating once", () => {
+      const once = derive(adv, [negateEvent(A.blight)]);
+      const twice = derive(adv, [negateEvent(A.blight), negateEvent(A.blight)]);
+      expect(twice.hash).toBe(once.hash);
     });
   });
 
-  describe("fact-level interventions do NOT commute (assignment semantics)", () => {
+  describe("edge-set writes do NOT commute (severEdge, addEdge)", () => {
+    it("REGRESSION: sever+add on a LOAD-BEARING edge yields different worlds", () => {
+      // The original version of this suite asserted these commuted. They do not.
+      // That test only passed because it targeted an edge whose removal was
+      // invisible (its target was a declared root either way), so the two
+      // genuinely different edge sets produced the same derived world.
+      const canon = loadBearingCanon();
+      const severAdd = derive(canon, [negateEvent("ev/p"), severEdge("edge/e"), addEdge(LOAD_BEARING_EDGE)]);
+      const addSever = derive(canon, [negateEvent("ev/p"), addEdge(LOAD_BEARING_EDGE), severEdge("edge/e")]);
+
+      // [sever, add] => edge present => q's prerequisite is the negated p
+      expect(severAdd.statuses["ev/q"]).toBe("UNSUPPORTED");
+      // [add, sever] => edge absent => q is a root
+      expect(addSever.statuses["ev/q"]).toBe("ESTABLISHED");
+      expect(severAdd.hash).not.toBe(addSever.hash);
+    });
+
+    it("the hash distinguishes the two orders even when the derived world coincides", () => {
+      // On the adversarial canon the edge is NOT load-bearing, so both orders
+      // derive the same content. The hash must still separate them, because the
+      // WorldState carries different `interventions` provenance — a hash-keyed
+      // memo would otherwise hand back a state whose intervention chain is a lie.
+      const edge: CausalEdge = { id: EDGES.exodusRequiresBlight, kind: "REQUIRES", from: A.blight, to: A.exodus };
+      const severAdd = derive(adv, [severEdge(edge.id), addEdge(edge)]);
+      const addSever = derive(adv, [addEdge(edge), severEdge(edge.id)]);
+
+      expect(severAdd.statuses).toEqual(addSever.statuses); // same derived content
+      expect(severAdd.hash).not.toBe(addSever.hash); // but not the same world identity
+      expect(severAdd.interventions.map((i) => i.kind)).not.toEqual(addSever.interventions.map((i) => i.kind));
+    });
+  });
+
+  describe("assignments do NOT commute (setFact, relocate, retractFact)", () => {
     it("setFact(s,p,v1) + setFact(s,p,v2): the last write wins", () => {
       const w1 = derive(adv, [setFact(vara, "located_in", valdar), setFact(vara, "located_in", thornhollow)]);
       const w2 = derive(adv, [setFact(vara, "located_in", thornhollow), setFact(vara, "located_in", valdar)]);
@@ -117,16 +176,20 @@ describe("intervention ordering", () => {
     });
   });
 
-  it("SUMMARY — graph-level interventions are sets; fact-level interventions are assignments (last write wins)", () => {
-    // The two classes side by side: identical worlds hash identically,
-    // genuinely different worlds never collide.
+  it("SUMMARY — three classes: set-like marks, edge-set writes, cell assignments", () => {
+    // Identical worlds hash identically; genuinely different worlds never collide.
     const negAb = derive(adv, [negateEvent(A.blight), negateEvent(A.exodus)]);
     const negBa = derive(adv, [negateEvent(A.exodus), negateEvent(A.blight)]);
-    expect(negAb.hash).toBe(negBa.hash); // same world (set semantics)
+    expect(negAb.hash).toBe(negBa.hash); // set-like marks: one identity
+
+    const canon = loadBearingCanon();
+    const severAdd = derive(canon, [negateEvent("ev/p"), severEdge("edge/e"), addEdge(LOAD_BEARING_EDGE)]);
+    const addSever = derive(canon, [negateEvent("ev/p"), addEdge(LOAD_BEARING_EDGE), severEdge("edge/e")]);
+    expect(severAdd.hash).not.toBe(addSever.hash); // edge-set writes: sequential
 
     const factAb = derive(adv, [setFact(vara, "located_in", valdar), setFact(vara, "located_in", thornhollow)]);
     const factBa = derive(adv, [setFact(vara, "located_in", thornhollow), setFact(vara, "located_in", valdar)]);
-    expect(factAb.hash).not.toBe(factBa.hash); // different worlds (assignment semantics)
+    expect(factAb.hash).not.toBe(factBa.hash); // cell assignments: last write wins
   });
 
   it("non-commutativity does not affect determinism: the same chain in the same order hashes identically", () => {

@@ -421,10 +421,10 @@ describe("fixpoint properties", () => {
     const ab = derive(canon, [negateEvent("ev/root1"), negateEvent("ev/root2")]);
     const ba = derive(canon, [negateEvent("ev/root2"), negateEvent("ev/root1")]);
     expect(ab.statuses).toEqual(ba.statuses);
-    // Two negateEvent marks are a set: both orders produce the identical world,
-    // and the content hash (which reflects actual order via the derived
-    // projection — no sorted-intervention multiset) agrees. P-003: the hash is
-    // order-faithful, so it is identical exactly when the worlds are.
+    // Two negateEvent marks are set-like, so the hash folds them in as a sorted
+    // deduplicated set and both orders share one identity. Sequential kinds
+    // (severEdge/addEdge, setFact/relocate/retractFact) are hashed in ACTUAL
+    // order — see src/derive/ordering.test.ts for the full three-class split.
     expect(ab.hash).toBe(ba.hash);
   });
 

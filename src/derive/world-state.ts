@@ -24,16 +24,23 @@
  *   6. Contradiction records (never auto-repaired) + temporal violations.
  *   7. Content hash over the deterministic projection of everything above.
  *
- * INTERVENTION ORDER IS PART OF THE WORLD'S IDENTITY. Fact-level interventions
- * (setFact / retractFact / relocate) are sequential ASSIGNMENTS to the same
- * (subject, predicate) cell — the last write wins — so they do NOT commute.
- * The content hash therefore never folds the intervention list back into a
- * sorted, commutative form (P-001 did): it is computed over the derived
- * projection, which already reflects the ACTUAL application order. Two orders
- * of a non-commuting chain yield different worlds and different hashes; two
- * orders of a commuting chain (graph-level negate/force/sever/add, which are
- * set-like and idempotent) yield the same world and the same hash. The
- * `interventions` field on the WorldState keeps the full ordered chain.
+ * INTERVENTION ORDER IS PART OF THE WORLD'S IDENTITY, but not uniformly.
+ * Measured semantics (executable spec: src/derive/ordering.test.ts):
+ *
+ *   - `negateEvent` / `forceEvent` are SET-LIKE marks: idempotent, order-free.
+ *   - `severEdge` / `addEdge` are SEQUENTIAL EDGE-SET WRITES: sever-then-add
+ *     leaves the edge present, add-then-sever leaves it absent, so they do NOT
+ *     commute on a canon where the edge is load-bearing.
+ *   - `setFact` / `relocate` / `retractFact` are ASSIGNMENTS to a
+ *     (subject, predicate) cell — last write wins — so they do NOT commute.
+ *
+ * The content hash folds the intervention list in under exactly that split (see
+ * `canonicalInterventions`): set-like marks as a sorted deduplicated set, every
+ * sequential kind in ACTUAL order. Hashing the raw ordered list would split
+ * genuinely identical worlds; hashing only the derived projection collided a
+ * no-op intervention chain with the baseline. P-001 hashed a fully sorted list,
+ * silently assuming commutativity that does not hold.
+ * The `interventions` field on the WorldState keeps the full ordered chain.
  */
 import type { Canon, Fact } from "../canon/types";
 import { canonicalJson, hashState } from "../canon/hash";
@@ -207,54 +214,65 @@ function toSortedRecord<T>(map: Map<string, T>): Record<string, T> {
   return out;
 }
 
-/** Graph-level interventions are set-like: idempotent and order-free. */
-const GRAPH_KINDS: ReadonlySet<string> = new Set(["negateEvent", "forceEvent", "severEdge", "addEdge"]);
+/**
+ * Interventions that are genuinely SET-LIKE: they mark a node, idempotently.
+ * `negateEvent` adds to a set of negated targets; `forceEvent` writes a target
+ * into a map. Applying either twice equals applying it once, and order between
+ * them never matters.
+ *
+ * `severEdge` / `addEdge` are deliberately NOT here. They MUTATE the edge set in
+ * sequence (see `resolveEdges` in propagation.ts), so sever-then-add leaves the
+ * edge present while add-then-sever leaves it absent. On a canon where the edge
+ * is load-bearing those are different worlds — measured: with `ev/q REQUIRES
+ * ev/p` and `p` negated, [sever, add] gives `ev/q` UNSUPPORTED and [add, sever]
+ * gives ESTABLISHED. Treating them as a set collided those two worlds on one
+ * hash (caught by the P-003 L2 gate, ncr-002).
+ */
+const SET_LIKE_KINDS: ReadonlySet<string> = new Set(["negateEvent", "forceEvent"]);
 
 function interventionKey(iv: Intervention): string {
   return canonicalJson({ kind: iv.kind, target: iv.target, params: iv.params ?? {} });
 }
 
 /**
- * Canonical form of an intervention list, mirroring the measured commutation
- * semantics (see src/derive/ordering.test.ts):
+ * Canonical form of an intervention list, mirroring the MEASURED commutation
+ * semantics (executable spec: src/derive/ordering.test.ts):
  *
- *   - graph-level (negateEvent / forceEvent / severEdge / addEdge) are SET-like:
- *     idempotent, order-free. Sorted and deduplicated, so two orders of the same
- *     graph interventions are one identity.
- *   - fact-level (setFact / relocate / retractFact) are ASSIGNMENTS: sequential
- *     writes to the same cell, last write wins. Kept in ACTUAL order.
+ *   - `setLike` — negateEvent / forceEvent. Sorted and deduplicated, so two
+ *     orders of the same marks are one identity.
+ *   - `ordered` — severEdge / addEdge / setFact / relocate / retractFact. All
+ *     sequential writes: to the edge set, or to a (subject, predicate) cell.
+ *     Kept in ACTUAL order, because reordering them changes the world.
  *
  * This is what makes `hash` a sound identity. Hashing the raw ordered list would
- * split worlds that are genuinely identical; hashing only the derived content
- * (the P-003 interim state) collided a no-op intervention chain with the
- * baseline, so a hash-keyed memo could return a state carrying the wrong
+ * split worlds that are genuinely identical (two orders of the same negations);
+ * hashing only the derived content collided a no-op intervention chain with the
+ * baseline, letting a hash-keyed memo return a state carrying the wrong
  * `interventions` provenance.
  */
 function canonicalInterventions(interventions: Intervention[]): {
-  graph: string[];
-  facts: string[];
+  setLike: string[];
+  ordered: string[];
 } {
-  const graph = new Set<string>();
-  const facts: string[] = [];
+  const setLike = new Set<string>();
+  const ordered: string[] = [];
   for (const iv of interventions) {
     const key = interventionKey(iv);
-    if (GRAPH_KINDS.has(iv.kind)) graph.add(key);
-    else facts.push(key);
+    if (SET_LIKE_KINDS.has(iv.kind)) setLike.add(key);
+    else ordered.push(key);
   }
-  return { graph: [...graph].sort(), facts };
+  return { setLike: [...setLike].sort(), ordered };
 }
 
 /**
  * Pure deterministic derivation: canon + ordered interventions + optional
  * rewind point => WorldState. The single entry point of the simulation core.
  *
- * The intervention list is consumed IN ORDER, and order is part of the world's
- * identity for fact-level interventions: graph-level interventions are set-like
- * (negateEvent / forceEvent / severEdge / addEdge — idempotent, order-free), but
- * fact-level interventions are assignments (setFact / relocate / retractFact —
- * last write wins), so derive(c, [setFact v1, setFact v2]) and
- * derive(c, [setFact v2, setFact v1]) are genuinely different worlds. The hash
- * encodes exactly that distinction via `canonicalInterventions`.
+ * The intervention list is consumed IN ORDER. Only `negateEvent` / `forceEvent`
+ * are set-like marks (idempotent, order-free); `severEdge` / `addEdge` are
+ * sequential edge-set writes and `setFact` / `relocate` / `retractFact` are
+ * sequential cell assignments, so both of those classes are order-sensitive.
+ * The hash encodes exactly that split via `canonicalInterventions`.
  */
 export function derive(
   canon: Canon,

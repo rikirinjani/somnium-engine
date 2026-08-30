@@ -371,7 +371,7 @@ Estimated scale: ~1,500â€“2,500 lines of TypeScript + tests. Recommended fi
 
 **Mission.** Attack the causal model itself rather than extend it. The question: is SE's causal model strong enough to support counterfactual fictional canon, or did P-001/P-002 merely build a deterministic graph traversal engine?
 
-**Verdict: it was closer to the latter than the report admitted.** Four defects were confirmed by construction, not by opinion. Three were load-bearing. The model has been rebuilt onto established foundations (Belnap FOUR, Kleene three-valued connectives, well-founded semantics) and every changed assumption carries a regression test.
+**Verdict: it was closer to the latter than the report admitted.** Six defects were confirmed by construction, not by opinion — four from review, two more that only the adversarial fixture exposed. Three were load-bearing. The model has been rebuilt onto established foundations (Belnap FOUR, Kleene three-valued connectives, well-founded semantics) and every changed assumption carries a regression test.
 
 Sections 5, 6 and 8.1 record the superseded design. They are kept for provenance; **this section is authoritative** where they disagree.
 
@@ -443,7 +443,11 @@ Answers to the questions §3 of the mission posed:
 
 **Termination and monotonicity.** Phase A's operator only ever moves a node `NEITHER → TRUE|FALSE` and never revisits a decided node, so `truthRank` is non-decreasing and the iteration is bounded by the number of nodes. The code *asserts* this: any attempt to lower `truthRank` throws with the node id and both values, and the pass cap throws rather than returning a plausible-looking partial answer. A cap that is reachable in normal operation is a soundness bug, not a safety net.
 
-**Contradiction is localized, not propagated (v1 decision).** A node that becomes `BOTH` in Phase D does not retroactively refute its dependents; re-entering the fixpoint with `BOTH` admitted reinstates the non-monotonicity this rewrite removed. `conjoin` treats a `BOTH` conjunct as `FALSE` for its group — a contradictory prerequisite cannot soundly ground anything, so it refutes rather than infects. Consequence, observed in the unit fixture: an event whose prerequisite is contradictory is now evaluated against that prerequisite's classical truth, which can surface a *second*, independent violation that the old cascade silently suppressed. A contradiction hiding another contradiction is worse than two contradictions.
+**Contradiction is localized, not propagated (v1 decision).** A node that becomes `BOTH` in Phase D does not retroactively refute its dependents; re-entering the fixpoint with `BOTH` admitted reinstates the non-monotonicity this rewrite removed.
+
+Be precise about the mechanism, because the obvious description is wrong. `conjoin` does map a `BOTH` conjunct to `FALSE` (a contradictory prerequisite cannot soundly ground anything, so it refutes rather than infects) — but **that code path is unreachable for Phase-D contradictions**, because `BOTH` is only ever assigned *after* Phase A has finished. The actual semantics is therefore: **a dependent is evaluated against its prerequisite's Phase-A classical truth**, and a later contradiction at that prerequisite does not revisit it. Measured: with `x` and `y` both grounded, `x EXCLUDES y`, and `dep REQUIRES x`, the result is `x` `CONTRADICTORY` and `dep` `ESTABLISHED` — grounded on `x`'s classical `TRUE`. The `conjoin` guard matters only for a canon that authors `BOTH` upstream of Phase A, which nothing currently does.
+
+Consequence, observed in the unit fixture: an event whose prerequisite is contradictory is evaluated against that prerequisite's classical truth, which can surface a *second*, independent violation that the old cascade silently suppressed. A contradiction hiding another contradiction is worse than two contradictions. Scoped as risk 1 in §17.8.
 
 ### 17.4 Confirmed relation semantics
 
@@ -496,20 +500,26 @@ Renamed throughout with numeric behaviour unchanged, and regression tests now as
 
 ### 17.7 Interventions do not commute
 
-Measured on the adversarial canon, `derive(c,[X,Y])` vs `derive(c,[Y,X])`:
+Measured on the adversarial canon plus a minimal canon with a load-bearing edge:
 
-| Pair | Commutes |
-|---|---|
-| `negateEvent` + `negateEvent` | yes |
-| `forceEvent` + `negateEvent` (same node) | yes |
-| `severEdge` + `addEdge` (same id) | yes |
-| `setFact(s,p,v1)` + `setFact(s,p,v2)` | **no** |
-| `setFact` + `retractFact` | **no** |
-| `relocate` + `setFact` (same cell) | **no** |
+| Pair | Commutes | Class |
+|---|---|---|
+| `negateEvent` + `negateEvent` | yes | set-like mark |
+| `forceEvent` + `negateEvent` (same node) | yes | set-like mark |
+| `severEdge` + `addEdge` (same id) | **no** | sequential edge-set write |
+| `setFact(s,p,v1)` + `setFact(s,p,v2)` | **no** | cell assignment |
+| `setFact` + `retractFact` | **no** | cell assignment |
+| `relocate` + `setFact` (same cell) | **no** | cell assignment |
 
-The reason is semantic, not incidental: **graph-level interventions are set-like** (they mark a node negated/forced or add/remove an edge — idempotent, order-free), whereas **fact-level interventions are assignments** (sequential writes to the same cell; last write wins).
+Three classes, not two:
 
-P-001 hashed a *sorted* intervention list, silently assuming commutativity. The hash now folds interventions in under their measured semantics: graph-level as a sorted set, fact-level in actual order. An interim fix that hashed only derived content was caught and rejected during integration because it collided a no-op intervention chain with the baseline — a hash-keyed memo could then have returned a state carrying the wrong `interventions` provenance. Every world hash changed; that is expected and correct.
+- **Set-like marks** — `negateEvent`, `forceEvent`. These add to a set of negated targets or write a target into a map. Idempotent; order never matters.
+- **Sequential edge-set writes** — `severEdge`, `addEdge`. These mutate the edge set in order (`resolveEdges`), so sever-then-add leaves the edge present while add-then-sever leaves it absent.
+- **Cell assignments** — `setFact`, `relocate`, `retractFact`. Sequential writes to one `(subject, predicate)` cell; last write wins.
+
+**The sever/add row is a correction, and it is the more instructive kind.** P-003 first shipped claiming `severEdge` + `addEdge` commuted, with a passing test to "prove" it. The test targeted an edge whose removal was *invisible* — its target was a declared root either way — so two genuinely different edge sets derived the same world and the assertion held for the wrong reason. On a canon where the edge is load-bearing (`ev/q REQUIRES ev/p`, with `p` negated) the orders diverge outright: `[sever, add]` gives `ev/q` `UNSUPPORTED`, `[add, sever]` gives `ESTABLISHED`. Because the hash had folded both kinds into a commutative set, those two worlds shared one hash while carrying different `interventions` — the exact provenance unsoundness this section claims to have fixed, reintroduced one row lower. Caught by the L2 gate (ncr-002). The regression test now uses a load-bearing fixture, and a second test asserts that even when the derived content *does* coincide, the hashes must still differ because the provenance does.
+
+P-001 hashed a fully *sorted* intervention list, silently assuming universal commutativity. The hash now folds interventions in under the three-class split: set-like marks as a sorted deduplicated set, every sequential kind in actual order. An interim fix that hashed only derived content was also rejected during integration, because it collided a no-op intervention chain with the baseline. Every world hash changed across P-003; that is expected and correct.
 
 ### 17.8 Remaining causal-model risks
 
