@@ -1,0 +1,57 @@
+{
+  "verification_id": "ver-003",
+  "title": "Somnium Engine P-003 — L2 verifier gate (causal semantics adversarial pass)",
+  "category": "records/verifications",
+  "trace_id": "somnium-verifier-p003-recheck2",
+  "date": "2026-08-31T02-46-51Z",
+  "result": "APPROVE",
+  "description": "Independent L2 review of P-003 (branch causal, commits d664b4c / 834c1ff / fa572f7 / 5bd65a9 on merged baseline bb2a527). Three gates: REJECT, REJECT, APPROVE. Both rejections were on documentation asserting a claim the change refuted; the second also exposed a substantive hash-identity unsoundness.",
+  "gate_history": [
+    {
+      "trace_id": "somnium-verifier-p003",
+      "commit": "834c1ff",
+      "result": "REJECT",
+      "findings": [
+        "F1 (doc-contradicts-code): three docstrings claimed the hash never folds the intervention list into a sorted form while canonicalInterventions did exactly that.",
+        "F2 (unsound claim asserted as measured): severEdge+addEdge classed as set-like and hashed commutatively; they do not commute on a load-bearing edge, so two different worlds shared one hash with different interventions provenance."
+      ],
+      "other_claims": "all PASS (six defects confirmed, judgment model, staged propagation with monotonicity throw, relation semantics, cases A-K, graphDistance rename behaviour-preserving, no auto-repair, determinism)"
+    },
+    {
+      "trace_id": "somnium-verifier-p003-recheck",
+      "commit": "fa572f7",
+      "result": "REJECT",
+      "findings": [
+        "F2 behaviour verified closed by execution.",
+        "F1 not closed: the repo-wide claim search missed world-state.ts:312-313, which still read 'graph-level interventions as a sorted set (they commute)' in the comment annotating the hashState call, contradicting SET_LIKE_KINDS twelve lines above.",
+        "Secondary (non-blocking): propagation.ts:4 said 'four defects' where the report says six."
+      ]
+    },
+    {
+      "trace_id": "somnium-verifier-p003-recheck2",
+      "commit": "5bd65a9",
+      "result": "APPROVE",
+      "note": "Exhaustive repo-wide claim search over ten refuted terms with a per-hit judgement (accurate / historical / surviving): zero surviving refuted claims. F2 behaviour re-confirmed by the verifier's own execution across four probes."
+    }
+  ],
+  "checks": [
+    { "id": 1, "name": "Change scoping", "result": "PASS", "evidence": "18 files cumulative, all under src/ tests/ docs/; zero Kronos Engine paths" },
+    { "id": 2, "name": "Hash comment accuracy", "result": "PASS", "evidence": "world-state.ts:310-317 names the three-class split; consistent with SET_LIKE_KINDS:231, canonicalInterventions:237-252, derive:271-275, header:27-43" },
+    { "id": 3, "name": "Defect count reconciled", "result": "PASS", "evidence": "propagation.ts:4-18 says six total, four in module, and attributes D5/D6 correctly" },
+    { "id": 4, "name": "Repo-wide claim search", "result": "PASS", "evidence": "~30 hits enumerated with per-hit judgement; zero category-(c) surviving claims; zero graph-level/GRAPH_KINDS/never-folds/four-defects remain; causalReach only in historical narrative and one frozen QMS record" },
+    { "id": 5, "name": "Non-commutativity behaviour (independently executed)", "result": "PASS", "evidence": "load-bearing [negate,sever,add] UNSUPPORTED vs [negate,add,sever] ESTABLISHED with different hashes; non-load-bearing identical content but distinct hashes; negate+negate one hash; no-op chain distinct from baseline" },
+    { "id": 6, "name": "Build, tests, gate", "result": "PASS", "evidence": "tsc exit 0; 225 tests / 15 files; poc-acceptance 14, depth-acceptance 14, causal-acceptance 33, ordering 10; verify-facts 3/3" },
+    { "id": 7, "name": "P-003 substance intact", "result": "PASS", "evidence": "judgment.ts Belnap model present; positiveFixpoint throws on truthRank decrease (:300-304) and on pass cap (:272-278); cases A-K with zero skips; report section 17 with three-class 17.7 and corrected 17.3 localization mechanism" }
+  ],
+  "verifier_observations_non_blocking": [
+    "qms/trace-matrix.json req-002 task text still uses the pre-rename causalReach inside a frozen P-002 requirement record — annotated rather than rewritten, since it records what was verified at the time under its then-current name.",
+    "ncr-002 was cited by code and the report before the record existed; written as part of this closure."
+  ],
+  "linked_tasks": [
+    "P-003 causal semantics adversarial pass (req-003)"
+  ],
+  "nonconformities": [
+    "qms/records/nonconformities/2026-08-31T02-46-51-ncr-002-refuted-claim-survived.json"
+  ],
+  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium Engine\\tests\\acceptance\\causal-acceptance.test.ts"
+}
