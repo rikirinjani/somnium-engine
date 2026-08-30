@@ -309,11 +309,12 @@ export function derive(
 
   // Content hash over the deterministic projection (canonicalJson sorts keys).
   // `canonicalInterventions` folds the intervention list in under its MEASURED
-  // commutation semantics: graph-level interventions as a sorted set (they
-  // commute), fact-level ones in actual order (they do not). Hashing the derived
-  // content alone collided a no-op intervention chain with the baseline, which
-  // would let a hash-keyed memo hand back a state carrying the wrong
-  // `interventions` provenance.
+  // commutation semantics: set-like marks (negateEvent / forceEvent) as a sorted
+  // deduplicated set, every sequential kind (severEdge / addEdge / setFact /
+  // relocate / retractFact) in ACTUAL order. Hashing the derived content alone
+  // collided a no-op intervention chain with the baseline, which would let a
+  // hash-keyed memo hand back a state carrying the wrong `interventions`
+  // provenance.
   world.hash = hashState({
     canonId: canon.canonId,
     canonHash: canon.hash,

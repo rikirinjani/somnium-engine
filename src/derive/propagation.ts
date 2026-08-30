@@ -1,8 +1,9 @@
 /**
  * Somnium Engine — causal propagation (P-003 rewrite).
  *
- * WHY THIS WAS REWRITTEN. The P-001/P-002 propagation had four defects that the
- * adversarial pass confirmed:
+ * WHY THIS WAS REWRITTEN. The adversarial pass confirmed six defects in the
+ * P-001/P-002 causal model (full list in docs/ARCHITECTURE-RECONNAISSANCE.md
+ * §17.1). Four of them were in this module:
  *
  *   1. Support was conjunction-only. `A OR B -> C` was inexpressible, so
  *      removing A always killed C even when B still held.
@@ -12,6 +13,9 @@
  *      across passes, and a silent pass cap masked the oscillation.
  *   4. ENABLES behaved like necessity: a blocked enabler degraded its target to
  *      UNSUPPORTED, i.e. removing an *enabling* condition could refute an event.
+ *
+ * The other two were elsewhere: a bootstrap cycle reported as UNKNOWN (fixed
+ * here, in Phase B) and `causalReach` misnamed (src/depth).
  *
  * THE STAGED PIPELINE. Propagation now runs in explicit stages so that each
  * stage has a provable property, rather than one loop with mixed semantics:
