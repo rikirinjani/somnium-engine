@@ -98,10 +98,19 @@ export interface DerivationModel {
    */
   declaredSubjects: Set<string>;
   /**
-   * `setFact`/`relocate` interventions naming an undeclared subject. Rejected,
-   * not applied, and reported as a contradiction — never silently dropped.
+   * `setFact`/`relocate` interventions rejected because they named an id canon
+   * never declares — as the SUBJECT (writing a fact about a non-thing) or as an
+   * id-shaped OBJECT (referring to a non-thing). Rejected, not applied, and
+   * reported as a contradiction — never silently dropped.
    */
-  rejectedFactWrites: { subject: string; predicate: string; source: string }[];
+  rejectedFactWrites: {
+    subject: string;
+    predicate: string;
+    source: string;
+    reason: "subject" | "object";
+    /** the offending id: the subject, or the unresolvable object */
+    offender: string;
+  }[];
   /** target -> alternative sufficient support sets (sorted by group) */
   supportGroups: Map<string, SupportGroup[]>;
   /** target -> sorted ENABLES source ids */
@@ -131,6 +140,41 @@ export interface DerivationModel {
 /** Cell key for a fact's (subject, predicate) — the unit a setFact writes to. */
 function cellKey(subject: string, predicate: string): string {
   return `${subject}\u0000${predicate}`;
+}
+
+/**
+ * Is a fact write legal? (P-005/ncr-004)
+ *
+ * A fact write must respect the SAME rules `validateCanon` applies to a canon
+ * fact: canon defines the vocabulary, an intervention selects among it.
+ * Interventions were exempt from both halves, so:
+ *
+ *   subject — `setFact(ghost, instance_of, type)` enrolled an invented id in a
+ *             real `EventType`.
+ *   object  — `setFact(real, instance_of, type/ghost)` invented an `EventType`,
+ *             and `occurrenceCount(type/ghost)` then returned 1.
+ *
+ * The object rule mirrors `validateCanon`'s convention check: a STRING object
+ * containing "/" is an id reference and must resolve. Literal values (numbers,
+ * booleans, plain strings) are unrestricted. Documented limitation, shared with
+ * the canon validator: a literal string that happens to contain a slash
+ * ("ash/ember") is rejected as if it were a reference.
+ *
+ * EXPORTED because `world-state.ts` must apply the identical rule to the
+ * effective-fact list. These are two views of the same fact and they must agree
+ * — gating only one of them recreated §18.6's defect, where the causal graph and
+ * the fact list disagreed about whether a fact held.
+ */
+export function factWriteRejection(
+  subject: string,
+  object: string | number | boolean | null,
+  declaredSubjects: ReadonlySet<string>
+): { reason: "subject" | "object"; offender: string } | null {
+  if (!declaredSubjects.has(subject)) return { reason: "subject", offender: subject };
+  if (typeof object === "string" && object.includes("/") && !declaredSubjects.has(object)) {
+    return { reason: "object", offender: object };
+  }
+  return null;
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
@@ -259,7 +303,7 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
   const forcedBy = new Map<string, string>();
   const retracted = new Set<string>();
   const overriddenCells = new Map<string, string | number | boolean | null>();
-  const rejectedFactWrites: { subject: string; predicate: string; source: string }[] = [];
+  const rejectedFactWrites: DerivationModel["rejectedFactWrites"] = [];
   for (const iv of interventions) {
     if (iv.kind === "negateEvent") negated.add(iv.target);
     else if (iv.kind === "forceEvent") forcedBy.set(iv.target, iv.id);
@@ -271,18 +315,20 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
       if (typeof predicate === "string") {
-        // P-005/ncr-004: a fact's subject must be something canon declares.
-        // `validateCanon` already enforces this for canon facts; interventions
-        // were exempt, so `setFact` could write a fact about an id canon never
-        // mentions — e.g. enrolling an invented id in an `EventType` via
-        // `instance_of`. Rejected and reported, never silently dropped.
-        if (!declaredSubjects.has(iv.target)) {
-          rejectedFactWrites.push({ subject: iv.target, predicate, source: iv.id });
+        const value = (object ?? null) as string | number | boolean | null;
+        // Shared with world-state.ts's effective-fact list — see
+        // `factWriteRejection`. Both views of the same fact must agree.
+        const rejection = factWriteRejection(iv.target, value, declaredSubjects);
+        if (rejection !== null) {
+          rejectedFactWrites.push({
+            subject: iv.target,
+            predicate,
+            source: iv.id,
+            reason: rejection.reason,
+            offender: rejection.offender,
+          });
         } else {
-          overriddenCells.set(
-            cellKey(iv.target, predicate),
-            (object ?? null) as string | number | boolean | null
-          );
+          overriddenCells.set(cellKey(iv.target, predicate), value);
         }
       }
     }
@@ -545,19 +591,31 @@ export interface ConflictNote {
      */
     | "forced-undeclared"
     /**
-     * P-005/ncr-004: setFact/relocate named a SUBJECT canon never declares.
-     * `validateCanon` already forbids this for canon facts; interventions were
-     * exempt, so a fact could be written about an id canon never mentions —
-     * enrolling an invented id in an `EventType`, for instance. Rejected and
-     * reported rather than silently dropped.
+     * P-005/ncr-004: setFact/relocate named a SUBJECT canon never declares —
+     * writing a fact about a non-thing. `validateCanon` already forbids this for
+     * canon facts; interventions were exempt, so an invented id could be
+     * enrolled in an `EventType`.
      */
     | "fact-write-undeclared-subject"
+    /**
+     * P-005/ncr-004: setFact/relocate named an id-shaped OBJECT canon never
+     * declares — referring to a non-thing. Found while probing the subject fix:
+     * `setFact(real, instance_of, type/ghost)` invented an `EventType`, and
+     * `occurrenceCount(type/ghost)` then returned 1. Same rule, other end of the
+     * triple.
+     */
+    | "fact-write-undeclared-object"
     | "excludes"
     | "invariant";
   other: string;
   /** intervention id, or "canon" for constraint violations */
   source: string;
   edgeId?: string;
+  /**
+   * The specific offending id, when it differs from `node` — currently the
+   * unresolvable object of a rejected fact write.
+   */
+  offender?: string;
 }
 
 /**

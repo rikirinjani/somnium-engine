@@ -73,6 +73,15 @@ function render(note: ConflictNote): ContradictionRecord {
         note.source,
         note.node
       );
+    case "fact-write-undeclared-object":
+      return buildContradiction(
+        `contra:${note.node}:fact-write-undeclared-object:${note.other}`,
+        note.node,
+        note.other,
+        `cannot write ${note.node}.${note.other} referring to "${note.offender ?? note.other}": canon never declares that id — canon defines the vocabulary, an intervention selects among it`,
+        note.source,
+        note.node
+      );
     case "excludes":
       return buildContradiction(
         `contra:${note.edgeId ?? "excludes"}:excludes:${note.node}`,

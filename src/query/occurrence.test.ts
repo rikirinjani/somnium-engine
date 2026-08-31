@@ -460,6 +460,59 @@ describe("an intervention may never manufacture an occurrence", () => {
       ).toBe(8);
     });
 
+    it("a declared subject cannot be enrolled in an INVENTED type", () => {
+      // The other end of the triple, found while probing the subject fix. The
+      // subject rule alone left `setFact(real, instance_of, type/ghost)` inventing
+      // an EventType: `occurrenceCount(type/ghost)` returned 1 and
+      // `typeOfOccurrence(real)` resolved to the phantom.
+      //
+      // `validateCanon` already applies a convention check to a canon fact's
+      // object (a string containing "/" is an id reference and must resolve).
+      // Interventions were exempt from that half too — the same asymmetry, on the
+      // other side of the fact.
+      const withTypes = mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "type/t", kind: "EventType", name: "T" },
+        ],
+        [instanceOf("fact/real-t", "ev/real", "type/t")],
+        [],
+        "canon/objects"
+      );
+      const world = derive(withTypes, [setFact("ev/real", INSTANCE_OF, "type/ghost")]);
+
+      expect(occurrencesOfType(world, "type/ghost")).toEqual([]);
+      expect(occurrenceCount(world, "type/ghost")).toBe(0);
+      // the real membership is untouched — the write was refused, not applied
+      expect(typeOfOccurrence(world, "ev/real")).toBe("type/t");
+      expect(occurrenceCount(world, "type/t")).toBe(1);
+      expect(world.contradictions.some((r) => /fact-write-undeclared/.test(r.id))).toBe(true);
+    });
+
+    it("does not over-fire on legitimate id-valued or literal objects", () => {
+      const withSubjects = mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "char/vara", kind: "Character", name: "Vara" },
+          { id: "loc/hall", kind: "Location", name: "Hall" },
+        ],
+        [],
+        [],
+        "canon/objects-ok"
+      );
+      const world = derive(withSubjects, [
+        setFact("char/vara", "located_in", "loc/hall"), // declared id object
+        relocate("char/vara", "loc/hall"), // same, via relocate
+        setFact("ev/real", "mood", "grim"), // literal string
+        setFact("ev/real", "count", 3), // literal number
+        setFact("ev/real", "flag", true), // literal boolean
+      ]);
+      expect(world.contradictions).toEqual([]);
+      expect(world.facts.find((f) => f.predicate === "located_in")?.object).toBe("loc/hall");
+      expect(world.facts.find((f) => f.predicate === "mood")?.object).toBe("grim");
+      expect(world.facts.find((f) => f.predicate === "count")?.object).toBe(3);
+    });
+
     it("declared roots and declared chains are unaffected by the gate", () => {
       // The gate must not over-fire: a declared node with no prerequisites is
       // still a root, and a declared dependent still inherits.

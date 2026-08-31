@@ -51,7 +51,7 @@ import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
 import type { Judgment } from "./judgment";
 import { occurs, projectStatus } from "./judgment";
-import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
+import { buildModel, factWriteRejection, propagateJudgments, temporalViolations } from "./propagation";
 import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
 
@@ -176,16 +176,12 @@ function overrideFact(
 /**
  * Fact interventions applied in order over the effective fact list.
  *
- * `declaredSubjects` gates the write (P-005/ncr-004). A fact's subject must be
- * something canon declares — `validateCanon` already enforces that for canon
- * facts, and an intervention is held to the same rule.
- *
- * This function and `buildModel`'s `overriddenCells` are TWO VIEWS OF THE SAME
- * FACT, and they must agree. P-004 fixed one such split (fact nodes ignoring
- * fact interventions); gating only `buildModel` here would have recreated it —
- * the causal graph would refuse the write while the effective-fact list, which
- * `occurrencesOfType` reads, accepted it. Caught by the very test written to
- * pin the fix.
+ * Uses `factWriteRejection` — the SAME predicate `buildModel` applies — because
+ * this function and `buildModel`'s `overriddenCells` are TWO VIEWS OF THE SAME
+ * FACT and must agree. §18.6 was exactly this defect (fact nodes ignoring fact
+ * interventions), and gating only one side here recreated it twice in one
+ * sitting: first the subject rule, then the object rule. Sharing the predicate
+ * makes the two views incapable of disagreeing.
  */
 function applyFactInterventions(
   facts: FactView[],
@@ -197,9 +193,10 @@ function applyFactInterventions(
     if (iv.kind === "setFact" || iv.kind === "relocate") {
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
-      if (typeof predicate === "string" && declaredSubjects.has(iv.target)) {
-        current = overrideFact(current, iv.target, predicate, object);
-      }
+      if (typeof predicate !== "string") continue;
+      const value = (object ?? null) as string | number | boolean | null;
+      if (factWriteRejection(iv.target, value, declaredSubjects) !== null) continue;
+      current = overrideFact(current, iv.target, predicate, value);
     } else if (iv.kind === "retractFact") {
       current = current.filter((f) => f.id !== iv.target);
     }
