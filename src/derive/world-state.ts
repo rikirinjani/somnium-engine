@@ -45,13 +45,15 @@
  * The `interventions` field on the WorldState keeps the full ordered chain.
  */
 import type { Canon, Fact, WorkBinding } from "../canon/types";
+import type { FactVocabulary } from "../canon/fact-rules";
+import { factAssertionError } from "../canon/fact-rules";
 import { canonicalJson, hashState } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
 import type { Judgment } from "./judgment";
 import { occurs, projectStatus } from "./judgment";
-import { buildModel, factWriteRejection, propagateJudgments, temporalViolations } from "./propagation";
+import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
 import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
 
@@ -176,17 +178,18 @@ function overrideFact(
 /**
  * Fact interventions applied in order over the effective fact list.
  *
- * Uses `factWriteRejection` — the SAME predicate `buildModel` applies — because
- * this function and `buildModel`'s `overriddenCells` are TWO VIEWS OF THE SAME
- * FACT and must agree. §18.6 was exactly this defect (fact nodes ignoring fact
- * interventions), and gating only one side here recreated it twice in one
- * sitting: first the subject rule, then the object rule. Sharing the predicate
- * makes the two views incapable of disagreeing.
+ * Uses `factAssertionError` — the SAME function `validateCanon` and `buildModel`
+ * apply — because this function and `buildModel`'s `overriddenCells` are TWO
+ * VIEWS OF THE SAME FACT and must agree. §18.6 was exactly this defect (fact
+ * nodes ignoring fact interventions), and gating only one side here recreated it
+ * twice in one sitting: first the subject rule, then the object rule. One
+ * function at every call site makes the views incapable of disagreeing, and
+ * makes the claim differential: an intervention may assert no more than canon may.
  */
 function applyFactInterventions(
   facts: FactView[],
   interventions: Intervention[],
-  declaredSubjects: ReadonlySet<string>
+  vocabulary: FactVocabulary
 ): FactView[] {
   let current = facts;
   for (const iv of interventions) {
@@ -195,7 +198,7 @@ function applyFactInterventions(
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
       if (typeof predicate !== "string") continue;
       const value = (object ?? null) as string | number | boolean | null;
-      if (factWriteRejection(iv.target, value, declaredSubjects) !== null) continue;
+      if (factAssertionError(iv.target, predicate, value, vocabulary) !== null) continue;
       current = overrideFact(current, iv.target, predicate, value);
     } else if (iv.kind === "retractFact") {
       current = current.filter((f) => f.id !== iv.target);
@@ -361,7 +364,7 @@ export function derive(
   const facts = applyFactInterventions(
     computeEffectiveFacts(canon, judgments),
     interventions,
-    model.declaredSubjects
+    model.factVocabulary
   );
   const statuses = toSortedRecord(statusMap);
   const workStatuses = computeWorkStatuses(canon, statuses, facts);

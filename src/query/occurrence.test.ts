@@ -413,11 +413,11 @@ describe("an intervention may never manufacture an occurrence", () => {
 
       // ...and the rejected write is reported, never silently dropped
       const record = world.contradictions.find(
-        (r) => r.id === "contra:ev/ghost:fact-write-undeclared-subject"
+        (r) => r.id === "contra:ev/ghost:fact-write-illegal:subject-not-entity"
       );
       expect(record).toBeDefined();
       expect(record?.source).toBe("setFact:ev/ghost.instance_of");
-      expect(record?.detail).toMatch(/canon never declares that subject/);
+      expect(record?.detail).toMatch(/is not a declared entity/);
     });
 
     it("a fact write about a declared non-event subject is still legal", () => {
@@ -456,20 +456,19 @@ describe("an intervention may never manufacture an occurrence", () => {
       );
       expect(occurrencesOfType(world, "type/t")).toEqual([]);
       expect(
-        world.contradictions.filter((r) => /fact-write-undeclared-subject/.test(r.id)).length
+        world.contradictions.filter((r) => /fact-write-illegal:subject-not-entity/.test(r.id)).length
       ).toBe(8);
     });
 
     it("a declared subject cannot be enrolled in an INVENTED type", () => {
-      // The other end of the triple, found while probing the subject fix. The
-      // subject rule alone left `setFact(real, instance_of, type/ghost)` inventing
-      // an EventType: `occurrenceCount(type/ghost)` returned 1 and
-      // `typeOfOccurrence(real)` resolved to the phantom.
+      // Route 6, found while probing the subject fix: the subject rule alone left
+      // `setFact(real, instance_of, type/ghost)` inventing an EventType, and
+      // `occurrenceCount(type/ghost)` returned 1.
       //
-      // `validateCanon` already applies a convention check to a canon fact's
-      // object (a string containing "/" is an id reference and must resolve).
-      // Interventions were exempt from that half too — the same asymmetry, on the
-      // other side of the fact.
+      // The fix is NOT another id-shape check. `instance_of` is named by the core
+      // (src/canon/types.ts), so the core owns its signature: Event -> EventType.
+      // A range check does not care whether the phantom id contains a slash,
+      // which is what defeated the convention-based version (route 7a).
       const withTypes = mk(
         [
           { id: "ev/real", kind: "Event", name: "Real" },
@@ -486,7 +485,82 @@ describe("an intervention may never manufacture an occurrence", () => {
       // the real membership is untouched — the write was refused, not applied
       expect(typeOfOccurrence(world, "ev/real")).toBe("type/t");
       expect(occurrenceCount(world, "type/t")).toBe(1);
-      expect(world.contradictions.some((r) => /fact-write-undeclared/.test(r.id))).toBe(true);
+      expect(
+        world.contradictions.some(
+          (r) => r.id === "contra:ev/real:fact-write-illegal:instance-of-object-not-event-type"
+        )
+      ).toBe(true);
+    });
+
+    it("a SLASH-FREE phantom type is rejected too", () => {
+      // Route 7a: the convention-based object check tested `includes("/")`, so
+      // dropping the slash walked straight past it. On the shipped Verrin canon
+      // `setFact("ev/kael-oath", instance_of, "phantomtype")` gave
+      // occurrenceCount("phantomtype") === 1. The typed signature has no such gap.
+      const withTypes = mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "type/t", kind: "EventType", name: "T" },
+        ],
+        [instanceOf("fact/real-t", "ev/real", "type/t")],
+        [],
+        "canon/slashfree"
+      );
+      for (const phantom of ["phantomtype", "Type_T2", "type.ghost", "ghost type"]) {
+        const world = derive(withTypes, [setFact("ev/real", INSTANCE_OF, phantom)]);
+        expect(occurrenceCount(world, phantom)).toBe(0);
+        expect(typeOfOccurrence(world, "ev/real")).toBe("type/t");
+        expect(world.contradictions.length).toBe(1);
+      }
+    });
+
+    it("a canon FACT id cannot be enrolled as an occurrence", () => {
+      // Route 7b: `declaredSubjects` had included fact ids, so
+      // `setFact("fact/seal-held-vaela", instance_of, "type/investiture")`
+      // inflated Ordos's count from 1 to 2 — while `validateCanon` rejects the
+      // identical canon fact, because only an ENTITY may be a fact's subject.
+      // The intervention path was strictly broader than the canon path.
+      const withFact = mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "type/t", kind: "EventType", name: "T" },
+        ],
+        [instanceOf("fact/real-t", "ev/real", "type/t")],
+        [],
+        "canon/factsubject"
+      );
+      const world = derive(withFact, [setFact("fact/real-t", INSTANCE_OF, "type/t")]);
+      expect(occurrenceCount(world, "type/t")).toBe(1);
+      expect(occurrencesOfType(world, "type/t").map((o) => o.occurrenceId)).toEqual(["ev/real"]);
+      expect(
+        world.contradictions.some(
+          (r) => r.id === "contra:fact/real-t:fact-write-illegal:subject-not-entity"
+        )
+      ).toBe(true);
+    });
+
+    it("a type cannot instantiate itself", () => {
+      // Route 7c: an EventType is a legal fact SUBJECT in general, so
+      // `setFact(type/t, instance_of, type/t)` used to add the type to its own
+      // membership list. The domain half of the signature (Event -> EventType)
+      // rules it out.
+      const withTypes = mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "type/t", kind: "EventType", name: "T" },
+        ],
+        [instanceOf("fact/real-t", "ev/real", "type/t")],
+        [],
+        "canon/selftype"
+      );
+      const world = derive(withTypes, [setFact("type/t", INSTANCE_OF, "type/t")]);
+      expect(occurrencesOfType(world, "type/t").map((o) => o.occurrenceId)).toEqual(["ev/real"]);
+      expect(typeOfOccurrence(world, "type/t")).toBeUndefined();
+      expect(
+        world.contradictions.some(
+          (r) => r.id === "contra:type/t:fact-write-illegal:instance-of-subject-not-event"
+        )
+      ).toBe(true);
     });
 
     it("does not over-fire on legitimate id-valued or literal objects", () => {
