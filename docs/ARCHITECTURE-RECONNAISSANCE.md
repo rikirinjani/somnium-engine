@@ -625,4 +625,153 @@ The open question is whether (1) and (2) can share one value. P-003's answer —
 
 ---
 
-*End of report. P-004 in progress: §18.1-18.4 recorded BEFORE implementation.*
+
+### 18.5 What actually happened — predictions scored
+
+The §18.3 predictions, scored against implementation. Four held, three were wrong, and the wrong ones were worth more.
+
+| # | Prediction | Outcome |
+|---|---|---|
+| 1 | Fact-level `EXCLUDES` works unchanged | **CONFIRMED.** Two `held_by` facts for one Seal; the constraint is satisfied at baseline with exactly one effective holder, no code change. |
+| 2 | Fact-gated `REQUIRES` works unchanged | **REFUTED — and this was the serious one.** See §18.6. |
+| 3 | `EntityKind: "Object"` touches only the type and the diff projections | **REFUTED.** It also needed `canon.ts`'s `ENTITY_KINDS` whitelist, which would have rejected every Object-bearing canon at load. The schema challenge overlooked the validator entirely — an omission that foreshadowed §18.7. |
+| 4 | `ALTERED` is wrong for Ordos today | **CONFIRMED.** Fixed by the dependency-union rule. |
+| 5 | No canon-specific branch needed in `derive`, `propagation`, `diff`, `depth` | **CONFIRMED**, and now enforced: a test scans nine engine source files for canon id literals in executable code and fails if any appears. |
+| 6 | The 10 capabilities pass with no engine change beyond items 9–11 | **REFUTED.** Two further changes were required (§18.6, §18.7). |
+| 7 | At least one further Verrin-specific assumption will surface | **CONFIRMED. Two did**, and neither was on the schema challenge's list. |
+
+### 18.6 The fact-node defect — two views of the same fact
+
+**The engine held two disagreeing beliefs about whether a fact held.**
+
+`world-state.ts` owns the *effective fact list*, and `applyFactInterventions` correctly applies `retractFact` / `setFact` / `relocate` to it. `propagation.ts` owns *fact nodes in the causal graph*, and `buildModel` collected only `negateEvent` and `forceEvent` — so a fact node's truth came solely from its validity window over event truth.
+
+Consequence: an event `REQUIRES` a fact, you retract that fact, and the event stays `ESTABLISHED`. Measured on Ordos before the fix:
+
+```
+retractFact(fact/seal-held-vaela)
+   effective held_by : (none)          <- world-state: the Seal is held by nobody
+   fact node status  : ESTABLISHED     <- propagation: the fact holds
+   rite status       : ESTABLISHED     <- so the rite proceeds anyway
+```
+
+The rite of binding requires the Seal to be in the claimant's hands. The Seal was in nobody's hands. The rite happened.
+
+**Why Verrin could never have caught this.** Verrin has exactly one REQUIRES edge sourced from a fact (`fact/gate-bribed`), and it is a deliberate dead end whose window can never open — it exists to make an event permanently unreachable. Its truth is *supposed* to be intervention-independent. So Verrin exercised the code path and got the right answer for the wrong reason. Ordos gates a live event on a transferable possession, and the disagreement was visible in the first probe.
+
+**Fix.** `buildModel` now also collects retracted fact ids and overridden `(subject, predicate)` cells, and `factNodeTruth` consults them before the validity window: a retracted fact is `FALSE`; a cell overwritten with a *different* object makes the displaced canon fact `FALSE`; writing the *same* value changes nothing about truth (it still registers as an override for `ALTERED`). Fact-level interventions are now authoritative over fact nodes exactly as `negateEvent` is over events. Classification: **[VERRIN-ACCIDENT]**, invasive enough to touch the model but not the phase structure.
+
+### 18.7 The validator had also stayed behind
+
+P-001's `validateCanon` treated three things as fatal that P-003 subsequently made first-class engine behaviours:
+
+- a reference to an **undeclared id** — which is the case-K mechanism, the thing that guarantees absence of knowledge never becomes falsehood;
+- a **REQUIRES cycle** — which well-founded semantics rejects as unfounded, deliberately and with a test;
+- a **PRECEDES cycle** — which surfaces as a `temporalViolation` while the events themselves stay `ESTABLISHED`, deliberately and with a test.
+
+**The proof it was wrong was already sitting in the repository.** P-003's own adversarial fixture — a *deliberate* stress canon — derives a perfectly usable world, and `validateCanon` called it invalid on seven counts. Nothing caught the contradiction because **nothing ever validated that canon.** Its own header even conceded it "would therefore FAIL `validateCanon` … that is the point", which recorded the divergence as if it were a property of the fixture rather than a defect in the validator.
+
+**Fix.** `inspectCanon` returns `{ errors, notices }`. Errors mean the canon cannot be trusted (duplicate ids, a subject that is not an entity, a work binding pointing at a non-Work, an object that looks like a typo'd id, an *undeclared* dangling reference). Notices mean the canon is deliberately incomplete or cyclic in a way the engine handles by design. `validateCanon` returns the errors, so every existing caller keeps its meaning.
+
+The interesting part is how a canon states intent. A deliberate unknown and a typo are **structurally identical** — both are a reference to an id that does not exist. No amount of analysis can distinguish them, so the canon must declare which it means, via `Canon.unspecified`. That is what lets the validator enforce referential integrity without outlawing incompleteness. All three canons now validate with zero errors; the adversarial fixture reports two notices and Ordos one.
+
+### 18.8 Verrin-specific assumptions, classified
+
+Per mission item 5, using the mandated labels. Sources: the pre-implementation audit plus what implementation exposed.
+
+| Assumption | Class | Disposition |
+|---|---|---|
+| Fact nodes are unaffected by fact interventions | **[VERRIN-ACCIDENT]** | Fixed (§18.6). Two views of one fact must agree. |
+| Validator requires completeness and acyclicity | **[VERRIN-ACCIDENT]** | Fixed (§18.7) via errors/notices + `Canon.unspecified`. |
+| `ALTERED` compares fact *subjects* to work *events* | **[VERRIN-ACCIDENT]** | Fixed: a Work is ALTERED when any fact it *depends on* is overridden (listed in `work.facts`, or windowed on a member event, or subject-is-a-member-event). |
+| `fact.object` is never validated | **[VERRIN-ACCIDENT]** | Fixed with a convention-based typo guard. Documented limitation: a literal string containing `/` would false-positive. |
+| `EntityKind` has no artifact kind | **[VERRIN-ACCIDENT]** | Fixed: `Object` added to the union, the validator whitelist, and the diff projections. |
+| `characterFact` naming | **[VERRIN-ACCIDENT]**, cosmetic | Renamed `subjectFact`; deprecated alias retained. |
+| Every entity has a location | **not present** — refuted by audit and by Ordos | The Chapter has no location fact and derives fine. `located_in` appears in the core only as what `relocate` desugars to, asserted by a test. |
+| Events occur at most once | **[SE-INVARIANT]** | Event ids are validity-window boundaries, so an event is a *point* in narrative time. Repeatable events would need a distinct occurrence identity. Deliberate, documented, and now a stated limit rather than an accident. |
+| Causality is binary per edge | **[SE-INVARIANT]** | No graded dependency anywhere. Uncertainty is expressed structurally (ENABLES, disjunctive groups, UNKNOWN), never numerically. This is what keeps the engine deterministic. |
+| One value per `(subject, predicate)` cell | **[OPEN-QUESTION]** | Ordos wants "exactly one holder", so single-valued cells *helped* here. Dual membership or co-ownership would need multi-valued cells, and `overrideFact` / `changedStateCount` / `factNodeTruth` all key by cell. Not forced by either canon; deferred rather than guessed. |
+| Canon is complete | **resolved** | Now explicitly optional via `Canon.unspecified`. |
+| All state is temporal | **not present** | Ordos ships atemporal `null`/`null` facts that ground an event with no window involved. |
+| `WorkBinding` binds only events | **[VERRIN-ACCIDENT]**, now generic | `facts?: string[]` added: a story may presuppose a *state*, not only a *sequence*. |
+
+Two observations that are neither defects nor accidents, but genuine semantics worth recording:
+
+**Possession falls back rather than vanishing.** Negating Vaela's recognition removes her investiture, which reopens the previous holder's window: the Seal returns to Petronius rather than becoming unheld. That is correct narrative-time behaviour — the object does not evaporate because a later transfer did not happen — and it is only visible in a canon with sequential possession.
+
+**Kleene disjunction keeps ignorance honest.** `succession-settled` requires (Vaela's rite) OR (Galen's rite). Negating Vaela's recognition refutes the first; the second depends on the unsettled parentage. `disjoin(FALSE, NEITHER) = NEITHER`, so the succession is **UNKNOWN, not UNSUPPORTED**. The engine declines to conclude that the succession fails, because it genuinely might not — exactly the behaviour the three-valued design exists to produce, arrived at without any special-casing.
+
+### 18.9 World identity and hashing — the decision
+
+§18.4 named four identities. The answer: **two hashes are required, one is not enough, and two of the four were never hash questions.**
+
+```ts
+/** "Are these the same WORLD?" — effective state only, provenance-independent. */
+stateHash: string;
+/** "Was this world reached the same WAY?" — full derivation identity; the memo key. */
+identityHash: string;
+```
+
+- `stateHash` = `hashState({ canonId, canonHash, judgments, statuses, facts, workStatuses, contradictions, temporalViolations })`. Deliberately **excludes** `rpId` and interventions.
+- `identityHash` = `hashState({ stateHash, rpId, interventions: canonicalInterventions(interventions) })`, with `canonicalInterventions` unchanged from P-003 (set-like marks sorted and deduplicated; sequential kinds in actual order).
+- The ambiguous `hash` field is **removed, not aliased.** Its meaning was the defect; keeping the name would keep the defect.
+- **Universe/lineage identity** is not a hash: it is `Universe.id` + `parent` + `lineageOf`, and it already worked.
+- **Rewind-point integrity** is not a hash question either, and `computeRewindHash` / `RewindPoint.derivedHash` were left completely untouched. Tamper detection remains unambiguous — it is the one mechanism in the engine that must never acquire a second meaning.
+
+**Why one hash could not do the job.** P-003's single value answered "same world?" and "same derivation?" simultaneously, which made a real question unanswerable: *did two different intervention chains reach the same world?* That is the immediate neighbourhood of the deferred minimum-intervention search, and it is exactly what a cross-canon exercise should be able to observe. A genuine convergence case now exists and is tested: `setFact(hero, "located_in", home)` and `relocate(hero, home)` derive byte-identical content — **same `stateHash`, different `identityHash`**. So does the Ordos no-op chain, which shares the baseline's `stateHash` while carrying different provenance.
+
+The direction of the split matters: `identityHash` is *strictly more discriminating* than the old `hash`, so no memo can now return a state whose recorded `interventions` are a lie, while `stateHash` is *strictly less* discriminating and answers the question the old value silently destroyed.
+
+### 18.10 Genericity test — the three answers the mission demanded
+
+**If Verrin were deleted tomorrow and only the SE core plus Ordos remained, would the architecture still make sense?**
+
+**Yes — and Ordos exercises more of it.** Ordos uses every entity kind including `Object`, both fact-window styles including atemporal, five of six edge kinds with `EXCLUDES` between *facts*, disjunctive support as its central mechanism, `WorkBinding.facts`, a declared unspecified id, and a genuinely partial temporal order. Verrin exercises no ontology feature that Ordos does not. What Verrin still contributes is *shape coverage* — long conjunctive cascades and a deep single-root dependency chain — which is a different stress, not a different ontology.
+
+**If Ordos were deleted and only Verrin remained, would the same architecture still make sense?**
+
+**It would look like it did, and it would be wrong in three places.** All 269 pre-Ordos tests passed while: an event could require a fact and ignore that fact being retracted; the validator called the project's own adversarial fixture invalid on seven counts; and `ALTERED` could not detect a Work altered by anything other than an event-subject fact. The architecture would have *made sense* and been *unproven and partly incorrect*. This is the sharpest result of P-004: a single canon cannot distinguish "the engine is generic" from "the engine happens to agree with this canon".
+
+**Which abstractions are now demonstrated as genuinely canon-generic?**
+
+Demonstrated by two structurally opposite canons through one engine, with no canon-specific branch (source-scan enforced):
+
+- **Entity/Fact/CausalEdge ontology** — free-form predicates carried both a displacement cascade and a succession dispute with zero core additions beyond `Object`.
+- **The judgment model** — truth × support × forced × negated, with the projection to `EventStatus`. `UNKNOWN` stayed epistemic in both canons.
+- **Staged propagation** — Phase A/B/C/D ran unmodified on both. Disjunctive support, well-founded rejection, and soft support all behaved as specified on a canon authored against the spec rather than against the implementation.
+- **Fact-gated causality** — after §18.6, an event grounded on a fact, and refuted by intervening on that fact.
+- **Constraint layer** — `EXCLUDES` between events (Verrin) and between facts (Ordos) through the same check; `INVARIANT` unchanged.
+- **Temporal layer** — a clear spine and a deliberately partial order, both with zero violations, and `PRECEDES` contributing nothing to support in either.
+- **Contradiction model** — provenance preserved, never auto-repaired, for canon-sourced and intervention-sourced conflicts in both canons.
+- **Branch/genealogy/diff/depth/graphDistance** — all parameterized over both canons and asserted identically.
+- **The two-hash identity model** — §18.9.
+
+Still **canon-generic-by-assertion rather than by demonstration**: repeated events, multi-valued cells, and graded causality. Two canons is a much stronger claim than one, and it is not proof; a third canon should be chosen to attack whichever of those three a real story most needs.
+
+### 18.11 Remaining risks
+
+Carrying forward from §17.8, with P-004 updates:
+
+1. **Contradiction still does not propagate** (§17.8 risk 1, unchanged). A node that becomes `BOTH` in Phase D does not refute its dependents. Neither canon needed it; a canon where contradiction should poison downstream events still cannot say so.
+2. **No support-set minimality** (unchanged). `REQUIRES` groups are taken as authored; nothing enforces the NESS condition, so a redundant conjunct is treated as load-bearing.
+3. **Point-order temporal model only** (unchanged). Ordos exercised *partial* order but not *interval* semantics; overlapping-span contradictions remain invisible.
+4. **Multi-valued cells** — now an explicit [OPEN-QUESTION] rather than an unexamined assumption. `overrideFact`, `changedStateCount`, and the new `factNodeTruth` all key by `(subject, predicate)`.
+5. **`WorkStatus` is still a hand-written cascade** reading the *projected* status rather than judgments — the one place the lossy projection feeds a decision. P-004 made it more capable (fact requirements, dependency union) and therefore more load-bearing, which raises rather than lowers this risk.
+6. **`ENABLES` transitivity undefined** (unchanged). Soft support propagates one hop; neither canon forced the question.
+7. **No actual-causality attribution** (unchanged). The engine answers "does this occur in this world?", not "which event caused this outcome?".
+8. **New: the typo guard is convention-based.** It relies on ids containing `/`. A canon whose literal fact values contain a slash would get false positives; a canon abandoning the `prefix/slug` convention would lose the check entirely.
+9. **New: `Canon.unspecified` is an honesty mechanism, not a proof.** A canon can declare a typo as intentional and the validator will believe it. It converts a silent failure into a documented assertion, which is the most a validator can do here.
+
+### 18.12 Recommended P-005
+
+**P-005: repeatable events and occurrence identity.**
+
+Of the three abstractions still generic-only-by-assertion, this is the one most likely to be *forced* by a real canon and the one whose absence is most structural. Today an event id is a point in narrative time, used directly as a validity-window boundary — so "the Chapter votes" happening in three different years is inexpressible without three distinct event ids, and `PRECEDES` cannot relate occurrences of the same event. That constraint is currently classified **[SE-INVARIANT]** on the strength of two canons that never needed otherwise, which is exactly the kind of claim P-004 just showed to be unreliable.
+
+Recommended shape, mirroring what worked here: choose a canon premise that *forces* recurrence (a cyclical rite, a recurring council, a seasonal siege), write the schema challenge and falsifiable predictions before touching code, and let the fixture disagree with the engine. Do not add occurrence identity to the core until a canon cannot be written without it.
+
+Explicitly **not** recommended next: minimum-intervention search. It remains reachable (closed intervention vocabulary, pure `derive`, and now a `stateHash` that can recognise convergent branches) but it is a search problem layered on the causal model, and the causal model just produced two defects in one pass. Attack the ontology twice more before building on it.
+
+---
+
+*End of report. P-004 complete (§18). Next: P-005 — repeatable events and occurrence identity (§18.12).*
