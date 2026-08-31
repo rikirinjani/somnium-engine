@@ -82,6 +82,26 @@ export interface DerivationModel {
    * a true premise (adversarial case K).
    */
   declared: Set<string>;
+  /**
+   * Every id canon declares as an ENTITY (any kind) or as a FACT — the legal
+   * subjects for a fact.
+   *
+   * `validateCanon` already enforces that a CANON fact's subject is a known
+   * entity. Interventions were not held to the same rule, so `setFact` could
+   * write a fact about an id canon never mentions — enrolling an invented id in
+   * an `EventType`, for instance. Canon defines the vocabulary; an intervention
+   * selects among it. Both paths now enforce the same invariant (ncr-004).
+   *
+   * Distinct from `declared`, which is Events + facts and answers "may this node
+   * be a root?". A fact's subject may be a Character, Location, Object,
+   * Institution, Faction, EventType or Work, none of which are causal nodes.
+   */
+  declaredSubjects: Set<string>;
+  /**
+   * `setFact`/`relocate` interventions naming an undeclared subject. Rejected,
+   * not applied, and reported as a contradiction — never silently dropped.
+   */
+  rejectedFactWrites: { subject: string; predicate: string; source: string }[];
   /** target -> alternative sufficient support sets (sorted by group) */
   supportGroups: Map<string, SupportGroup[]>;
   /** target -> sorted ENABLES source ids */
@@ -151,6 +171,19 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
     if (entity.kind === "Event") declared.add(entity.id);
   }
   for (const fact of canon.facts) declared.add(fact.id);
+
+  // `declaredSubjects` = every id that may legally be the SUBJECT of a fact.
+  // Any entity kind qualifies (a Character, Object, EventType and so on are all
+  // legal fact subjects even though none is a causal node), plus fact ids.
+  //
+  // `validateCanon` already enforces this for canon facts. Interventions were
+  // not held to the same rule, so `setFact` could write a fact about an id canon
+  // never mentions — enrolling an invented id in an `EventType`. Same asymmetry
+  // as the original P-005 defect, where `hardSupport` had a gate and
+  // `forceEvent` bypassed it (ncr-004).
+  const declaredSubjects = new Set<string>();
+  for (const entity of canon.entities) declaredSubjects.add(entity.id);
+  for (const fact of canon.facts) declaredSubjects.add(fact.id);
 
   // The NODE SET is narrower: events, plus only those facts that actually
   // participate in the graph as an edge endpoint, plus intervention targets.
@@ -226,6 +259,7 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
   const forcedBy = new Map<string, string>();
   const retracted = new Set<string>();
   const overriddenCells = new Map<string, string | number | boolean | null>();
+  const rejectedFactWrites: { subject: string; predicate: string; source: string }[] = [];
   for (const iv of interventions) {
     if (iv.kind === "negateEvent") negated.add(iv.target);
     else if (iv.kind === "forceEvent") forcedBy.set(iv.target, iv.id);
@@ -237,10 +271,19 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
       if (typeof predicate === "string") {
-        overriddenCells.set(
-          cellKey(iv.target, predicate),
-          (object ?? null) as string | number | boolean | null
-        );
+        // P-005/ncr-004: a fact's subject must be something canon declares.
+        // `validateCanon` already enforces this for canon facts; interventions
+        // were exempt, so `setFact` could write a fact about an id canon never
+        // mentions — e.g. enrolling an invented id in an `EventType` via
+        // `instance_of`. Rejected and reported, never silently dropped.
+        if (!declaredSubjects.has(iv.target)) {
+          rejectedFactWrites.push({ subject: iv.target, predicate, source: iv.id });
+        } else {
+          overriddenCells.set(
+            cellKey(iv.target, predicate),
+            (object ?? null) as string | number | boolean | null
+          );
+        }
       }
     }
   }
@@ -253,6 +296,8 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
   return {
     nodeIds,
     declared,
+    declaredSubjects,
+    rejectedFactWrites,
     supportGroups,
     enablesIn,
     precedesEdges,
@@ -499,6 +544,14 @@ export interface ConflictNote {
      * into existence.
      */
     | "forced-undeclared"
+    /**
+     * P-005/ncr-004: setFact/relocate named a SUBJECT canon never declares.
+     * `validateCanon` already forbids this for canon facts; interventions were
+     * exempt, so a fact could be written about an id canon never mentions —
+     * enrolling an invented id in an `EventType`, for instance. Rejected and
+     * reported rather than silently dropped.
+     */
+    | "fact-write-undeclared-subject"
     | "excludes"
     | "invariant";
   other: string;
@@ -520,6 +573,19 @@ export function propagateJudgments(model: DerivationModel): {
   for (const node of unfounded) truth.set(node, "FALSE");
 
   const conflicts: ConflictNote[] = [];
+
+  // Phase D.0 — fact writes rejected at model-build time (P-005/ncr-004).
+  // `setFact`/`relocate` naming a subject canon never declares. Reported, never
+  // silently dropped: the intervention was incoherent, and a caller who asked
+  // for it must be told.
+  for (const write of model.rejectedFactWrites) {
+    conflicts.push({
+      node: write.subject,
+      kind: "fact-write-undeclared-subject",
+      other: write.predicate,
+      source: write.source,
+    });
+  }
 
   // Phase D.1 — intervention conflicts.
   for (const node of model.nodeIds) {

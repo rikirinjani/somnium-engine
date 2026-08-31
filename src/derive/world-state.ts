@@ -173,14 +173,31 @@ function overrideFact(
   return out;
 }
 
-/** Fact interventions applied in order over the effective fact list. */
-function applyFactInterventions(facts: FactView[], interventions: Intervention[]): FactView[] {
+/**
+ * Fact interventions applied in order over the effective fact list.
+ *
+ * `declaredSubjects` gates the write (P-005/ncr-004). A fact's subject must be
+ * something canon declares — `validateCanon` already enforces that for canon
+ * facts, and an intervention is held to the same rule.
+ *
+ * This function and `buildModel`'s `overriddenCells` are TWO VIEWS OF THE SAME
+ * FACT, and they must agree. P-004 fixed one such split (fact nodes ignoring
+ * fact interventions); gating only `buildModel` here would have recreated it —
+ * the causal graph would refuse the write while the effective-fact list, which
+ * `occurrencesOfType` reads, accepted it. Caught by the very test written to
+ * pin the fix.
+ */
+function applyFactInterventions(
+  facts: FactView[],
+  interventions: Intervention[],
+  declaredSubjects: ReadonlySet<string>
+): FactView[] {
   let current = facts;
   for (const iv of interventions) {
     if (iv.kind === "setFact" || iv.kind === "relocate") {
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
-      if (typeof predicate === "string") {
+      if (typeof predicate === "string" && declaredSubjects.has(iv.target)) {
         current = overrideFact(current, iv.target, predicate, object);
       }
     } else if (iv.kind === "retractFact") {
@@ -344,7 +361,11 @@ export function derive(
     statusMap.set(node, projectStatus(judgment));
   }
 
-  const facts = applyFactInterventions(computeEffectiveFacts(canon, judgments), interventions);
+  const facts = applyFactInterventions(
+    computeEffectiveFacts(canon, judgments),
+    interventions,
+    model.declaredSubjects
+  );
   const statuses = toSortedRecord(statusMap);
   const workStatuses = computeWorkStatuses(canon, statuses, facts);
   const contradictions = detectContradictions(conflicts);

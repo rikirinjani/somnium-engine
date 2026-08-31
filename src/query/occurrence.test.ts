@@ -384,14 +384,80 @@ describe("an intervention may never manufacture an occurrence", () => {
       expect(world.statuses["ev/ghost"]).toBe("UNKNOWN");
     });
 
-    it("an invented id can never join a type or be counted", () => {
-      // The occurrence layer must not be reachable by fabrication.
+    it("an invented id can never join a type, be enrolled, or be counted", () => {
+      // P-005 DEFECT FIX (4 of 4), found by the fourth L2 gate.
+      //
+      // This test previously asserted only `occurrenceCount === 0` and the
+      // occurred-filtered rows, while its NAME claimed the id could never join a
+      // type. The name asserted strictly more than the body, and the gap was
+      // real: `setFact(ghost, instance_of, type)` alone — no forceEvent, no
+      // conflict, no record — enrolled the invented id as a non-occurring member
+      // row, and `typeOfOccurrence(ghost)` resolved to the type.
+      //
+      // Nothing occurred and nothing was counted, so it was not a truth-level
+      // hole. But `validateCanon` already forbids a canon fact whose subject is
+      // undeclared, and interventions were exempt from the same rule — the same
+      // asymmetry as the original defect, where `hardSupport` had a gate and
+      // `forceEvent` walked around it. Canon defines the vocabulary; an
+      // intervention selects among it. Fact writes are now held to that too.
       const world = derive(canon, [
         addEdge({ id: "edge/g", kind: "REQUIRES", from: "ev/real", to: "ev/ghost" }),
-        setFact("ev/ghost", "instance_of", "type/t"),
+        setFact("ev/ghost", INSTANCE_OF, "type/t"),
       ]);
+
+      // not counted, and not present even as a non-occurring member row
       expect(occurrenceCount(world, "type/t")).toBe(0);
       expect(occurrencesOfType(world, "type/t").filter((o) => o.occurred)).toEqual([]);
+      expect(occurrencesOfType(world, "type/t").map((o) => o.occurrenceId)).not.toContain("ev/ghost");
+      expect(typeOfOccurrence(world, "ev/ghost")).toBeUndefined();
+
+      // ...and the rejected write is reported, never silently dropped
+      const record = world.contradictions.find(
+        (r) => r.id === "contra:ev/ghost:fact-write-undeclared-subject"
+      );
+      expect(record).toBeDefined();
+      expect(record?.source).toBe("setFact:ev/ghost.instance_of");
+      expect(record?.detail).toMatch(/canon never declares that subject/);
+    });
+
+    it("a fact write about a declared non-event subject is still legal", () => {
+      // The gate must not over-fire. A fact's subject may be any declared
+      // entity — Character, Location, Object, EventType, Work — none of which is
+      // a causal node. Only `declared` (events + facts) gates causal truth;
+      // `declaredSubjects` (all entities + facts) gates fact writes.
+      const withSubjects = mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "type/t", kind: "EventType", name: "T" },
+          { id: "char/vara", kind: "Character", name: "Vara" },
+          { id: "loc/hall", kind: "Location", name: "Hall" },
+        ],
+        [],
+        [],
+        "canon/subjects"
+      );
+      const world = derive(withSubjects, [
+        setFact("char/vara", "located_in", "loc/hall"),
+        relocate("char/vara", "loc/hall"),
+        setFact("ev/real", "mood", "grim"),
+        setFact("type/t", "note", "a type may be a subject"),
+      ]);
+      expect(world.contradictions).toEqual([]);
+      expect(world.facts.find((f) => f.subject === "char/vara" && f.predicate === "located_in")?.object).toBe(
+        "loc/hall"
+      );
+      expect(world.facts.find((f) => f.subject === "ev/real" && f.predicate === "mood")?.object).toBe("grim");
+    });
+
+    it("scales: many enrolment attempts cannot grow a type's membership", () => {
+      const world = derive(
+        canon,
+        [1, 2, 3, 4, 5, 6, 7, 8].map((n) => setFact(`ev/g${n}`, INSTANCE_OF, "type/t"))
+      );
+      expect(occurrencesOfType(world, "type/t")).toEqual([]);
+      expect(
+        world.contradictions.filter((r) => /fact-write-undeclared-subject/.test(r.id)).length
+      ).toBe(8);
     });
 
     it("declared roots and declared chains are unaffected by the gate", () => {

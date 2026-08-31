@@ -64,6 +64,15 @@ function render(note: ConflictNote): ContradictionRecord {
         note.source,
         note.node
       );
+    case "fact-write-undeclared-subject":
+      return buildContradiction(
+        `contra:${note.node}:fact-write-undeclared-subject`,
+        note.node,
+        note.node,
+        `cannot write ${note.other} about ${note.node}: canon never declares that subject — canon defines the vocabulary, an intervention selects among it`,
+        note.source,
+        note.node
+      );
     case "excludes":
       return buildContradiction(
         `contra:${note.edgeId ?? "excludes"}:excludes:${note.node}`,
