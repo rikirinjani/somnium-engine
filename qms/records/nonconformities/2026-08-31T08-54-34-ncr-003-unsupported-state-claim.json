@@ -1,0 +1,44 @@
+{
+  "ncr_id": "ncr-003",
+  "title": "Third recurrence: documentation asserted a claim the change had not actually implemented",
+  "category": "records/nonconformities",
+  "trigger": "L2 verifier gate on P-004 returned REJECT",
+  "severity": "major",
+  "trace_ids": [
+    "somnium-verifier-p004",
+    "somnium-verifier-p004-recheck"
+  ],
+  "agent": "orchestrator",
+  "role": "P-004 second canon genericity challenge",
+  "date": "2026-08-31T08-54-34Z",
+  "status": "closed",
+  "recurrence_of": [
+    "ncr-001",
+    "ncr-002"
+  ],
+  "description": "P-004 split canon validation into errors and notices so that deliberate incompleteness and engine-handled cycles would stop being reported as corruption. The section-18.7 narrative and the adversarial fixture's own header both stated that all three canons now validate with zero errors and that ev/adv-unspecified was declared in Canon.unspecified. Neither was true: the adversarial canon's body never set the key, so the five edges sourced from that id were still reported as dangling errors (5 errors, not 0). The false claim landed on P-004's own headline result, in the fixture whose mis-validation was the evidence for the whole change.",
+  "why_it_escaped": "I verified the mechanism on the canon I had just authored (Ordos, where I added the declaration deliberately) and on Verrin (which needs no declaration), then generalised to 'all three'. The adversarial fixture was the one canon whose declaration I had not written, and it was also the one the argument depended on. Worse: the section-18.7 finding is precisely that nothing ever validated that fixture — so the same blind spot that created the original defect also hid my incomplete fix of it.",
+  "root_cause": "The preventive actions from ncr-001 and ncr-002 were both about SEARCHING (grep the repo for the refuted claim). That is necessary but insufficient, because it can only catch a claim that is textually similar to something I already know is wrong. Here the claim was novel prose asserting a state of the world, and no amount of grepping for prior wording would have found it. The actual root cause is that a factual claim about system state was written into documentation without an executable assertion behind it. Grep cannot verify 'all three canons validate'; a test can.",
+  "corrective_action": [
+    "1c7565a: verrin-adversarial.ts now actually sets unspecified: [ADV_IDS.K.unspecified]; inspectCanon reports 0 errors / 7 notices.",
+    "1c7565a: canon.test.ts gained an 'every seed canon validates' block asserting, for each of the three seeds, zero errors, the exact notice count, and a usable derived world — plus a NEGATIVE test that deletes the declaration and asserts the errors return, so the zero-error result is causally tied to the mechanism rather than coincidental.",
+    "Report 18.7 corrected to state the true per-canon notice counts (0 / 7 / 1) with their decomposition.",
+    "Report 18.4's forward reference to 18.7 corrected to 18.9 (the hashing decision landed in a different subsection than planned)."
+  ],
+  "preventive_action": [
+    "ESCALATION beyond ncr-001/ncr-002: a documentation claim about system STATE (counts, statuses, 'all X now Y') must be backed by an executable assertion, and the assertion must be named in the prose or adjacent to it. Prose that cannot be falsified by running the suite is not evidence, and in this project it has now been wrong three times.",
+    "Specifically: any claim quantified over a set ('all three canons', 'every seed', 'no file contains') must be implemented as a test parameterized over that set, so adding a member to the set forces the claim to be re-proven. The new 'every seed canon validates' block is the pattern.",
+    "When a change's argument rests on a fixture, that fixture must be exercised by the change's own tests. Section 18.7's finding was that nothing validated the adversarial canon; the fix had to include validating it, not merely describing it as validated.",
+    "Keep the ncr-001/ncr-002 repo-wide claim search — it remains the right tool for a refuted PREMISE. It is simply the wrong tool for an unsupported FACTUAL claim, which is what this was."
+  ],
+  "verifier_findings_non_blocking": [
+    "The one-engine source scan matches only double-quoted id literals, so a single-quoted or template-literal canon check would evade it. Left as-is: the repo uses no single quotes, the gap is theoretical, and section 18.5 states the scan's scope precisely rather than claiming completeness.",
+    "qms req-004 was not filed at the time of the first gate; filed as part of this closure."
+  ],
+  "linked_records": [
+    "qms/records/nonconformities/2026-08-30T13-40-00-ncr-001-doc-contradicts-change.json",
+    "qms/records/nonconformities/2026-08-31T02-46-51-ncr-002-refuted-claim-survived.json",
+    "qms/records/verifications/2026-08-31T08-54-34-ver-004-p004-l2-gate.json"
+  ],
+  "notes": "No functional regression at any point: 338 then 348 tests green, tsc clean, verify-facts 3/3 throughout, and the three prior acceptance suites unchanged. As with ncr-002 the defect was a false claim, not broken behaviour — which is why only an adversarial gate catches this class. Three recurrences in three phases indicates the failure is systematic to how I write findings, not incidental."
+}
