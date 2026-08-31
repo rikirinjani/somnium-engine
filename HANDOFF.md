@@ -1,8 +1,9 @@
 # Somnium Engine — Handoff Ledger
 
 **Protocol:** self-harness/constitution.md (role boundaries) + this ledger
-**Scope:** inter-agent coordination — Somnium Engine PoC build only
-**Memory boundary:** entries stay in `C:\Users\think\Project_v2\Somnium-poc\`
+**Scope:** inter-agent coordination — Somnium Engine only
+**Memory boundary:** entries stay in this repository; the sibling Kronos Engine
+repo has its own ledger and must not be modified.
 
 ## How Handoffs Work
 

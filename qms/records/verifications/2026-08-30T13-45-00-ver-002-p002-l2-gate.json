@@ -36,5 +36,5 @@
   "linked_tasks": [
     "P-002 depth/divergence/chain-experiments (req-002)"
   ],
-  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium Engine\\tests\\acceptance\\depth-acceptance.test.ts"
+  "evidence_path": "tests/acceptance/depth-acceptance.test.ts"
 }
