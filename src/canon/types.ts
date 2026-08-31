@@ -16,7 +16,16 @@
  * (see docs/ARCHITECTURE-RECONNAISSANCE.md §18.2 item 9) — a new kind that
  * silently falls through a projection filter is worse than no new kind.
  *
- * Deliberately NOT here: any kind that only one canon would use. Canon-specific
+ * `EventType` (P-005) is the KIND of a happening, as distinct from an `Event`,
+ * which has always been a single OCCURRENCE of one. `ev/rite-of-binding-vaela`
+ * and `ev/rite-of-binding-galen` are two occurrences; `type/rite-of-binding` is
+ * what they are both instances of. A canon links them with an ordinary
+ * `instance_of` fact — no new edge kind, and an EventType is NOT a causal node:
+ * a type does not occur, so it can neither ground nor refute anything.
+ *
+ * Deliberately NOT here: any kind that only one canon would use, and any
+ * bibliographic notion (source, chapter, section). Citation is not world
+ * structure; a canon that wants it can carry it as ordinary facts. Canon-specific
  * flavour belongs in free-form fact predicates, which is the extension point.
  */
 export type EntityKind =
@@ -26,7 +35,18 @@ export type EntityKind =
   | "Institution"
   | "Object"
   | "Event"
+  | "EventType"
   | "Work";
+
+/**
+ * The canonical predicate linking an occurrence to its type (P-005).
+ *
+ * Named in the core so that occurrence/type queries and the OccurrenceDiff
+ * projection are canon-agnostic, while remaining an ORDINARY fact: it takes part
+ * in validity windows, diffing and interventions exactly like any other, and the
+ * causal engine gives it no special treatment.
+ */
+export const INSTANCE_OF = "instance_of";
 
 export interface Entity {
   id: string; // stable id, e.g. "char/vara"

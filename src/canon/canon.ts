@@ -49,6 +49,8 @@ const ENTITY_KINDS: ReadonlySet<string> = new Set([
   "Object", // P-004: artifacts/relics/regalia — in the core because it is
   // ubiquitous across fictional canons, not an Ordos peculiarity.
   "Event",
+  "EventType", // P-005: the KIND of a happening, as distinct from an Event,
+  // which has always been a single occurrence. Not a causal node.
   "Work",
 ]);
 

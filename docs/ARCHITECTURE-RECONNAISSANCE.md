@@ -774,4 +774,253 @@ Explicitly **not** recommended next: minimum-intervention search. It remains rea
 
 ---
 
-*End of report. P-004 complete (§18). Next: P-005 — repeatable events and occurrence identity (§18.12).*
+
+---
+
+## 19. P-005 — Repeatable events and occurrence identity
+
+**Question.** Can Somnium represent a fictional world in which the same *kind* of thing happens more than once, while preserving deterministic identity, causality, temporal ordering, and branch provenance?
+
+**Method note, stated honestly.** P-004 wrote its predictions before touching the engine at all. P-005 differs: the mission's questions were largely answerable by *read-only probe* against the existing engine, so §19.2 records what the engine already does, measured before any change. §19.3 then states falsifiable predictions about what remains to be built. Nothing in §19.2 is a prediction dressed up as a result, and nothing in §19.3 was written after the corresponding code.
+
+### 19.1 The ontology question — Event is already an Occurrence
+
+The mission proposes distinguishing `EventType` / `EventOccurrence` / `CanonicalEventReference` and warns against assuming that ontology is correct. It is not correct for SE, and the reason matters.
+
+**SE's `Event` entity has been an occurrence since P-001.** An `Event` id is a point in narrative time: it anchors fact validity windows (`validFrom`/`validTo`), it is a `PRECEDES` endpoint, and it is what an intervention names. Nothing about it denotes a *kind* of happening. Verrin's `ev/exodus` is not "exodus in general", it is *the* exodus.
+
+So the three-part ontology collapses to:
+
+| Mission concept | SE reality | Verdict |
+|---|---|---|
+| `EventOccurrence` | **`Entity` of kind `Event`** — already exists, already the unit of causality, time, and intervention | **A** — already represented correctly |
+| `EventType` | absent. Expressible as an ordinary fact (`occurrence --instance_of--> type`), but the *type itself* has no entity kind to be | **C** — missing, and generic: any canon with recurring rites, trials, battles or councils needs it |
+| `CanonicalEventReference` | absent — no source/chapter/section provenance anywhere | **D** — bibliographic metadata, not world structure. Belongs in seed data as ordinary facts if a canon wants it. It must **not** enter the core: an engine that computes consequences has no use for a page number, and putting it in the core would invite the mistake of treating citation as identity. |
+
+**Therefore P-005 is not "add recurrence support".** Recurrence already works (§19.2). What is missing is the *type layer* that lets a canon say "these two occurrences are the same kind of thing", and one defect that lets the engine invent occurrences that canon never declared.
+
+**Occurrence identity, defined.** An occurrence is identified by its **declared canon id**, and by nothing else. Not by type, participants, temporal position, location, or causal provenance — those are *properties* of an occurrence, and every one of them can be shared by two distinct occurrences.
+
+The mission asks: *can two distinct occurrences have identical observable properties?* **Yes**, and the engine must still distinguish them. Probe (§19.2 case C): two rites with the same name, the same performer, the same location, and no distinguishing fact remain distinguishable because they are distinct nodes — negating one yields a different world from negating the other. Identity is *declarational*, not derived from attributes. This is the only model that survives the twin-occurrence case, and it is what SE already does.
+
+The cost of that choice, stated plainly: a canon must enumerate its occurrences. SE cannot say "the council meets every spring for a century" in one assertion. That is a **deliberate limit**, not an oversight — see §19.8 risk 1.
+
+### 19.2 What the engine already does — probe results (read-only, before any change)
+
+Each probe used a throwaway fixture and the shipped `derive`. No engine code was modified to obtain these.
+
+**The mission's temporal pattern works, and is not mistaken for a cycle.**
+
+```
+A1 PRECEDES B1 PRECEDES A2 PRECEDES B2,  plus  A1 REQUIRES A2
+```
+Result: all four `ESTABLISHED`, zero `temporalViolations`, zero validation notices. Negating `A1` makes `A2` `UNSUPPORTED` (it required A1) while `B2` stays `ESTABLISHED` (mere ordering is not support).
+
+This is the distinction the mission asks for, and it falls out of the existing design rather than needing new machinery:
+
+- **causal cycle** — a `REQUIRES` loop among occurrences. Detected as an unfounded set (P-003 Phase B), rejected as `UNSUPPORTED`, reported as a validation *notice*.
+- **temporal recurrence** — a `PRECEDES` chain that revisits the same *type*. Not a cycle at all, because the nodes are distinct occurrences. `A1 → B1 → A2 → B2` is a path of length 4 through 4 nodes.
+- **repeated event type** — two occurrences bearing the same type label. Invisible to the engine today, because there is no type label.
+
+A `PRECEDES` cycle can only arise between the *same* occurrence ids, which is a genuine contradiction (an occurrence before itself) and is already reported.
+
+**Twin occurrences are distinguishable** (case C). Two `Event`s with identical name, performer and location: `negate(rite-1)` → `stateHash 747cf84b`; `negate(rite-2)` → `stateHash 82619cdb`. Distinct.
+
+**Case D** (shared prerequisite, different outcomes): negating `trial-1` leaves the shared `omen` and `trial-2` established, and only `trial-1`'s outcome falls. Correct.
+
+**Case E** (an occurrence *enables* a later occurrence of the same type) and **case F** (later occurrence *requires* the earlier): both derive cleanly, no oscillation, no manufactured nodes.
+
+**Case G — convergence.** Two branches reaching the same outcome by *different* occurrences (`settled` supported by `rite-a` OR `rite-b`, negate one or the other) produce **different** `stateHash`es. This is correct and worth stating: occurrence statuses are part of the effective state, so "which rite happened" is a difference *in the world*, not merely in its history. False convergence is structurally impossible here.
+
+**Case H — same state, different provenance.** Where two intervention chains genuinely produce the same effective world (P-004's `setFact` vs `relocate`, or a duplicated set-like mark), `stateHash` matches and `identityHash` differs. The P-004 split already answers the mission's question; §19.6 records the formal semantics.
+
+**Type membership needs no core change.** An `instance_of` fact from occurrence to type validates with zero errors, and the occurrences of a type are recoverable by filtering effective facts. The type *layer* is free; only the type *entity kind* is missing.
+
+**Ordos already contains a recurrence pattern and cannot say so.** `ev/rite-of-binding-vaela` and `ev/rite-of-binding-galen` are two occurrences of one narrative kind, feeding one outcome through disjunctive groups. Nothing in the canon marks them as the same kind of act. The capability gap is real and predates P-005.
+
+### 19.3 The defect — `forceEvent` manufactures occurrences
+
+`do(X happens)` on an id **canon never declared** yields:
+
+```
+forceEvent("ev/ghost")  ->  status ESTABLISHED
+                            judgment { truth: TRUE, support: "HARD", forced: true }
+                            contradictions: 0
+```
+
+The engine asserts that an occurrence it has never heard of not only happened but is *hard-supported*, and reports no conflict. Compare the same undeclared id reached other ways:
+
+| Route | Result | Correct? |
+|---|---|---|
+| `addEdge` endpoint | `UNKNOWN` | yes — `hardSupport` consults `declared` (P-003 case K) |
+| `negateEvent` | `EXCLUDED` | harmless — removing a non-thing |
+| **`forceEvent`** | **`ESTABLISHED`, support `HARD`** | **no — invented history** |
+
+The cause: `positiveFixpoint` sets `TRUE` for a forced node *before* consulting support, so the `declared` gate that protects every other path is bypassed. P-003 built that gate specifically so that absence of knowledge could not become fact; `forceEvent` walks around it.
+
+This is precisely the mission's prohibition — *"the engine must not silently manufacture infinite fictional history"* — and it is a live defect on `main`, not a hypothetical. It went unnoticed because both seed canons only ever force *declared* events.
+
+**Occurrence generation rule (the explicit rule the mission asks for):**
+
+> **The set of occurrences is exactly the set canon declares.** Interventions may change an occurrence's status; they may never bring an occurrence into existence. Forcing an undeclared occurrence is a contradiction between the intervention and the canon, and is reported as one.
+
+### 19.4 Falsifiable predictions
+
+1. Fixing the `forceEvent` gate breaks no existing test, because both seed canons only force declared events.
+2. `EntityKind` gaining `EventType` requires the type union, the validator whitelist, and the diff projections — the same three sites `Object` needed in P-004, now that the P-004 lesson is known.
+3. The type layer needs **no** change to `propagation.ts`: `instance_of` facts are ordinary facts, and types are not causal nodes.
+4. Cases A–H all pass with no change to the causal, temporal, or hashing models.
+5. The diff can express "event type remains but occurrence identity changed" as a **projection over the existing `WorldDiff`**, with no new `WorldDiff` field.
+6. Both seed canons can carry a recurrence pattern without restructuring: Ordos by labelling the two rites it already has, Verrin by adding a genuinely recurring act.
+7. At least one further assumption will surface that this analysis did not anticipate.
+
+---
+
+
+### 19.5 Intervention semantics — what is generic, what is search
+
+The mission asks which of four intervention forms belong in the vocabulary.
+
+| Form | Verdict | Reasoning |
+|---|---|---|
+| `do(EventOccurrence X never occurs)` | **Ship — already shipped.** | This is exactly `negateEvent(occurrenceId)`. It names a declared occurrence and has a unique satisfying world. |
+| `do(EventOccurrence X occurs)` | **Ship — already shipped**, now with a gate. | `forceEvent(occurrenceId)`. P-005 added the rule that the occurrence must be declared (§19.3). |
+| `do(EventType never occurs)` | **Ship as sugar, not primitive.** | Well-defined: negate *every* declared occurrence of the type. It has a unique satisfying world, so it is a derivation, not a search. Deliberately **not implemented** in P-005 because it is a mechanical fold over `occurrencesOfType` that no experiment yet needs — the moment a canon wants it, it is four lines and no new semantics. |
+| `do(EventType occurs at least once)` | **Defer — this is search.** | It does not say *which* occurrence. With N declared occurrences there are up to 2^N−1 satisfying worlds, and choosing among them is abduction, not propagation. |
+| `do(EventType occurs exactly N times)` | **Defer — this is search, and worse.** | Same non-uniqueness, plus it can be unsatisfiable given canon's support structure (Ordos cannot have two rites: they compete). An engine that "satisfied" it would have to invent or suppress occurrences, which is precisely §19.3's prohibition. |
+
+**The dividing line is uniqueness, not difficulty.** An occurrence-quantified intervention names its target and yields one world. A type-quantified intervention constrains a *count* and yields a solution set. SE's `derive` is a function; a solver is not. This is the same boundary that keeps minimum-intervention search out of the core (§10), and it is now the second place that boundary has appeared — which suggests it is a real seam in the architecture rather than a convenience.
+
+What P-005 ships instead is `occurrenceCount(world, typeId)`, which makes the *question* answerable without pretending the *constraint* is derivable. You can ask how many rites happened in any branch; you cannot ask the engine to arrange for exactly two.
+
+### 19.6 Diff semantics — one flag was wrong, and both canons proved it
+
+The mission asks for a diff that distinguishes occurrence added / removed / changed / *"event type remains but occurrence identity changes"*.
+
+The first implementation carried a single `identityShifted` boolean for the last case, defined as *the type persists in both worlds and the occurrence set differs*. **Both seed canons immediately pulled it in opposite directions**, and the cross-canon test failed on Verrin:
+
+| Canon | Shift | added | removed | Reading |
+|---|---|---|---|---|
+| Verrin | negate `ev/kael-oath` | — | `ev/kael-oath` | a sibling was **lost**; nothing replaced it |
+| Ordos | negate Vaela's recognition, force Galen's | `ev/rite-of-binding-galen` | `ev/rite-of-binding-vaela` | one occurrence was **substituted** for another |
+
+Both are "the occurrence set changed while the type persists". Only the second is an identity *shift* in the sense the mission means — the world still contains a rite of binding, but a different one. Collapsing them lost exactly the distinction being asked for, and the single flag reported `true` for both.
+
+`OccurrenceSetDiff` therefore reports **three** predicates over the same computed sets:
+
+- `setChanged` — the type happens in both worlds through a different set. True for both cases above.
+- `substituted` — something was **both** added and removed: an occurrence stood in for another. The strict reading. True for Ordos, false for Verrin.
+- `typeCeased` — the type happened before and happens not at all now. Not an identity change: the kind of thing stopped.
+
+`added` / `removed` / `retained` / `statusChanged` carry the first three cases the mission lists, and are what the three predicates are computed from.
+
+**No new `WorldDiff` field was needed** (prediction 5 held). This is a projection over derived state in `src/query/occurrence.ts`: the underlying status changes are already in the generic diff, and the type grouping is read from `instance_of` facts. The causal engine, the diff engine, and the hashing model are untouched.
+
+### 19.7 Hash and convergence — measured
+
+The mission asks whether `stateHash` equality is *expected* and `identityHash` equality *expected or forbidden*, for worlds with different intervention histories and different causal provenance but the same effective state.
+
+**Formal semantics, restated:**
+
+- `stateHash` = the identity of the **world**. Canon + judgments + effective facts + work statuses + contradictions + temporal violations. Excludes `rpId` and interventions. Two worlds sharing a `stateHash` *are the same world*.
+- `identityHash` = the identity of the **derivation**. `stateHash` + `rpId` + the canonicalized intervention list. Two worlds sharing an `identityHash` were reached the same way.
+
+Therefore: `stateHash(A) == stateHash(B)` with `identityHash(A) != identityHash(B)` is **expected and legitimate**. It is the signature of genealogical convergence. Measured on Ordos, retracting two type-membership facts in either order:
+
+```
+retract A then B   stateHash 44f43369   identityHash 241f7600
+retract B then A   stateHash 44f43369   identityHash 50928c58
+```
+
+Same world, two provenances. Neither hash is wrong; they answer different questions.
+
+**Is `identityHash` equality forbidden when provenance differs?** No — it is *impossible*, which is stronger. `identityHash` is computed *from* the canonicalized provenance, so distinct provenance yields distinct input. The only way two different-looking chains share an `identityHash` is if they canonicalize to the same thing (duplicate set-like marks, or reordered set-like marks), and in that case the provenance is genuinely the same up to the commutation semantics P-004 measured.
+
+**Multiple genealogical branches may legitimately converge, and the engine does not collapse them.** `Universe.id`/`parent`/`lineageOf` are independent of both hashes: two universes with identical `stateHash` remain distinct universes with distinct ancestry. Genealogy and state identity are different concepts and are represented separately — the mission's instruction, satisfied by construction rather than by a new mechanism.
+
+**One result worth stating because it is easy to get backwards.** Occurrence statuses are *part of* the effective state, so two branches that reach "the succession is settled" via different rites do **not** share a `stateHash`:
+
+```
+negate ev/kael-oath      stateHash db4b9c39   (kael-oath EXCLUDED)
+negate ev/wardens-arrive stateHash bf0d25fa   (kael-oath ESTABLISHED)
+```
+
+Which occurrence carried the outcome is a difference *in the world*, not merely in its history. False convergence — two genuinely different worlds sharing a state identity — is structurally impossible for occurrence-level differences.
+
+### 19.8 Propagation — no oscillation, no manufactured history
+
+The mission asks whether the propagation algorithm survives `A → A₁ → B₁ → A₂` without infinite recursion, false bootstrap, accidental cycle detection, duplicate occurrence creation, or status oscillation. Measured:
+
+- **No recursion at all.** `positiveFixpoint` is an iterative worklist over a fixed node set with a `throw`ing pass cap. The node set cannot grow during derivation.
+- **No false bootstrap.** `A₁ REQUIRES A₂` between distinct occurrences is a DAG edge. The unfounded-set phase only fires on genuine `REQUIRES` loops, which recurrence is not.
+- **No accidental cycle detection.** Verified: the `A1 → B1 → A2 → B2` fixture produces zero cycle notices and zero temporal violations, while a genuine `PRECEDES` loop on the same two occurrences still reports one. Revisiting a *type* is not revisiting a *node*.
+- **No duplicate occurrence creation, and none possible.** The node set is `canon events ∪ edge endpoints ∪ intervention targets`, computed once in `buildModel`. Nothing in the pipeline adds a node.
+- **No oscillation.** Phase A truth values are sticky and monotone in the information order; the assertion that catches a `truthRank` decrease never fires on any recurrence fixture.
+
+**The occurrence generation rule, as implemented:**
+
+> The set of occurrences is exactly the set canon declares. An intervention may change an occurrence's status; it may never bring an occurrence into existence. Forcing an undeclared occurrence is a contradiction between intervention and canon, reported as `contra:<id>:force-undeclared` with the forcing intervention as its provenance.
+
+This closes the defect in §19.3. It is the reason the engine cannot manufacture infinite fictional history: not a depth limit or a recursion guard, but the absence of any mechanism that could create a node.
+
+### 19.9 Cross-canon results — two shapes, one engine
+
+Both seed canons now carry a recurring event type, and **they express recurrence differently on purpose**:
+
+| | Verrin | Ordos |
+|---|---|---|
+| Type | `type/oath-sworn` | `type/rite-of-binding`, `type/investiture` |
+| Occurrences | `ev/kael-oath`, `ev/vara-vow` | `ev/rite-of-binding-vaela`, `ev/rite-of-binding-galen` |
+| Shape | **independent parallel** — two people swear binding oaths in answer to one catastrophe | **competing alternatives** — two rites of one kind, at most one can complete |
+| Occurring at baseline | 2 of 2 | 1 of 2 (Galen's hangs on the unsettled parentage) |
+| Consequences | different (Kael's summons the Wardens, Vara's does not) | feed one outcome disjunctively |
+| Under a shift | `setChanged`, **not** `substituted` | `setChanged` **and** `substituted` |
+
+`capability 11` in the cross-canon suite is parameterized over both, per the mission's requirement that quantified claims be tests rather than prose: 9 assertions × 2 canons, plus 2 explicit contrast tests. The same `occurrencesOfType` / `occurrenceCount` / `diffOccurrences` functions read both, and the one-engine source scan still passes — no canon id literal appears in executable engine code.
+
+Ordos's two rites existed before P-005 and the canon could not say they were the same kind of act. That gap is now closed with two facts and no structural change, which is the strongest available evidence that the type layer is genuinely a layer.
+
+### 19.10 Predictions scored
+
+| # | Prediction | Outcome |
+|---|---|---|
+| 1 | Fixing the `forceEvent` gate breaks no existing test | **CONFIRMED** — 348 stayed green through the fix |
+| 2 | `EventType` needs the type union, the validator whitelist, and the diff projections | **CONFIRMED** — exactly those three, the P-004 lesson applied |
+| 3 | The type layer needs no `propagation.ts` change | **CONFIRMED** — types are not causal nodes; the engine never learned they exist |
+| 4 | Cases A–H pass with no change to the causal, temporal, or hashing models | **CONFIRMED** |
+| 5 | The diff needs no new `WorldDiff` field | **CONFIRMED** — a projection in `src/query/occurrence.ts` |
+| 6 | Both canons carry a recurrence pattern without restructuring | **CONFIRMED** — two facts each |
+| 7 | At least one further assumption will surface | **CONFIRMED** — the single `identityShifted` boolean (§19.6). Both canons pulled it in opposite directions and the cross-canon test caught it. |
+
+Prediction 7 is the one that earned its place. Writing it as "something I have not thought of will break" is only useful if it is allowed to actually fire, and it did: the diff-semantics correction came from the two canons disagreeing, not from review.
+
+### 19.11 Remaining risks
+
+Carried from §17.8 / §18.11, with P-005 updates:
+
+1. **Occurrences must be enumerated.** The declarational identity model means a canon cannot say "the council meets every spring for a century" — it must declare each meeting. Correct for a *counterfactual* engine (you can only intervene on what exists), but it puts a hard ceiling on canon scale. A generative occurrence schema is the obvious next want and the obvious next hazard: anything that manufactures occurrences reopens §19.3.
+2. **No cardinality constraints.** A canon cannot assert "this type happens at most once" and have it enforced. Ordos gets that effect indirectly, through fact-level `EXCLUDES` on the Seal. A first-class `AT_MOST_ONE` over a type would be a constraint-layer addition — deliberately not attempted on one canon's evidence.
+3. **`instance_of` is single-valued in practice.** `typeOfOccurrence` returns the first match. An occurrence that is both a rite *and* a betrayal is representable as two facts but only one is reported. Same multi-valued-cell risk as §18.11 item 4, now with a second instance.
+4. **Contradiction still does not propagate** (§17.8 item 1, unchanged).
+5. **No support-set minimality** (unchanged).
+6. **Point-order temporal model only** (unchanged). Recurrence exercised *partial* order hard; interval semantics remain absent.
+7. **`WorkStatus` still reads the projected status** (§18.11 item 5, unchanged) and has no notion of occurrence at all — a Work binds to specific occurrence ids, so "the Work as such recurs" is inexpressible.
+8. **`ENABLES` transitivity undefined** (unchanged).
+9. **No actual-causality attribution** (unchanged).
+10. **Type-quantified interventions are absent by design** (§19.5). If a canon genuinely needs "exactly N", that is a solver, and it should arrive as a separate layer above `derive`, never inside it.
+
+### 19.12 Recommended P-006
+
+**P-006: constraint-layer cardinality — `AT_MOST_ONE` / `AT_LEAST_ONE` over an EventType.**
+
+This is the smallest thing P-005 makes both possible and obviously missing. Ordos already needs it and fakes it: "only one Warden holds the Seal" is enforced by a fact-level `EXCLUDES` between two `held_by` facts, which works but says the wrong thing — the constraint is really *about the type of act*, not about two particular facts. Verrin would need the opposite (its oaths are deliberately unconstrained), so the two canons would immediately disagree about it, which is the condition under which P-003/P-004/P-005 all produced their best findings.
+
+Critically, cardinality *constraints* are not cardinality *interventions*: a constraint is checked in Phase D and yields a contradiction when violated, which is a derivation. `do(exactly N)` is a search (§19.5). P-006 should build the former and continue to refuse the latter.
+
+Recommended method, unchanged because it keeps working: pick the premise that forces the feature, write the schema challenge and falsifiable predictions before touching code, let the fixtures disagree with the engine, and treat a green suite as evidence about the tests as much as about the code.
+
+**Explicitly not recommended next:** a third canon. P-004 established genericity across two structurally opposite canons and P-005 confirmed it holds under recurrence. A third canon would raise confidence more slowly than attacking the constraint layer, which currently has exactly two edge kinds (`EXCLUDES`, `INVARIANT`) and has never been stress-tested at all.
+
+---
+
+*End of report. P-005 complete (section 19). Next: P-006 - constraint-layer cardinality over an EventType (section 19.12).*

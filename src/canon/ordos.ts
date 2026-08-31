@@ -47,6 +47,7 @@
  * structural contract asserted in ordos.test.ts.
  */
 import { computeRewindHash, hashCanon } from "./hash";
+import { INSTANCE_OF } from "./types";
 import type { Canon, CausalEdge, Entity, Fact, WorkBinding } from "./types";
 import type { RewindPoint } from "../timeline/types";
 
@@ -92,6 +93,17 @@ export const ORDOS_IDS = deepFreeze({
   undeclared: {
     heirProofSworn: "ev/heir-proof-sworn",
   },
+  /**
+   * Event types (P-005). Ordos expresses recurrence as COMPETING ALTERNATIVES:
+   * two rites of one kind, only one of which can complete, feeding a single
+   * outcome through disjunctive support. Verrin expresses it as INDEPENDENT
+   * PARALLEL occurrences. Same core mechanism, two different narrative shapes —
+   * which is the cross-canon genericity contrast.
+   */
+  types: {
+    riteOfBinding: "type/rite-of-binding",
+    investiture: "type/investiture",
+  },
   facts: {
     sealHeldAnselm: "fact/seal-held-anselm",
     sealHeldPetronius: "fact/seal-held-petronius",
@@ -107,6 +119,11 @@ export const ORDOS_IDS = deepFreeze({
     petroniusSeneschal: "fact/petronius-seneschal",
     chapterChartered: "fact/chapter-chartered",
     myrraPresides: "fact/myrra-presides",
+    // occurrence -> type membership (P-005)
+    vaelaRiteIsRite: "fact/vaela-rite-is-rite",
+    galenRiteIsRite: "fact/galen-rite-is-rite",
+    vaelaInvestitureIsInvestiture: "fact/vaela-investiture-is-investiture",
+    galenInvestitureIsInvestiture: "fact/galen-investiture-is-investiture",
   },
   works: {
     investitureOfVaela: "work/investiture-of-vaela",
@@ -194,6 +211,13 @@ const work = (id: string, name: string, description: string): Entity => ({
   name,
   description,
 });
+/** P-005: the KIND of a happening. Not a causal node — a type does not occur. */
+const evtype = (id: string, name: string, description: string): Entity => ({
+  id,
+  kind: "EventType",
+  name,
+  description,
+});
 const fact = (
   id: string,
   subject: string,
@@ -248,6 +272,9 @@ const entities: Entity[] = [
   work(ORDOS_IDS.works.investitureOfVaela, "The Investiture of Vaela", "Vaela acclaimed, recognised, invested, and bound."),
   work(ORDOS_IDS.works.claimOfGalen, "The Claim of Galen", "The inheritance claim that never settles."),
   work(ORDOS_IDS.works.settlementOfSuccession, "The Settlement of the Succession", "The binding rite and the settled succession."),
+  // event types (P-005): two kinds of act that each happen twice in this canon
+  evtype(ORDOS_IDS.types.riteOfBinding, "Rite of Binding", "The rite that binds a claimant to the Warden's office."),
+  evtype(ORDOS_IDS.types.investiture, "Investiture", "The passing of the Seal into a claimant's hands."),
 ];
 
 const facts: Fact[] = [
@@ -270,6 +297,14 @@ const facts: Fact[] = [
   fact(ORDOS_IDS.facts.petroniusSeneschal, ORDOS_IDS.characters.petronius, "seneschal_of", ORDOS_IDS.institution.chapter, null, null),
   fact(ORDOS_IDS.facts.chapterChartered, ORDOS_IDS.institution.chapter, "chartered_by", ORDOS_IDS.objects.charter, null, null),
   fact(ORDOS_IDS.facts.myrraPresides, ORDOS_IDS.characters.myrra, "presides_over", ORDOS_IDS.faction.council, null, null),
+  // occurrence -> type membership (P-005). Ordinary atemporal facts: an
+  // occurrence's KIND does not change over narrative time, even though whether
+  // the occurrence happens very much does. Ordos's recurrence shape is COMPETING
+  // ALTERNATIVES — two rites of one kind, at most one of which can complete.
+  fact(ORDOS_IDS.facts.vaelaRiteIsRite, ORDOS_IDS.events.riteBindingVaela, INSTANCE_OF, ORDOS_IDS.types.riteOfBinding, null, null),
+  fact(ORDOS_IDS.facts.galenRiteIsRite, ORDOS_IDS.events.riteBindingGalen, INSTANCE_OF, ORDOS_IDS.types.riteOfBinding, null, null),
+  fact(ORDOS_IDS.facts.vaelaInvestitureIsInvestiture, ORDOS_IDS.events.vaelaInvested, INSTANCE_OF, ORDOS_IDS.types.investiture, null, null),
+  fact(ORDOS_IDS.facts.galenInvestitureIsInvestiture, ORDOS_IDS.events.galenInvested, INSTANCE_OF, ORDOS_IDS.types.investiture, null, null),
 ];
 
 const edges: CausalEdge[] = [

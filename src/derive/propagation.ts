@@ -363,6 +363,15 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
         if (model.forcedBy.has(node)) {
           // do(X happens) asserts occurrence. A refuted prerequisite makes this
           // a conflict, recorded in Phase D rather than resolved here.
+          //
+          // P-005: forcing an occurrence canon never DECLARED is also a conflict
+          // (Phase D.1 "forced-undeclared"). An intervention may change an
+          // occurrence's status; it may never bring one into existence. Before
+          // this, `forceEvent("ev/never-declared")` returned ESTABLISHED with
+          // support HARD and no contradiction — the engine inventing fictional
+          // history, which is exactly what the `declared` gate exists to prevent.
+          // Every other route to an undeclared id already respected that gate;
+          // forcing walked around it because this branch short-circuits support.
           next = "TRUE";
         } else {
           next = support;
@@ -444,7 +453,17 @@ function softSupported(node: string, model: DerivationModel, truth: Map<string, 
 /** A conflict detected in Phase D, carrying its provenance. */
 export interface ConflictNote {
   node: string;
-  kind: "forced-vs-negated" | "forced-vs-refuted" | "excludes" | "invariant";
+  kind:
+    | "forced-vs-negated"
+    | "forced-vs-refuted"
+    /**
+     * P-005: do(X happens) named an occurrence canon never declared. An
+     * intervention may change an occurrence's status; it may never bring one
+     * into existence.
+     */
+    | "forced-undeclared"
+    | "excludes"
+    | "invariant";
   other: string;
   /** intervention id, or "canon" for constraint violations */
   source: string;
@@ -471,6 +490,15 @@ export function propagateJudgments(model: DerivationModel): {
     if (forceId === undefined) continue;
     if (model.negated.has(node)) {
       conflicts.push({ node, kind: "forced-vs-negated", other: node, source: forceId });
+      continue;
+    }
+    // P-005: forcing an occurrence canon never declared. Checked BEFORE support,
+    // because an undeclared node has no support to speak of — `hardSupport`
+    // returns NEITHER for it, so the refuted-prerequisite branch below would
+    // never fire and the invented occurrence would pass silently.
+    const isFact = model.facts.has(node);
+    if (!isFact && !model.declared.has(node)) {
+      conflicts.push({ node, kind: "forced-undeclared", other: node, source: forceId });
       continue;
     }
     const fact = model.facts.get(node);

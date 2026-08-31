@@ -55,6 +55,15 @@ function render(note: ConflictNote): ContradictionRecord {
         note.source,
         note.node
       );
+    case "forced-undeclared":
+      return buildContradiction(
+        `contra:${note.node}:force-undeclared`,
+        note.node,
+        note.node,
+        `occurrence ${note.node} is forced but canon never declares it — an intervention may change an occurrence's status, never bring one into existence`,
+        note.source,
+        note.node
+      );
     case "excludes":
       return buildContradiction(
         `contra:${note.edgeId ?? "excludes"}:excludes:${note.node}`,

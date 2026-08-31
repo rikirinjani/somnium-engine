@@ -25,6 +25,7 @@
  *     without contradiction.
  */
 import { computeRewindHash, hashCanon } from "./hash";
+import { INSTANCE_OF } from "./types";
 import type { Canon, CausalEdge, Entity, Fact, WorkBinding } from "./types";
 import type { RewindPoint } from "../timeline/types";
 
@@ -64,6 +65,12 @@ const entities: Entity[] = [
   { id: "ev/maren-return", kind: "Event", name: "Maren Returns", description: "Maren returns to Valdar as an envoy of the court." },
   { id: "ev/valdar-rebuilds", kind: "Event", name: "Valdar Rebuilds", description: "The long rebuilding of Valdar begins." },
   { id: "ev/secret-betrayal", kind: "Event", name: "The Secret Betrayal", description: "The city gates are opened from within — no path to it in baseline." },
+  // event types (P-005): the KIND of a happening, distinct from an occurrence.
+  // Verrin expresses recurrence as INDEPENDENT PARALLEL occurrences: two people
+  // swear binding oaths in answer to the same catastrophe, and the two acts have
+  // different consequences. (Ordos expresses recurrence differently — as
+  // competing alternatives — which is the cross-canon genericity contrast.)
+  { id: "type/oath-sworn", kind: "EventType", name: "An Oath Sworn", description: "A character binds themselves by a vow." },
   // works
   { id: "work/verrin-ashfall", kind: "Work", name: "Verrin: Ashfall", description: "The canonical first cycle: blight, exodus, ashfall." },
   { id: "work/ember-prelude", kind: "Work", name: "Verrin: Ember Prelude", description: "The ultimatum and Orin's defiance." },
@@ -90,6 +97,14 @@ const facts: Fact[] = [
   { id: "fact/ashfall-blankets-valdar", subject: "loc/valdar", predicate: "blanketed_by", object: "ash", validFrom: "ev/ashfall-falls", validTo: null, source: "canon" },
   // dead-end fact: only effective in worlds where the betrayal already happened
   { id: "fact/gate-bribed", subject: "loc/valdar", predicate: "gate_bribed_by", object: "fac/ember-court", validFrom: "ev/secret-betrayal", validTo: null, source: "canon" },
+  // occurrence -> type membership (P-005). Ordinary facts: they take part in
+  // validity windows, diffing and interventions like any other, and the causal
+  // engine gives them no special treatment. Two INDEPENDENT PARALLEL occurrences
+  // of one kind — both oaths answer the blight, neither requires the other, and
+  // they have different downstream consequences (Kael's summons the Wardens,
+  // Vara's does not).
+  { id: "fact/vara-vow-is-oath", subject: "ev/vara-vow", predicate: INSTANCE_OF, object: "type/oath-sworn", validFrom: null, validTo: null, source: "canon" },
+  { id: "fact/kael-oath-is-oath", subject: "ev/kael-oath", predicate: INSTANCE_OF, object: "type/oath-sworn", validFrom: null, validTo: null, source: "canon" },
 ];
 
 const edges: CausalEdge[] = [
