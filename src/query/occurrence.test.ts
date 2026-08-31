@@ -223,15 +223,90 @@ describe("an intervention may never manufacture an occurrence", () => {
     []
   );
 
-  it("forcing an UNDECLARED occurrence is a contradiction, not a new event", () => {
-    // P-005 DEFECT FIX (1 of 2). Before this, forceEvent on an id canon never
-    // declared returned ESTABLISHED with support HARD and zero contradictions.
+  it("forcing an UNDECLARED occurrence does not put it in the world, and is recorded", () => {
+    // P-005 DEFECT FIX (1 of 3). Before any fix, `forceEvent` on an id canon
+    // never declared returned ESTABLISHED with support HARD and zero
+    // contradictions.
+    //
+    // The FIRST fix set truth TRUE and let Phase D join it to BOTH, giving
+    // status CONTRADICTORY. That looked right and was wrong where it mattered:
+    // `occurs()` accepts BOTH, so the invented occurrence was still counted by
+    // `occurrenceCount`, still joined an `EventType`, and still opened the
+    // validity window of any canon fact anchored to it. Found by the second L2
+    // gate (ncr-004).
+    //
+    // The world provably does not contain the occurrence — canon defines the
+    // vocabulary — so truth is FALSE and every downstream consumer (`occurs`,
+    // fact windows, counting, diffing) is correct for free, because they all
+    // read truth. The incoherence of the INTERVENTION lives in the records,
+    // which is the authoritative surface for contradictions; `statuses` is a
+    // documented lossy projection.
     const world = derive(canon, [forceEvent("ev/ghost")]);
-    expect(world.statuses["ev/ghost"]).toBe("CONTRADICTORY");
+
+    // not in the world
+    expect(world.judgments["ev/ghost"]).toMatchObject({ truth: "FALSE", forced: true });
+    expect(world.statuses["ev/ghost"]).toBe("UNSUPPORTED");
+    // ...and the incoherent intervention is reported with provenance
     const record = world.contradictions.find((r) => r.id === "contra:ev/ghost:force-undeclared");
     expect(record).toBeDefined();
     expect(record?.source).toBe("forceEvent:ev/ghost");
     expect(record?.detail).toMatch(/never declares it/);
+  });
+
+  it("a forced undeclared id can never be counted or open a fact window", () => {
+    // The two consequences that made the BOTH reading unacceptable. `truth: FALSE`
+    // closes both at once.
+    const withWindow = mk(
+      [
+        { id: "ev/rite", kind: "Event", name: "Rite" },
+        { id: "type/t", kind: "EventType", name: "T" },
+      ],
+      [
+        instanceOf("fact/rite-t", "ev/rite", "type/t"),
+        // a canon fact whose window opens at the undeclared id
+        {
+          id: "fact/opened",
+          subject: "ev/rite",
+          predicate: "note",
+          object: "opened-by-ghost",
+          validFrom: "ev/ghost",
+          validTo: null,
+          source: "canon",
+        },
+      ],
+      [],
+      "canon/window"
+    );
+
+    const world = derive(withWindow, [
+      forceEvent("ev/ghost"),
+      setFact("ev/ghost", INSTANCE_OF, "type/t"),
+    ]);
+    expect(occurrenceCount(world, "type/t")).toBe(1); // only the declared rite
+    expect(world.facts.some((f) => f.id === "fact/opened")).toBe(false);
+    expect(world.contradictions.some((r) => r.id === "contra:ev/ghost:force-undeclared")).toBe(true);
+  });
+
+  it("forcing many undeclared ids cannot inflate an occurrence count", () => {
+    // The scaling version: five forced ghosts on a canon declaring one occurrence.
+    const withType = mk(
+      [
+        { id: "ev/rite", kind: "Event", name: "Rite" },
+        { id: "type/t", kind: "EventType", name: "T" },
+      ],
+      [instanceOf("fact/rite-t", "ev/rite", "type/t")],
+      [],
+      "canon/many"
+    );
+    const world = derive(
+      withType,
+      [1, 2, 3, 4, 5].flatMap((n) => [
+        forceEvent(`ev/g${n}`),
+        setFact(`ev/g${n}`, INSTANCE_OF, "type/t"),
+      ])
+    );
+    expect(occurrenceCount(world, "type/t")).toBe(1);
+    expect(world.contradictions.filter((r) => /force-undeclared/.test(r.id)).length).toBe(5);
   });
 
   it("forcing a DECLARED occurrence remains ordinary", () => {

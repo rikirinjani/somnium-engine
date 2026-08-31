@@ -674,13 +674,24 @@ describe.each(CASES)("capability 11: repeatable events [$name]", (c) => {
     );
   });
 
-  it("never manufactures an occurrence: forcing an undeclared id is a contradiction", () => {
+  it("never manufactures an occurrence: a forced undeclared id stays out of the world", () => {
+    // The world provably does not contain it (truth FALSE), and the incoherent
+    // intervention is reported. An earlier pass gave it truth BOTH, which
+    // `occurs()` accepts — so the invented occurrence was counted. See ncr-004.
     const ghost = `${r.typeId.replace("type/", "ev/")}-undeclared-occurrence`;
     const world = derive(c.canon, [forceEvent(ghost)], c.rp);
-    expect(statusOf(world, ghost)).toBe("CONTRADICTORY");
+
+    expect(world.judgments[ghost]).toMatchObject({ truth: "FALSE", forced: true });
     expect(world.contradictions.some((x) => x.id === `contra:${ghost}:force-undeclared`)).toBe(true);
-    // and it did NOT join the type
+    // it did not join the type...
     expect(occurrencesOfType(world, r.typeId).map((o) => o.occurrenceId)).toEqual(r.occurrences);
+    // ...and even when an intervention tries to enrol it, it is not counted.
+    const enrolled = derive(
+      c.canon,
+      [forceEvent(ghost), setFact(ghost, "instance_of", r.typeId)],
+      c.rp
+    );
+    expect(occurrenceCount(enrolled, r.typeId)).toBe(r.baselineCount);
   });
 
   it("type membership is intervenable without changing whether the occurrence happened", () => {

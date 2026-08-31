@@ -385,19 +385,20 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
           // do(X happens) asserts occurrence. A refuted prerequisite makes this
           // a conflict, recorded in Phase D rather than resolved here.
           //
-          // P-005: forcing an occurrence canon never DECLARED is also a conflict
-          // (Phase D.1 "forced-undeclared"). An intervention may change an
-          // occurrence's status; it may never bring one into existence. Before
-          // this, `forceEvent("ev/never-declared")` returned ESTABLISHED with
-          // support HARD and no contradiction — the engine inventing fictional
-          // history, which is exactly what the `declared` gate exists to prevent.
+          // P-005: but forcing cannot bring an UNDECLARED occurrence into
+          // existence, so the `declared` gate applies here too. An undeclared
+          // forced id is FALSE — the world does not contain it — and Phase D
+          // records a `forced-undeclared` contradiction naming the incoherent
+          // intervention. The contradiction lives in the records, not in the
+          // truth value.
           //
-          // Forcing needs its own gate because this branch short-circuits
-          // support. `hardSupport` has a second, independent gate for the
-          // `addEdge`-undeclared-target route (see its doc block): both were
-          // holes in the same wall, and the first fix here covered only one of
-          // them until the L2 gate found the other.
-          next = "TRUE";
+          // An earlier pass set TRUE here and let Phase D join it to BOTH. That
+          // looked right (status CONTRADICTORY) but was wrong where it mattered:
+          // `occurs()` accepts BOTH, so the invented occurrence was counted by
+          // `occurrenceCount`, joined an `EventType`, and opened the validity
+          // window of any canon fact anchored to it — an id canon never declared
+          // writing world state. Found by the second L2 gate (ncr-004).
+          next = model.declared.has(node) || model.facts.has(node) ? "TRUE" : "FALSE";
         } else {
           next = support;
         }
@@ -580,7 +581,23 @@ export function propagateJudgments(model: DerivationModel): {
     }
   }
 
-  const conflicted = new Set(conflicts.map((c) => c.node));
+  /**
+   * Conflicts whose truth value must NOT be flipped to BOTH (P-005).
+   *
+   * Every other conflict kind means "the world asserts an impossibility", and
+   * BOTH is the right verdict. `forced-undeclared` means something different:
+   * the INTERVENTION is incoherent, not the world. The world simply does not
+   * contain the occurrence, so its truth stays FALSE and the incoherence is
+   * reported in the records.
+   *
+   * This matters because `occurs()` accepts BOTH. Flipping a forced undeclared
+   * id to BOTH made the invented occurrence count toward `occurrenceCount`, let
+   * it join an `EventType`, and opened the validity window of any canon fact
+   * anchored to it — an id canon never declared writing world state. Found by
+   * the second L2 gate on this change (ncr-004).
+   */
+  const NON_TAINTING: ReadonlySet<ConflictNote["kind"]> = new Set(["forced-undeclared"]);
+  const conflicted = new Set(conflicts.filter((c) => !NON_TAINTING.has(c.kind)).map((c) => c.node));
 
   const judgments = new Map<string, Judgment>();
   for (const node of model.nodeIds) {
