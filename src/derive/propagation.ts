@@ -95,6 +95,22 @@ export interface DerivationModel {
   forcedBy: Map<string, string>;
   /** fact nodes participating in the graph, by id */
   facts: Map<string, Fact>;
+  /**
+   * Fact ids a `retractFact` intervention removed (P-004). The fact does not
+   * hold in this world, so its node is FALSE — authoritative, like `negated`.
+   */
+  retracted: Set<string>;
+  /**
+   * `subject|predicate` -> the object a `setFact`/`relocate` intervention wrote
+   * last (P-004). A canon fact node for that cell whose object differs no longer
+   * holds, so its node is FALSE.
+   */
+  overriddenCells: Map<string, string | number | boolean | null>;
+}
+
+/** Cell key for a fact's (subject, predicate) — the unit a setFact writes to. */
+function cellKey(subject: string, predicate: string): string {
+  return `${subject}\u0000${predicate}`;
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
@@ -208,9 +224,25 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
 
   const negated = new Set<string>();
   const forcedBy = new Map<string, string>();
+  const retracted = new Set<string>();
+  const overriddenCells = new Map<string, string | number | boolean | null>();
   for (const iv of interventions) {
     if (iv.kind === "negateEvent") negated.add(iv.target);
     else if (iv.kind === "forceEvent") forcedBy.set(iv.target, iv.id);
+    else if (iv.kind === "retractFact") retracted.add(iv.target);
+    else if (iv.kind === "setFact" || iv.kind === "relocate") {
+      // Applied IN ORDER, so the last write to a cell wins — matching
+      // applyFactInterventions in world-state.ts, which owns the effective
+      // fact list. These two views of "does this fact hold" must agree.
+      const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
+      const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
+      if (typeof predicate === "string") {
+        overriddenCells.set(
+          cellKey(iv.target, predicate),
+          (object ?? null) as string | number | boolean | null
+        );
+      }
+    }
   }
 
   const facts = new Map<string, Fact>();
@@ -229,10 +261,51 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
     negated,
     forcedBy,
     facts,
+    retracted,
+    overriddenCells,
   };
 }
 
-/** Phase-A truth of a fact-as-constraint node, from its validity window. */
+/**
+ * Phase-A truth of a fact-as-constraint node.
+ *
+ * Two sources, in precedence order:
+ *
+ *   1. FACT-LEVEL INTERVENTIONS (P-004). A `retractFact` removes the fact, and a
+ *      `setFact`/`relocate` that writes a DIFFERENT object to the same
+ *      (subject, predicate) cell replaces it. Either way the canon fact no
+ *      longer holds, so its node is FALSE — authoritative, exactly as
+ *      `negateEvent` is for an event.
+ *
+ *      This was a P-004 defect. `buildModel` collected only negate/force, so a
+ *      fact node's truth came solely from its validity window and an event
+ *      REQUIRING a fact was unaffected by retracting or overwriting that fact.
+ *      The effective-fact list (world-state.ts) and the causal graph disagreed
+ *      about whether the same fact held. Verrin never noticed because its one
+ *      fact-sourced REQUIRES edge is a deliberate dead end; Ordos gates a rite
+ *      on who holds the Seal, so the disagreement became visible immediately.
+ *
+ *   2. The validity window over event truth, when no intervention touched it.
+ */
+function factNodeTruth(
+  fact: Fact,
+  model: DerivationModel,
+  truth: Map<string, TruthValue>
+): TruthValue {
+  if (model.retracted.has(fact.id)) return "FALSE";
+
+  const cell = cellKey(fact.subject, fact.predicate);
+  if (model.overriddenCells.has(cell)) {
+    // An override to this cell displaces every canon fact for it except one
+    // asserting the same object (writing the same value changes nothing).
+    const written = model.overriddenCells.get(cell);
+    if (written !== fact.object) return "FALSE";
+  }
+
+  return factWindowTruth(fact, truth);
+}
+
+/** Truth of a fact node from its narrative-time validity window alone. */
 function factWindowTruth(fact: Fact, truth: Map<string, TruthValue>): TruthValue {
   const fromTruth = fact.validFrom === null ? "TRUE" : truth.get(fact.validFrom) ?? "NEITHER";
   const toTruth = fact.validTo === null ? "NEITHER" : truth.get(fact.validTo) ?? "NEITHER";
@@ -286,7 +359,7 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
         next = "FALSE"; // do(X never happens) is authoritative
       } else {
         const fact = model.facts.get(node);
-        const support = fact !== undefined ? factWindowTruth(fact, truth) : hardSupport(node, model, truth);
+        const support = fact !== undefined ? factNodeTruth(fact, model, truth) : hardSupport(node, model, truth);
         if (model.forcedBy.has(node)) {
           // do(X happens) asserts occurrence. A refuted prerequisite makes this
           // a conflict, recorded in Phase D rather than resolved here.
@@ -401,7 +474,7 @@ export function propagateJudgments(model: DerivationModel): {
       continue;
     }
     const fact = model.facts.get(node);
-    const support = fact !== undefined ? factWindowTruth(fact, truth) : hardSupport(node, model, truth);
+    const support = fact !== undefined ? factNodeTruth(fact, model, truth) : hardSupport(node, model, truth);
     if (support === "FALSE") {
       // Name the refuted prerequisite for the record (first refuted conjunct,
       // sorted, across the sorted groups — deterministic).

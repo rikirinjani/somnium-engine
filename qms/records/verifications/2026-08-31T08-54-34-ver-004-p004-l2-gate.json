@@ -1,0 +1,52 @@
+{
+  "verification_id": "ver-004",
+  "title": "Somnium Engine P-004 — L2 verifier gate (second canon genericity challenge)",
+  "category": "records/verifications",
+  "trace_id": "somnium-verifier-p004-recheck",
+  "date": "2026-08-31T08-54-34Z",
+  "result": "APPROVE",
+  "description": "Independent L2 review of P-004 (branch generic, commits 2206d10 / 32a517a / 1c7565a on merged baseline d83e84e). Two gates: REJECT then APPROVE. The rejection was a third recurrence of the documentation-claim defect class, on the change's own headline result.",
+  "gate_history": [
+    {
+      "trace_id": "somnium-verifier-p004",
+      "commit": "32a517a",
+      "result": "REJECT",
+      "findings": [
+        "B1 verrin-adversarial.ts:28-35 asserted the fixture passes validateCanon with zero errors and that ev/adv-unspecified was declared in Canon.unspecified. Both false — the canon body never set the key; 5 errors on HEAD.",
+        "B2 report 18.7 asserted 'All three canons now validate with zero errors' — false for the adversarial fixture."
+      ],
+      "non_blocking": [
+        "the one-engine source scan matches only double-quoted id literals",
+        "report 18.4 forward-referenced 18.7 for the hashing decision that landed as 18.9"
+      ],
+      "other_claims": "all PASS — two canons through one engine, predictions scored honestly with 18.3 byte-identical pre/post implementation, fact-node defect reproduced at the parent commit, ALTERED fix a strict superset, two-hash split with hash removed not aliased and src/timeline byte-unchanged, ten capabilities parameterized with no skips, both 18.8 semantics claims verified by execution, determinism intact"
+    },
+    {
+      "trace_id": "somnium-verifier-p004-recheck",
+      "commit": "1c7565a",
+      "result": "APPROVE",
+      "note": "Both blocking findings closed and independently reproduced. Exhaustive repo-wide recurrence sweep over src/, tests/, docs/, qms/: zero SURVIVING refuted claims; every hit accurate at HEAD or past-tense naming the error it replaced. The negative test confirms the zero-error result is earned by the declaration rather than by the validator having stopped checking."
+    }
+  ],
+  "checks": [
+    { "id": 1, "name": "Change scoping", "result": "PASS", "evidence": "24 files cumulative, all under docs/ src/ tests/; src/timeline byte-unchanged; Kronos Engine untouched" },
+    { "id": 2, "name": "Two canons, one engine", "result": "PASS", "evidence": "both derive through the single imported derive; source-scan test over 9 engine files rejects canon id literals in executable code; scan scope stated precisely rather than overclaimed" },
+    { "id": 3, "name": "Predictions scored honestly", "result": "PASS", "evidence": "section 18.3 byte-identical in 2206d10 and HEAD; each of the 3 refutations maps to real code; none reworded to 'confirmed'" },
+    { "id": 4, "name": "Fact-node defect real and fixed", "result": "PASS", "evidence": "retracted/overriddenCells/factNodeTruth all new vs d83e84e; defect reproduced at parent commit (rite ESTABLISHED with the Seal unheld); fix verified by execution incl. the same-value case" },
+    { "id": 5, "name": "Validator errors/notices split", "result": "PASS", "evidence": "inspectCanon splits; validateCanon returns errors only; historical 7-count failure reproduced at d83e84e; all three seeds now 0 errors with notices 0/7/1" },
+    { "id": 6, "name": "ALTERED fix is a strict superset", "result": "PASS", "evidence": "old subject-vs-events rule retained as one clause of the dependency union, so the pre-existing test passes legitimately; Ordos returns PRESERVED under the old rule and ALTERED under the new" },
+    { "id": 7, "name": "Two-hash split", "result": "PASS", "evidence": "hash removed not aliased (hasOwnProperty false); stateHash excludes rpId/interventions; convergence case executed — setFact vs relocate share stateHash, differ in identityHash; computeRewindHash untouched" },
+    { "id": 8, "name": "Ten capabilities for both canons", "result": "PASS", "evidence": "parameterized over a CASES table, no skips; both 18.8 genuine-semantics claims (possession fallback; disjoin(FALSE,NEITHER)=NEITHER leaving succession UNKNOWN) verified by execution" },
+    { "id": 9, "name": "No silent UNKNOWN->FALSE, no silent contradiction repair", "result": "PASS", "evidence": "asserted per canon; world returned with EXCLUDED intact alongside CONTRADICTORY" },
+    { "id": 10, "name": "Determinism, build, gates", "result": "PASS", "evidence": "no Math.random/Date.now in the simulation path; tsc exit 0; 348 tests / 18 files; poc 14, causal 33, depth 14, cross-canon 69 — no regression; verify-facts 3/3" }
+  ],
+  "verifier_judgement_on_rewritten_tests": "The two canon.test.ts cycle tests were rewritten from 'reports an error' to 'reports a NOTICE'. Judged legitimate corrections, verified independently rather than accepted: P-003 had already made both cycle kinds tested engine behaviours, so a validator calling them fatal contradicted shipped code. The rewritten tests are also stronger — they still assert the cycle is detected and named with both endpoints, and add the negative assertion that it is not in errors.",
+  "verifier_judgement_on_self_assessment": "Report 18.10's claim that Verrin alone would have left the architecture 'wrong in three places' was checked item by item. Two (fact-node defect, ALTERED rule) were reproduced at the parent commit. The third (validator divergence) was accurately diagnosed but inaccurately reported as fixed at the first gate — which is what ncr-003 records.",
+  "linked_tasks": [
+    "P-004 second canon genericity challenge (req-004)"
+  ],
+  "nonconformities": [
+    "qms/records/nonconformities/2026-08-31T08-54-34-ncr-003-unsupported-state-claim.json"
+  ],
+  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium Engine\\tests\\acceptance\\cross-canon-acceptance.test.ts"
+}

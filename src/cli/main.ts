@@ -125,7 +125,7 @@ function main(): void {
       for (const spec of rest) {
         chain.push(parseIntervention(spec));
         const world = derive(canon, [...chain], rp);
-        steps.push({ step: steps.length + 1, intervention: spec, worldHash: world.hash });
+        steps.push({ step: steps.length + 1, intervention: spec, worldHash: world.identityHash });
       }
       const final = derive(canon, chain, rp);
       print({ steps, diff: worldDiff(baseline, final) });

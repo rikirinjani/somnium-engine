@@ -5,11 +5,26 @@
  * and works — not as prose. Everything here is data; the engine is deterministic.
  */
 
+/**
+ * What kinds of thing a canon may declare.
+ *
+ * `Object` (P-004) covers artifacts, relics, documents, weapons, regalia — any
+ * inanimate thing that can be possessed, transferred, destroyed, or gate an
+ * event. It earned its place in the core by being ubiquitous across fictional
+ * canons rather than by being needed once: an artifact of office is not an
+ * Ordos peculiarity. Every site that reads `kind` was audited when it was added
+ * (see docs/ARCHITECTURE-RECONNAISSANCE.md §18.2 item 9) — a new kind that
+ * silently falls through a projection filter is worse than no new kind.
+ *
+ * Deliberately NOT here: any kind that only one canon would use. Canon-specific
+ * flavour belongs in free-form fact predicates, which is the extension point.
+ */
 export type EntityKind =
   | "Character"
   | "Location"
   | "Faction"
   | "Institution"
+  | "Object"
   | "Event"
   | "Work";
 
@@ -68,10 +83,24 @@ export interface CausalEdge {
   note?: string;
 }
 
-/** A canonical story: an ordered set of events plus its fact scope. */
+/**
+ * A canonical story: the events it consists of, plus optionally the world state
+ * it presupposes.
+ *
+ * `facts` (P-004) lets a Work depend on a STATE and not only on a SEQUENCE.
+ * "The investiture happens" is an event list; "the investiture is *this* story
+ * only if the Seal is in the right hands" is a state requirement. A story
+ * requiring a configuration of the world is a general narrative-constraint
+ * pattern, not a peculiarity of one canon, which is why it is in the core.
+ *
+ * Omitted => no state requirement, so a canon that never sets it behaves exactly
+ * as pre-P-004 (an absent key is absent from the content hash).
+ */
 export interface WorkBinding {
   workId: string; // e.g. "work/verrin-ashfall"
   events: string[]; // event ids in narrative order
+  /** fact ids that must be effective for this Work to hold as written */
+  facts?: string[];
 }
 
 /**
@@ -85,6 +114,23 @@ export interface Canon {
   facts: Fact[];
   edges: CausalEdge[];
   workBindings: WorkBinding[];
+  /**
+   * Ids this canon deliberately REFERENCES WITHOUT DECLARING (P-004).
+   *
+   * SE's case-K guarantee is that absence of knowledge never becomes falsehood:
+   * an event referenced as a fact's validity boundary or a REQUIRES source, but
+   * never declared as an entity, stays UNKNOWN and keeps its dependents UNKNOWN.
+   * That is how a canon says "the parentage was never settled".
+   *
+   * Structurally, a deliberate unknown and a typo are identical — both are a
+   * reference to a non-existent id. So the canon must DECLARE its intent here.
+   * Listing an id makes the under-specification intentional (a validation
+   * notice); omitting it makes the dangling reference an error. This is what
+   * lets the validator enforce integrity without outlawing incompleteness.
+   *
+   * Omitted => the canon claims to be complete, so every reference must resolve.
+   */
+  unspecified?: string[];
   /** Content hash over sorted-key JSON of everything above (FNV-1a). */
   hash: string;
 }

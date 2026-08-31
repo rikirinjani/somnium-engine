@@ -30,6 +30,38 @@ distributed via git.
 
 ### Completed
 
+- **2026-08-31** — **P-004 second canon genericity challenge — COMPLETED +
+  VERIFIED.** Introduced `canon/ordos` (a succession dispute over an artifact of
+  office) as the deliberate structural inverse of Verrin: a FACT gating events,
+  `EXCLUDES` between facts, disjunctive support as the central mechanism, a
+  load-bearing unknown, a partial temporal order, an `Object` entity, an
+  institution with no location.
+  §18.1–18.4 (selection rationale, schema challenge, seven falsifiable
+  predictions) were written and committed BEFORE implementation. **Four
+  predictions held, three were refuted, and the refutations were worth more.**
+  Core changes: `EntityKind` gains `Object`; `WorkBinding.facts`;
+  `Canon.unspecified`; `inspectCanon` errors/notices split; fact-object typo
+  guard; `ALTERED` dependency-union rule; `stateHash`/`identityHash` split
+  replacing the ambiguous single `hash`; `characterFact` → `subjectFact`.
+  **348/348 tests** (was 225), `tsc` clean, `verify-facts` 3/3. L2 gate:
+  **REJECT** (`32a517a`), **APPROVE** (`1c7565a`, ver-004).
+  Three findings worth carrying forward:
+  (a) **A single canon cannot distinguish "the engine is generic" from "the
+  engine happens to agree with this canon."** All 269 pre-Ordos tests passed
+  while three things were wrong (§18.10).
+  (b) **The engine held two disagreeing beliefs about whether a fact held.**
+  `buildModel` collected only negate/force, so an event REQUIRING a fact was
+  unaffected by that fact being retracted — a rite gated on the Seal proceeded
+  with the Seal in nobody's hands. Verrin's one fact-sourced REQUIRES edge is a
+  deliberate dead end, so it got the right answer for the wrong reason (§18.6).
+  (c) **The validator had also stayed behind**, calling this project's own
+  adversarial fixture invalid on seven counts while that fixture derived a
+  perfectly usable world. Uncaught because nothing ever validated it (§18.7).
+  ncr-003: a documentation claim about system state shipped without an
+  executable assertion behind it — third recurrence of the class, and the
+  preventive action is now "quantified claims must be parameterized tests",
+  because grep cannot verify "all three canons validate".
+  Next: **P-005 — repeatable events and occurrence identity** (§18.12).
 - **2026-08-31** — **P-003 causal semantics adversarial pass — COMPLETED +
   VERIFIED.** Attacked the causal model rather than extending it. Six defects
   confirmed by construction (report §17.1): conjunction-only support; the status

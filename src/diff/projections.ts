@@ -2,15 +2,22 @@
  * Somnium Engine — typed diff projections.
  *
  * Typed views (CharacterDiff, EventDiff, RelationshipDiff, LocationDiff,
- * FactionDiff, WorkDiff) are FILTERS over the one generic WorldDiff — not
- * separate differs. Entity kind is resolved from the canon by subject id;
+ * FactionDiff, ObjectDiff, WorkDiff) are FILTERS over the one generic WorldDiff
+ * — not separate differs. Entity kind is resolved from the canon by subject id;
  * "relationship" = facts whose subject and object are both characters.
  */
 import { hashState } from "../canon/hash";
 import type { Canon, EntityKind, Fact } from "../canon/types";
 import type { FactOverride, StatusChange, TypedDiff, WorldDiff } from "./types";
 
-export type ProjectionKind = "character" | "event" | "relationship" | "location" | "faction" | "work";
+export type ProjectionKind =
+  | "character"
+  | "event"
+  | "relationship"
+  | "location"
+  | "faction"
+  | "object" // P-004: artifacts/relics/regalia
+  | "work";
 
 const ENTITY_KIND_FOR_PROJECTION: Record<ProjectionKind, EntityKind | undefined> = {
   character: "Character",
@@ -18,6 +25,7 @@ const ENTITY_KIND_FOR_PROJECTION: Record<ProjectionKind, EntityKind | undefined>
   relationship: undefined, // handled specially (two character endpoints)
   location: "Location",
   faction: "Faction",
+  object: "Object", // P-004
   work: "Work",
 };
 
@@ -90,6 +98,12 @@ export function projectDiff(d: WorldDiff, canon: Canon, kind: ProjectionKind): W
 }
 
 export function typedDiff(d: WorldDiff, canon: Canon): TypedDiff {
+  // NOTE (P-004): the "object" projection is NOT included in the returned
+  // TypedDiff because `TypedDiff` (src/diff/types.ts, owned by another lane)
+  // has no `object` member and the literal would fail the excess-property
+  // check. The projection itself is fully available via
+  // `projectDiff(d, canon, "object")`; `TypedDiff.object` must be added there
+  // before `typedDiff` can surface it.
   return {
     character: projectDiff(d, canon, "character"),
     event: projectDiff(d, canon, "event"),

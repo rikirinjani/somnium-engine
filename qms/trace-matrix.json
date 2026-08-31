@@ -97,6 +97,45 @@
         "qms/records/nonconformities/2026-08-31T02-46-51-ncr-002-refuted-claim-survived.json"
       ],
       "status": "verified"
+    },
+    {
+      "requirement_id": "req-004",
+      "requirement_title": "Second canon genericity challenge — prove the architecture is canon-generic, not Verrin-shaped",
+      "requirement_source": "docs/ARCHITECTURE-RECONNAISSANCE.md §18",
+      "spec": [
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §18.1 (canon selection rationale)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §18.2 (schema challenge, A/B/C/D classification — written BEFORE implementation)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §18.3 (seven falsifiable predictions — written BEFORE implementation)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §18.9 (world identity: stateHash vs identityHash)",
+        "src/canon/types.ts (EntityKind gains Object; WorkBinding.facts; Canon.unspecified)"
+      ],
+      "tasks": [
+        "second canon: Ordos succession dispute (structural inverse of Verrin)",
+        "core ontology: Object entity kind, WorkBinding.facts, Canon.unspecified",
+        "canon validation: inspectCanon errors/notices split + fact-object typo guard",
+        "ALTERED detection: dependency-union rule replacing subject-vs-events",
+        "fact-node defect fix: fact-level interventions are authoritative over fact nodes",
+        "world identity: stateHash / identityHash split, ambiguous hash removed",
+        "characterFact renamed subjectFact (deprecated alias retained)",
+        "cross-canon suite: ten PoC capabilities parameterized over both canons",
+        "one-engine proof: source scan rejecting canon id literals in executable code",
+        "remediation: declare the adversarial fixture's unspecified id; validate every seed canon (ncr-003)"
+      ],
+      "tests": [
+        "tests/acceptance/cross-canon-acceptance.test.ts",
+        "src/canon/ordos.test.ts",
+        "src/canon/canon.test.ts",
+        "src/diff/projections.test.ts",
+        "src/derive/world-state.test.ts"
+      ],
+      "verification": [
+        "qms/records/verifications/2026-08-31T08-54-34-ver-004-p004-l2-gate.json",
+        "verify-facts (scripts/verify-facts.ts)"
+      ],
+      "nonconformities": [
+        "qms/records/nonconformities/2026-08-31T08-54-34-ncr-003-unsupported-state-claim.json"
+      ],
+      "status": "verified"
     }
   ]
 }

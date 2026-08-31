@@ -145,7 +145,7 @@ describe("capability 10: deterministic replay", () => {
   it("same canon + same interventions => identical WorldState", () => {
     const a = derive(canon, [NO_BLIGHT], rp);
     const b = derive(canon, [NO_BLIGHT], rp);
-    expect(a.hash).toBe(b.hash);
+    expect(a.identityHash).toBe(b.identityHash);
     expect(a.statuses).toEqual(b.statuses);
     expect(a.facts).toEqual(b.facts);
     expect((a as WorldState).canonId).toBe("canon/verrin");

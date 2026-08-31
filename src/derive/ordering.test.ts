@@ -89,7 +89,7 @@ describe("intervention ordering", () => {
       const ba = derive(adv, [negateEvent(A.exodus), negateEvent(A.blight)]);
       expect(ab.statuses).toEqual(ba.statuses);
       expect(ab.facts).toEqual(ba.facts);
-      expect(ab.hash).toBe(ba.hash);
+      expect(ab.identityHash).toBe(ba.identityHash);
     });
 
     it("forceEvent(x) + negateEvent(x) on one node: identical world in either order", () => {
@@ -101,13 +101,13 @@ describe("intervention ordering", () => {
       expect(ab.contradictions).toEqual(ba.contradictions);
       expect(ab.statuses).toEqual(ba.statuses);
       expect(ab.facts).toEqual(ba.facts);
-      expect(ab.hash).toBe(ba.hash);
+      expect(ab.identityHash).toBe(ba.identityHash);
     });
 
     it("marks are idempotent: negating twice equals negating once", () => {
       const once = derive(adv, [negateEvent(A.blight)]);
       const twice = derive(adv, [negateEvent(A.blight), negateEvent(A.blight)]);
-      expect(twice.hash).toBe(once.hash);
+      expect(twice.identityHash).toBe(once.identityHash);
     });
   });
 
@@ -125,20 +125,23 @@ describe("intervention ordering", () => {
       expect(severAdd.statuses["ev/q"]).toBe("UNSUPPORTED");
       // [add, sever] => edge absent => q is a root
       expect(addSever.statuses["ev/q"]).toBe("ESTABLISHED");
-      expect(severAdd.hash).not.toBe(addSever.hash);
+      expect(severAdd.identityHash).not.toBe(addSever.identityHash);
     });
 
-    it("the hash distinguishes the two orders even when the derived world coincides", () => {
-      // On the adversarial canon the edge is NOT load-bearing, so both orders
-      // derive the same content. The hash must still separate them, because the
-      // WorldState carries different `interventions` provenance — a hash-keyed
-      // memo would otherwise hand back a state whose intervention chain is a lie.
+    it("two chains whose derived worlds coincide: same stateHash, different identityHash", () => {
+      // P-004 (docs §18.4): this is the CONVERGENCE case. On the adversarial
+      // canon the edge is NOT load-bearing, so [sever, add] and [add, sever]
+      // derive the same effective world — same stateHash. But the WorldState
+      // carries different `interventions` provenance, so the identities differ
+      // — a hash-keyed memo keyed on identityHash can never hand back a state
+      // whose intervention chain is a lie.
       const edge: CausalEdge = { id: EDGES.exodusRequiresBlight, kind: "REQUIRES", from: A.blight, to: A.exodus };
       const severAdd = derive(adv, [severEdge(edge.id), addEdge(edge)]);
       const addSever = derive(adv, [addEdge(edge), severEdge(edge.id)]);
 
       expect(severAdd.statuses).toEqual(addSever.statuses); // same derived content
-      expect(severAdd.hash).not.toBe(addSever.hash); // but not the same world identity
+      expect(severAdd.stateHash).toBe(addSever.stateHash); // same WORLD
+      expect(severAdd.identityHash).not.toBe(addSever.identityHash); // reached differently
       expect(severAdd.interventions.map((i) => i.kind)).not.toEqual(addSever.interventions.map((i) => i.kind));
     });
   });
@@ -150,7 +153,7 @@ describe("intervention ordering", () => {
       expect(locatedIn(w1)).toBe(thornhollow); // thornhollow written last
       expect(locatedIn(w2)).toBe(valdar); // valdar written last
       expect(w1.facts).not.toEqual(w2.facts);
-      expect(w1.hash).not.toBe(w2.hash);
+      expect(w1.identityHash).not.toBe(w2.identityHash);
     });
 
     it("setFact(s,p,v) + retractFact(f): the retract hits a different fact by order", () => {
@@ -163,7 +166,7 @@ describe("intervention ordering", () => {
       expect(locatedIn(w1)).toBeUndefined();
       expect(locatedIn(w2)).toBe(valdar);
       expect(w1.facts).not.toEqual(w2.facts);
-      expect(w1.hash).not.toBe(w2.hash);
+      expect(w1.identityHash).not.toBe(w2.identityHash);
     });
 
     it("relocate(s,l1) + setFact(s,'located_in',l2): the last write wins", () => {
@@ -172,7 +175,7 @@ describe("intervention ordering", () => {
       expect(locatedIn(w1)).toBe(valdar); // setFact written last
       expect(locatedIn(w2)).toBe(thornhollow); // relocate written last
       expect(w1.facts).not.toEqual(w2.facts);
-      expect(w1.hash).not.toBe(w2.hash);
+      expect(w1.identityHash).not.toBe(w2.identityHash);
     });
   });
 
@@ -180,16 +183,16 @@ describe("intervention ordering", () => {
     // Identical worlds hash identically; genuinely different worlds never collide.
     const negAb = derive(adv, [negateEvent(A.blight), negateEvent(A.exodus)]);
     const negBa = derive(adv, [negateEvent(A.exodus), negateEvent(A.blight)]);
-    expect(negAb.hash).toBe(negBa.hash); // set-like marks: one identity
+    expect(negAb.identityHash).toBe(negBa.identityHash); // set-like marks: one identity
 
     const canon = loadBearingCanon();
     const severAdd = derive(canon, [negateEvent("ev/p"), severEdge("edge/e"), addEdge(LOAD_BEARING_EDGE)]);
     const addSever = derive(canon, [negateEvent("ev/p"), addEdge(LOAD_BEARING_EDGE), severEdge("edge/e")]);
-    expect(severAdd.hash).not.toBe(addSever.hash); // edge-set writes: sequential
+    expect(severAdd.identityHash).not.toBe(addSever.identityHash); // edge-set writes: sequential
 
     const factAb = derive(adv, [setFact(vara, "located_in", valdar), setFact(vara, "located_in", thornhollow)]);
     const factBa = derive(adv, [setFact(vara, "located_in", thornhollow), setFact(vara, "located_in", valdar)]);
-    expect(factAb.hash).not.toBe(factBa.hash); // cell assignments: last write wins
+    expect(factAb.identityHash).not.toBe(factBa.identityHash); // cell assignments: last write wins
   });
 
   it("non-commutativity does not affect determinism: the same chain in the same order hashes identically", () => {
@@ -200,7 +203,7 @@ describe("intervention ordering", () => {
     ];
     const a = derive(adv, chain);
     const b = derive(adv, chain);
-    expect(a.hash).toBe(b.hash);
+    expect(a.identityHash).toBe(b.identityHash);
     expect(a.facts).toEqual(b.facts);
     expect(a.statuses).toEqual(b.statuses);
     expect(a.contradictions).toEqual(b.contradictions);
