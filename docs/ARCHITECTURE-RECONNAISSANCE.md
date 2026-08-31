@@ -857,7 +857,7 @@ The engine asserts that an occurrence it has never heard of not only happened bu
 | `negateEvent` | `EXCLUDED` | harmless — removing a non-thing |
 | **`forceEvent`** | **`ESTABLISHED`, support `HARD`** | **no — invented history** |
 
-**Ten routes around the same wall.** P-003 built the `declared` gate so that absence of knowledge could not become fact. Nine separate routes walked around it, across five L2 gates. The list is worth reading in full, because the *pattern* is the finding and no individual route is:
+**Ten routes around the same wall.** P-003 built the `declared` gate so that absence of knowledge could not become fact. Ten separate routes walked around it, across six L2 gates. The list is worth reading in full, because the *pattern* is the finding and no individual route is:
 
 1. `positiveFixpoint` sets `TRUE` for a forced node *before* consulting support, so `forceEvent` never reaches the gate at all.
 2. The gate lived only in `hardSupport`'s *no-support-rules* branch. An `addEdge` intervention naming a fresh id as a REQUIRES **target** gives that id support rules, so it fell through to `disjoin` and inherited its prerequisite's truth. It chained, too: three added edges produced three `ESTABLISHED` invented occurrences, which then joined an `EventType` and were counted by the occurrence layer.
@@ -902,7 +902,16 @@ joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE")
 
 which for a dormant node evaluates `joinTruth("NEITHER", "TRUE") = TRUE`. A **rejected** intervention therefore *promoted* a dormant declared event to `ESTABLISHED`. Measured on shipped Ordos, `setFact("ev/galen-invested", instance_of, "phantomtype")` — a write the engine refuses — moved that event `UNKNOWN -> ESTABLISHED`, inflated `occurrenceCount("type/investiture")` from 1 to 2, opened `fact/seal-held-galen` so both Seal holders were effective at once, and did **not** report the canon `EXCLUDES` violation, because the fact *node* stayed `NEITHER` and Phase D.2 gates on `occursNow`. 150 refused writes across the three shipped canons changed world state.
 
-**The fix is a second discipline on the taint operation itself.** A conflict may only CONTRADICT A DECIDED VALUE; it may never decide an undecided one. `BOTH` means "this world asserts P and ¬P", which is meaningless until the world has asserted something, so `taint(NEITHER) = NEITHER`. Being a property of the operation rather than of a kind or a node, it holds for every present and future conflict kind on declared and undeclared nodes alike. Independently, `forced-undeclared` and `fact-write-illegal` are now marked as describing an incoherent *intervention* rather than an inconsistent *world*, so they are reported as records and never touch truth. Either guard alone suffices; both are present because fixing only the new kind would have been the ncr-004 mistake a seventh time.
+**The fix is a second discipline on the taint operation itself.** A conflict may only CONTRADICT A DECIDED VALUE; it may never decide an undecided one. `BOTH` means "this world asserts P and ¬P", which is meaningless until the world has asserted something, so `taint(NEITHER) = NEITHER`. Being a property of the operation rather than of a kind or a node, it holds for every present and future conflict kind on declared and undeclared nodes alike. Separately, `forced-undeclared` and `fact-write-illegal` are now marked as describing an incoherent *intervention* rather than an inconsistent *world*, so they are reported as records and never touch truth.
+
+**The two guards are not symmetric, and an earlier draft of this section claimed they were** ("either guard alone suffices"). The seventh gate measured it by mutation, and the measurement is worth keeping:
+
+| mutant | refused writes that still move world state |
+|---|---|
+| name list removed, taint discipline kept | **114 of 264** — route 8 proper is stopped (0 dormant promotions, 0 count changes) but a refused write still taints an already-DECIDED subject, e.g. verrin `ev/ashfall-falls` `TRUE -> BOTH`, flipping `work/verrin-ashfall` `PRESERVED -> IMPOSSIBLE` |
+| taint discipline removed, name list kept | **0 of 264** |
+
+So `ABOUT_THE_INTERVENTION` is the **load-bearing** guard and the taint discipline is a narrower **backstop**. The backstop is currently unreachable through `derive` — the gate made `taintTruth(NEITHER)` throw and found zero hits across 4,386 derivations, because the four world-level conflict kinds gate on `occursNow`/`forcedBy`, which decide a node before any conflict about it can fire. It is kept deliberately: it makes the taint operation sound on its own terms, and it is the defence if a future conflict kind's predicate does *not* imply a decided node. Since `derive` cannot reach it, its behaviour is pinned directly in `src/derive/taint.test.ts`, alongside a test asserting that the intervention/world classification **partitions** `ConflictNote["kind"]` — no gaps, no overlaps — so a new kind added without being classified fails a test instead of silently tainting truth. That last test is the one that closes the enumeration shape ncr-004 warns about.
 
 **And the test observable moved to where the claim lives.** The differential suite now also asserts, per *shipped* canon: a refused write leaves `judgments`, `statuses`, `facts`, `workStatuses` and `temporalViolations` identical to the empty chain. (`stateHash` is deliberately excluded — it hashes `contradictions`, which P-003 made first-class members of the world, so a refused write legitimately moves it.) The old fixture had **no dormant declared event**, which is precisely why 352 triples passed while Verrin and Ordos were corruptible. The fixture's *shape*, not its size, was the gap.
 
@@ -1072,7 +1081,9 @@ Carried from §17.8 / §18.11, with P-005 updates:
 7. **`WorkStatus` still reads the projected status** (§18.11 item 5, unchanged) and has no notion of occurrence at all — a Work binds to specific occurrence ids, so "the Work as such recurs" is inexpressible.
 8. **`ENABLES` transitivity undefined** (unchanged).
 9. **No actual-causality attribution** (unchanged).
-10. **Type-quantified interventions are absent by design** (§19.5). If a canon genuinely needs "exactly N", that is a solver, and it should arrive as a separate layer above `derive`, never inside it.
+10. **Not every incoherent intervention is reported.** Only fact-write illegality and forced-undeclared produce a record. `retractFact` on a non-existent id, `severEdge` on a non-existent edge, a malformed `addEdge`, and a `setFact` with a non-string predicate all leave the world unchanged with **zero records**. "Never silently dropped" is accurate for the two kinds it is written about and reads broader than it is. Harmless today — all four are no-ops rather than corruptions — but a caller cannot distinguish "your intervention did nothing because the world already matched" from "your intervention was malformed".
+11. **The backstop guard is unreachable, so its correctness rests on reasoning.** The taint discipline has no execution coverage through `derive` (§19.3) and is unit-tested in isolation. If a future conflict kind fires on an undecided node, that guard becomes load-bearing and the argument for it is one paragraph rather than a measurement.
+12. **Type-quantified interventions are absent by design** (§19.5). If a canon genuinely needs "exactly N", that is a solver, and it should arrive as a separate layer above `derive`, never inside it.
 
 ### 19.12 Recommended P-006
 
