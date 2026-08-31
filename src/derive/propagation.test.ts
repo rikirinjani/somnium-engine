@@ -421,11 +421,12 @@ describe("fixpoint properties", () => {
     const ab = derive(canon, [negateEvent("ev/root1"), negateEvent("ev/root2")]);
     const ba = derive(canon, [negateEvent("ev/root2"), negateEvent("ev/root1")]);
     expect(ab.statuses).toEqual(ba.statuses);
-    // Two negateEvent marks are set-like, so the hash folds them in as a sorted
-    // deduplicated set and both orders share one identity. Sequential kinds
-    // (severEdge/addEdge, setFact/relocate/retractFact) are hashed in ACTUAL
-    // order — see src/derive/ordering.test.ts for the full three-class split.
-    expect(ab.hash).toBe(ba.hash);
+    // Two negateEvent marks are set-like, so identityHash folds them in as a
+    // sorted deduplicated set and both orders share one identity. Sequential
+    // kinds (severEdge/addEdge, setFact/relocate/retractFact) are hashed in
+    // ACTUAL order — see src/derive/ordering.test.ts for the full three-class
+    // split.
+    expect(ab.identityHash).toBe(ba.identityHash);
   });
 
   it("converges without hitting the pass cap on a deep chain", () => {

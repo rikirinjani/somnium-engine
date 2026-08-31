@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { FactView, WorldState } from "../derive/world-state";
 import { statusOf, workStatusOf } from "./status";
-import { characterFact, reachable } from "./query";
+import { characterFact, reachable, subjectFact } from "./query";
 
 function view(id: string, subject: string, predicate: string, object: string | number | boolean | null, validFrom?: string): FactView {
   return {
@@ -28,7 +28,8 @@ function makeState(overrides: Partial<WorldState>): WorldState {
     workStatuses: {},
     contradictions: [],
     temporalViolations: [],
-    hash: "00000000",
+    stateHash: "00000000",
+    identityHash: "00000000",
     ...overrides,
   };
 }
@@ -47,13 +48,24 @@ describe("statusOf / workStatusOf", () => {
   });
 });
 
-describe("characterFact", () => {
+describe("subjectFact (P-004 rename of characterFact)", () => {
   it("returns the matching effective fact or undefined", () => {
     const ws = makeState({
       facts: [view("fact/vara-valdar", "char/vara", "located_in", "loc/valdar")],
     });
-    expect(characterFact(ws, "char/vara", "located_in")?.object).toBe("loc/valdar");
-    expect(characterFact(ws, "char/vara", "married_to")).toBeUndefined();
+    expect(subjectFact(ws, "char/vara", "located_in")?.object).toBe("loc/valdar");
+    expect(subjectFact(ws, "char/vara", "married_to")).toBeUndefined();
+  });
+
+  it("works for ANY subject kind — an event, a location, an institution", () => {
+    const ws = makeState({
+      facts: [
+        view("fact/academy-in-valdar", "inst/valdar-academy", "located_in", "loc/valdar"),
+        view("fact/blight-cause", "ev/blight-begins", "cause", "the-blight"),
+      ],
+    });
+    expect(subjectFact(ws, "inst/valdar-academy", "located_in")?.object).toBe("loc/valdar");
+    expect(subjectFact(ws, "ev/blight-begins", "cause")?.object).toBe("the-blight");
   });
 
   it("prefers the most recently valid fact (latest validFrom)", () => {
@@ -63,7 +75,7 @@ describe("characterFact", () => {
         view("fact/vara-thornhollow", "char/vara", "located_in", "loc/thornhollow", "ev/exodus"),
       ],
     });
-    expect(characterFact(ws, "char/vara", "located_in")?.id).toBe("fact/vara-thornhollow");
+    expect(subjectFact(ws, "char/vara", "located_in")?.id).toBe("fact/vara-thornhollow");
   });
 
   it("falls back to the last effective fact when no validity window is available", () => {
@@ -73,10 +85,10 @@ describe("characterFact", () => {
         view("fact/vara-thornhollow", "char/vara", "located_in", "loc/thornhollow"),
       ],
     });
-    expect(characterFact(ws, "char/vara", "located_in")?.id).toBe("fact/vara-thornhollow");
+    expect(subjectFact(ws, "char/vara", "located_in")?.id).toBe("fact/vara-thornhollow");
   });
 
-  it("does not mix characters or predicates", () => {
+  it("does not mix subjects or predicates", () => {
     const ws = makeState({
       facts: [
         view("fact/vara-valdar", "char/vara", "located_in", "loc/valdar"),
@@ -84,8 +96,20 @@ describe("characterFact", () => {
         view("fact/kell-valdar", "char/kell", "located_in", "loc/valdar"),
       ],
     });
-    expect(characterFact(ws, "char/vara", "affiliated_with")?.object).toBe("fac/ember");
-    expect(characterFact(ws, "char/kell", "located_in")?.id).toBe("fact/kell-valdar");
+    expect(subjectFact(ws, "char/vara", "affiliated_with")?.object).toBe("fac/ember");
+    expect(subjectFact(ws, "char/kell", "located_in")?.id).toBe("fact/kell-valdar");
+  });
+
+  it("characterFact is a deprecated alias that still delegates to subjectFact", () => {
+    const ws = makeState({
+      facts: [view("fact/vara-valdar", "char/vara", "located_in", "loc/valdar")],
+    });
+    expect(characterFact(ws, "char/vara", "located_in")?.object).toBe("loc/valdar");
+    expect(characterFact(ws, "char/kell", "located_in")).toBeUndefined();
+    // same underlying implementation
+    expect(characterFact(ws, "char/vara", "located_in")?.id).toBe(
+      subjectFact(ws, "char/vara", "located_in")?.id
+    );
   });
 });
 

@@ -24,10 +24,15 @@
  *    appears only as an edge endpoint (the case-K probe). Nodes that are only
  *    referenced, never declared, must stay UNKNOWN — absence of knowledge never
  *    becomes falsehood (see propagation.ts Phase A/B comments).
- *  - This canon intentionally contains REQUIRES cycles, a PRECES cycle and a
- *    baseline EXCLUDES violation (case J). It would therefore FAIL
- *    `validateCanon` (which requires REQUIRES/PRECEDES DAGs) — that is the
- *    point. It is a stress fixture, not a validatable seed.
+ *  - This canon intentionally contains REQUIRES cycles, a PRECEDES cycle and a
+ *    baseline EXCLUDES violation (case J). P-004 UPDATE: it now passes
+ *    `validateCanon` with zero errors, because the validator no longer treats
+ *    engine-handled structures as corruption — the two cycle kinds are NOTICES
+ *    (`inspectCanon().notices`), and the undeclared `ev/adv-unspecified` is
+ *    declared in `Canon.unspecified` so the case-K gap is intentional rather
+ *    than a typo. Before P-004 this fixture failed validation on seven counts
+ *    while deriving a perfectly usable world, and nothing caught it because
+ *    nothing ever validated it.
  */
 import { hashCanon } from "./hash";
 import type { Canon, CausalEdge, Entity, Fact, WorkBinding } from "./types";

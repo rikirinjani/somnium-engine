@@ -2,7 +2,7 @@
  * Somnium Engine — canon loader + validator unit tests.
  */
 import { describe, expect, it } from "vitest";
-import { loadCanon, validateCanon } from "./canon";
+import { inspectCanon, loadCanon, validateCanon } from "./canon";
 import { hashState } from "./hash";
 import { verrinCanon } from "./verrin";
 import type { Canon } from "./types";
@@ -30,6 +30,18 @@ describe("loadCanon", () => {
     expect(() => loadCanon({ canonId: "canon/x" })).toThrow();
     expect(() => loadCanon({ ...canon, entities: "nope" })).toThrow();
     expect(() => loadCanon({ ...canon, edges: [{ id: "edge/x", kind: "SOMETIMES" }] })).toThrow();
+  });
+
+  it("accepts an Object-kind entity (P-004: artifacts/relics/regalia)", () => {
+    const canon = verrinCanon();
+    const withSeal: Canon = {
+      ...canon,
+      entities: [...canon.entities, { id: "obj/seal-of-office", kind: "Object", name: "The Seal" }],
+      facts: [...canon.facts, { id: "fact/seal-silver", subject: "obj/seal-of-office", predicate: "material", object: "silver", validFrom: null, validTo: null, source: "canon" }],
+    };
+    const loaded = loadCanon(JSON.parse(JSON.stringify(withSeal)));
+    expect(loaded.entities.some((e) => e.id === "obj/seal-of-office" && e.kind === "Object")).toBe(true);
+    expect(validateCanon(withSeal)).toEqual([]);
   });
 
   it("throws on semantically invalid input (duplicate ids)", () => {
@@ -70,7 +82,18 @@ describe("validateCanon", () => {
     expect(validateCanon(brokenWork).some((e) => /work\/ghost/.test(e))).toBe(true);
   });
 
-  it("reports a REQUIRES cycle with its path", () => {
+  // P-004 CHANGE (these two were `errors`, now `notices`). P-003 made both
+  // cycle kinds first-class ENGINE BEHAVIOURS, not corruption:
+  //   REQUIRES cycle -> an unfounded set, rejected as UNSUPPORTED by
+  //                     well-founded semantics unless a group reaches outside it
+  //   PRECEDES cycle -> a temporalViolation when it occurs among occurring
+  //                     events, while the events themselves stay ESTABLISHED
+  // Calling them fatal meant the validator still believed Verrin's shape
+  // (complete and acyclic) while the engine had moved on. The proof it was
+  // wrong: P-003's own adversarial fixture derives a perfectly usable world and
+  // yet `validateCanon` called it invalid on seven counts — nothing caught that
+  // because nothing ever validated that canon.
+  it("reports a REQUIRES cycle as a NOTICE, not an error", () => {
     const canon = verrinCanon();
     const broken: Canon = {
       ...canon,
@@ -80,15 +103,18 @@ describe("validateCanon", () => {
         { id: "edge/loop-b", kind: "REQUIRES", from: "ev/exodus", to: "ev/blight-begins" },
       ],
     };
-    const errors = validateCanon(broken);
-    const cycle = errors.find((e) => /REQUIRES cycle/.test(e));
+    const { errors, notices } = inspectCanon(broken);
+    const cycle = notices.find((e) => /REQUIRES cycle/.test(e));
     expect(cycle).toBeDefined();
     expect(cycle).toContain("ev/blight-begins");
     expect(cycle).toContain("ev/exodus");
     expect(cycle).toMatch(/->/);
+    // and it is NOT fatal
+    expect(errors.some((e) => /REQUIRES cycle/.test(e))).toBe(false);
+    expect(validateCanon(broken)).toEqual([]);
   });
 
-  it("reports a PRECEDES cycle with its path", () => {
+  it("reports a PRECEDES cycle as a NOTICE, not an error", () => {
     const canon = verrinCanon();
     const broken: Canon = {
       ...canon,
@@ -97,12 +123,89 @@ describe("validateCanon", () => {
         { id: "edge/loop-c", kind: "PRECEDES", from: "ev/treaty-of-ash", to: "ev/wardens-arrive" },
       ],
     };
-    const errors = validateCanon(broken);
-    const cycle = errors.find((e) => /PRECEDES cycle/.test(e));
+    const { errors, notices } = inspectCanon(broken);
+    const cycle = notices.find((e) => /PRECEDES cycle/.test(e));
     expect(cycle).toBeDefined();
     expect(cycle).toContain("ev/wardens-arrive");
     expect(cycle).toContain("ev/treaty-of-ash");
     expect(cycle).toMatch(/->/);
+    expect(errors.some((e) => /PRECEDES cycle/.test(e))).toBe(false);
+    expect(validateCanon(broken)).toEqual([]);
+  });
+
+  it("treats an UNDECLARED dangling reference as an error but a DECLARED one as a notice", () => {
+    // A deliberate unknown and a typo are structurally identical — a reference
+    // to an id that does not exist. The canon must state which it means, which
+    // is exactly what `Canon.unspecified` is for.
+    const canon = verrinCanon();
+    const dangling: Canon = {
+      ...canon,
+      edges: [
+        ...canon.edges,
+        { id: "edge/mystery", kind: "REQUIRES", from: "ev/never-declared", to: "ev/exodus" },
+      ],
+    };
+    expect(validateCanon(dangling).some((e) => /ev\/never-declared/.test(e))).toBe(true);
+
+    const declared: Canon = { ...dangling, unspecified: ["ev/never-declared"] };
+    const inspected = inspectCanon(declared);
+    expect(inspected.errors).toEqual([]);
+    expect(inspected.notices.some((n) => /ev\/never-declared/.test(n))).toBe(true);
+  });
+
+  it("rejects an id that is both declared and listed as unspecified", () => {
+    const canon = verrinCanon();
+    const contradictory: Canon = { ...canon, unspecified: ["ev/exodus"] };
+    expect(
+      validateCanon(contradictory).some((e) => /cannot be both/.test(e))
+    ).toBe(true);
+  });
+
+  it("reports an entity-valued fact object that is not a known id (typo guard)", () => {
+    const canon = verrinCanon();
+    const broken: Canon = {
+      ...canon,
+      facts: [{ ...canon.facts[0]!, object: "loc/valdarr" }], // typo: two r's
+    };
+    const errors = validateCanon(broken);
+    const hit = errors.find((e) => /looks like an id reference/.test(e));
+    expect(hit).toBeDefined();
+    expect(hit).toContain('"loc/valdarr"');
+  });
+
+  it("does NOT flag literal objects without a slash, or known ids", () => {
+    const canon = verrinCanon();
+    // "ash" is a literal (no slash); the other objects are known entity ids.
+    expect(validateCanon(canon)).toEqual([]);
+  });
+
+  it("reports work.facts entries that do not resolve to known facts", () => {
+    const canon = verrinCanon();
+    const broken: Canon = {
+      ...canon,
+      workBindings: [
+        { ...canon.workBindings[0]!, facts: ["fact/no-such-fact"] },
+        ...canon.workBindings.slice(1),
+      ],
+    };
+    const errors = validateCanon(broken);
+    expect(errors.some((e) => e.includes('fact "fact/no-such-fact" is not a known fact'))).toBe(true);
+  });
+
+  it("round-trips a work.facts requirement through loadCanon (absent key stays absent)", () => {
+    const canon = verrinCanon();
+    const withFacts: Canon = {
+      ...canon,
+      workBindings: [
+        { ...canon.workBindings[0]!, facts: ["fact/vara-in-thornhollow"] },
+        ...canon.workBindings.slice(1),
+      ],
+    };
+    const loaded = loadCanon(JSON.parse(JSON.stringify(withFacts)));
+    const wb = loaded.workBindings.find((w) => w.workId === "work/verrin-ashfall");
+    expect(wb?.facts).toEqual(["fact/vara-in-thornhollow"]);
+    // a binding without `facts` never gains the key (content-hash stable)
+    expect("facts" in canon.workBindings[0]!).toBe(false);
   });
 });
 

@@ -67,7 +67,7 @@ export function runChain(
     interventions: [],
     depth: computeDepth(canon, baseline, baseline, [], 0),
     diff: worldDiff(baseline, baseline),
-    worldHash: baseline.hash,
+    worldHash: baseline.identityHash,
     createdAt: new Date().toISOString(),
   });
 
@@ -90,7 +90,7 @@ export function runChain(
       interventions: [...prefix],
       depth: computeDepth(canon, baseline, world, prefix, n),
       diff: worldDiff(parentWorld, world),
-      worldHash: world.hash,
+      worldHash: world.identityHash,
       createdAt: new Date().toISOString(),
     });
 

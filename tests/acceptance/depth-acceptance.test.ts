@@ -151,9 +151,9 @@ describe("chain experiments: every intermediate state is inspectable", () => {
     expect(characterFact(d3, "char/vara", "located_in")?.object).toBe("loc/stonehall");
 
     // the runner's world hashes must match direct derivation (no divergent path)
-    expect(set.runs[1]?.worldHash).toBe(d1.hash);
-    expect(set.runs[2]?.worldHash).toBe(d2.hash);
-    expect(set.runs[3]?.worldHash).toBe(d3.hash);
+    expect(set.runs[1]?.worldHash).toBe(d1.identityHash);
+    expect(set.runs[2]?.worldHash).toBe(d2.identityHash);
+    expect(set.runs[3]?.worldHash).toBe(d3.identityHash);
   });
 
   it("each run's diff is against the IMMEDIATE parent depth, not the baseline", () => {

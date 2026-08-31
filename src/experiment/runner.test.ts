@@ -49,7 +49,7 @@ describe("runChain: structure", () => {
 
     expect(d0.interventions).toEqual([]);
     expect(d0.rpId).toBeNull();
-    expect(d0.worldHash).toBe(BASELINE.hash);
+    expect(d0.worldHash).toBe(BASELINE.identityHash);
     expect(d0.diff.hash).toBe(worldDiff(BASELINE, BASELINE).hash);
     expect(d0.diff.statusChanges).toEqual([]);
     expect(d0.diff.factAdditions).toEqual([]);
@@ -96,7 +96,7 @@ describe("runChain: semantics", () => {
     for (let n = 0; n <= CHAIN.length; n += 1) {
       const prefix = CHAIN.slice(0, n);
       const direct = n === 0 ? derive(canon, []) : derive(canon, prefix, rp);
-      expect(set.runs[n]?.worldHash).toBe(direct.hash);
+      expect(set.runs[n]?.worldHash).toBe(direct.identityHash);
     }
   });
 

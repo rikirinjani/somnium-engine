@@ -545,4 +545,84 @@ What remains unfinished is mostly about *depth of inference* (contradiction prop
 
 ---
 
-*End of report. P-003 complete (§17). Next: P-004 — a second seed canon to test genericity (§17.10).*
+
+---
+
+## 18. P-004 — Second canon genericity challenge
+
+**Question.** Does the P-003 architecture generalize beyond Verrin, or is it a very good Verrin engine?
+
+**This subsection (18.1–18.4) was written BEFORE any P-004 code was changed.** It records the canon selection, the schema challenge, and a set of falsifiable predictions about what the engine would and would not handle. §18.5 onward records what actually happened, including where the predictions were wrong. Writing the predictions first is the only way the exercise can fail honestly.
+
+### 18.1 Selecting the second canon
+
+**Rejected approach: another cataclysm.** Verrin is a *cascade*: one root event (the Blight), deep REQUIRES chains, characters whose `located_in` flips at a single displacement event, Works bound to ordered event lists. A second canon of the same shape would raise the test count and prove nothing. Whatever the engine has silently learned from Verrin, it would learn again.
+
+**Selected: `canon/ordos` — a succession dispute over an artifact of office.**
+
+A chartered institution (the Ordos Chapter) has a Seal of office. Exactly one Warden may hold it at a time. When the old Warden dies, two claimants emerge — one with a clean claim by acclamation, one whose inheritance claim rests on a parentage canon never settles. A rite of binding cannot proceed unless the Seal is actually in the claimant's hands.
+
+This is structurally the *inverse* of Verrin, along the axes that matter:
+
+| Axis | Verrin | Ordos |
+|---|---|---|
+| Shape | cascade from one root | contest between two competing routes |
+| What drives the plot | events causing events | **a fact (who holds the Seal) gating events** |
+| Exclusion | between **events** (guarded vs sacked) | between **facts** (two holders of one Seal) |
+| Support | conjunctive chains | **alternative sufficient causes as the central mechanism** |
+| Time | a clear spine of PRECEDES | deliberately **partially ordered** — two events canon does not order |
+| Entity kinds | characters, locations, factions, institution | adds an **object/artifact**; an institution with **no location at all** |
+| Unknowns | one adversarial probe | a **load-bearing** unknown (disputed parentage) the plot turns on |
+| Facts | almost all windowed | mix of windowed and **atemporal** (the Seal is silver; the charter grants a veto) |
+
+Each of these is a property SE claims to support and has never had to demonstrate. None was chosen from the mission's menu for its own sake: the succession premise *forces* all of them. If a canon can have an artifact that changes hands and gates a ritual, it needs objects, ownership facts, fact-level exclusion, and fact-gated events, or it cannot be written.
+
+**Scale discipline.** Ordos is deliberately small: roughly 20 entities, 14 facts, 12 events, 20 edges, 3 Works. It is a stress fixture, not a story.
+
+### 18.2 Schema challenge — can SE represent Ordos without canon-specific hacks?
+
+Every Ordos concept, classified **A** (already correct), **B** (represented incorrectly, needs a generic change), **C** (missing but clearly generic), or **D** (canon-specific, must NOT enter the core).
+
+| # | Concept | Class | Reasoning |
+|---|---|---|---|
+| 1 | **Ownership / possession** (`held_by`) | **A** | A `Fact` with an entity-valued object. SE facts are already `(subject, predicate, object)` with narrative-time windows; possession is just a predicate. No core change. Verrin never used an entity-valued object for a *transferable* relation, so this is untested rather than unsupported. |
+| 2 | **At most one holder at a time** | **A**, unproven | `EXCLUDES` between two *fact* nodes. P-003's `buildModel` admits any edge endpoint as a node and gives fact nodes truth via `factWindowTruth`, and the EXCLUDES check tests `occurs()` on both endpoints — so this should work. Verrin only ever put EXCLUDES between events. **Prediction: works unchanged.** If it does not, that is a [VERRIN-ACCIDENT] in the constraint layer. |
+| 3 | **Fact-gated events** (rite requires the Seal held) | **A**, unproven | `REQUIRES` from a fact to an event. `hardSupport` reads whatever truth a node has, and fact nodes have truth. Verrin has exactly one such edge and it is a deliberate dead end (`fact/gate-bribed`), so the *working* case is untested. **Prediction: works unchanged.** |
+| 4 | **Alternative sufficient causes** | **A** | P-003 added `CausalEdge.group`. Ordos makes it load-bearing rather than adversarial. |
+| 5 | **Deliberately unknown facts** (disputed parentage) | **A** | The case-K mechanism: a fact whose window is anchored to an undeclared event stays `NEITHER` → `UNKNOWN`, and dependents stay `UNKNOWN` rather than becoming false. Already asserted; Ordos makes it plot-critical. |
+| 6 | **Atemporal facts** (the Seal is silver) | **A** | `validFrom: null, validTo: null` ⇒ `factWindowTruth` returns TRUE unconditionally. |
+| 7 | **Partially ordered events** | **A** | PRECEDES is a partial order; absence of an edge *is* "unordered". Nothing requires a total order. The temporal layer only rejects cycles among occurring events. |
+| 8 | **Entities with no location** | **A** | Nothing in the core privileges `located_in`; `relocate` is sugar over `setFact(subject, "located_in", …)`. An institution with no location fact is simply an entity with fewer facts. |
+| 9 | **Objects / artifacts** | **C** | `EntityKind` is `Character \| Location \| Faction \| Institution \| Event \| Work` — no object. Artifacts of office, weapons, documents, relics: ubiquitous across fictional canons, not an Ordos peculiarity. Cheapest possible change (one union member) and the burden of proof is easily met. Must check every site that reads `kind` — a new kind that silently falls through a projection filter would be worse than no kind at all. |
+| 10 | **Works that depend on facts** | **C** | `WorkBinding` is `{ workId, events }`. "This story requires the Seal in the right hands" is a *general* narrative-constraint pattern — a story can require a state of the world, not only a sequence of occurrences. Generic; add optional `facts?: string[]`. |
+| 11 | **`ALTERED` detection** | **B** | `computeWorkStatuses` computes `affectedByOverride` as `overridden.some(f => work.events.includes(f.subject))` — it compares a fact's **subject** against the work's **event** ids. So a Work is only ALTERED when an overridden fact's subject is one of its events. Verrin's Works are event-bound and its overridable facts are about *characters*, so the branch is nearly unreachable there and the one test that exercises it uses a fact whose subject happens to be an event (`setFact("ev/root1","mood",…)`). Under Ordos, overriding who holds the Seal must alter the investiture Work — and today it would report `PRESERVED`. A wrong answer, not a missing feature. |
+| 12 | **Unvalidated fact objects** | **B** | `validateCanon` checks `subject`, `validFrom`, `validTo` and every edge endpoint, but never `object`. A typo in an entity-valued object (`loc/valdarr`) loads silently and produces a world that looks fine. Verrin hid this because its entity-valued objects are few and were hand-checked. Generic fix, and it belongs in the **canon schema/validation layer**, not the core ontology. |
+| 13 | **`characterFact` naming** | **B**, cosmetic | Works for any subject; only the name says "character". A rename, not a generalization. |
+| 14 | Chapter voting procedure, Seal metallurgy, charter clauses | **D** | Ordos flavour. Expressible as ordinary facts with canon-specific predicates. Predicates are free-form strings by design — **that is exactly the extension point**, and nothing about them enters the core. |
+
+**Where extensions belong** (mission item 6). Of the changes above: two are **core ontology** (`EntityKind` gains `Object`; `WorkBinding` gains optional `facts`), one is **canon validation** (object reference checking), one is a **core semantics bug fix** (`ALTERED`), one is **cosmetic** (rename). Everything else — predicates, entity naming, the shape of the succession itself — is **seed data**. Nothing needs canon *rules* or a derived-projection extension, and no canon-specific branch enters the engine. If any Ordos concept had required a conditional on `canonId`, that would have been a failure of the exercise.
+
+### 18.3 Predictions (falsifiable, recorded before coding)
+
+1. Fact-level `EXCLUDES` works unchanged.
+2. Fact-gated `REQUIRES` works unchanged.
+3. Adding `EntityKind: "Object"` requires touching only the type and the diff projections.
+4. `ALTERED` is wrong for Ordos today and will need the generic fix in item 11.
+5. No canon-specific branch will be needed in `derive`, `propagation`, `diff`, or `depth`.
+6. The 10 PoC capabilities will pass for Ordos with no engine change beyond items 9–11.
+7. At least one *further* Verrin-specific assumption will surface that this challenge did not anticipate. (If none does, I have not looked hard enough.)
+
+### 18.4 World identity and hashing — the question, stated before answering
+
+P-003 left one hash carrying several distinct questions at once. Before changing anything, the identities have to be named:
+
+1. **Effective world-state identity** — "are these two worlds *the same world*?" Judgments, effective facts, work statuses, contradictions, temporal violations, and the canon they are relative to. Deliberately *excludes* how the world was reached.
+2. **Derivation / provenance identity** — "did these two worlds arise *the same way*?" Canon + rewind point + the canonical intervention form.
+3. **Universe / lineage identity** — "where does this world sit in the branch tree?" Already a separate mechanism: `Universe.id`, `parent`, `lineageOf`. Not a hash question.
+4. **Rewind-point integrity** — tamper detection over a canonical cut. Already separate: `computeRewindHash(canonId, anchorEvent, cut, canonHash)`. **This must remain untouched and unambiguous** whatever else changes.
+
+The open question is whether (1) and (2) can share one value. P-003's answer — fold both into `hash` — is *sound as a memo key*, because a memo keyed on state alone can return a world carrying someone else's provenance. But it makes one question unanswerable: **"did two different intervention chains reach the same world?"** That is not a hypothetical; it is the immediate neighbourhood of the deferred minimum-intervention search (§10), and a cross-canon genericity exercise is exactly where convergent branches should be observable. §18.7 records the decision and its justification.
+
+---
+
+*End of report. P-004 in progress: §18.1-18.4 recorded BEFORE implementation.*

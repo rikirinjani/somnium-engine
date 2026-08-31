@@ -6,12 +6,37 @@
  * (the single source of truth in ./hash.ts — never reimplemented). The input's
  * own `hash` field, if any, is never trusted: it is always recomputed.
  *
- * `validateCanon` performs semantic validation:
- *   - global id uniqueness (entities, facts, edges, work bindings)
- *   - referential integrity (fact subjects/validity windows, edge endpoints,
- *     work binding event lists)
- *   - acyclicity of REQUIRES and of PRECEDES (each must form a DAG; the cycle
- *     path is reported in the error string)
+ * ERRORS vs NOTICES (P-004). The P-001 validator treated three things as fatal
+ * that P-003 then made first-class engine features:
+ *
+ *   - a reference to an undeclared id (the case-K mechanism: absence of
+ *     knowledge must never become falsehood);
+ *   - a REQUIRES cycle (well-founded semantics rejects an unfounded set as
+ *     unsupported — a deliberate, tested outcome);
+ *   - a PRECEDES cycle (reported as a `temporalViolation` when it occurs among
+ *     occurring events — again deliberate and tested).
+ *
+ * The validator had learned Verrin's shape — complete and acyclic — while the
+ * engine had moved on. The adversarial canon that P-003 ships as a test fixture
+ * derives a perfectly usable world and yet `validateCanon` called it invalid on
+ * seven counts. Nothing caught this because nothing ever validated that canon.
+ *
+ * So validation now separates:
+ *   - **errors**   — the canon is genuinely broken and cannot be trusted
+ *                    (duplicate ids, a subject that is not an entity, a
+ *                    work binding pointing at a non-Work, an object that looks
+ *                    like a typo'd id, an UNDECLARED dangling reference).
+ *   - **notices**  — the canon is deliberately incomplete or cyclic in a way the
+ *                    engine handles by design (declared unspecified ids, and the
+ *                    two cycle kinds). Informational, never fatal.
+ *
+ * A canon declares its intentional gaps in `Canon.unspecified`. Structurally a
+ * deliberate unknown and a typo are the same thing — a reference to an id that
+ * does not exist — so the canon must say which it means. That is what lets the
+ * validator enforce referential integrity without outlawing incompleteness.
+ *
+ * `validateCanon` returns only the errors, so every existing caller keeps its
+ * meaning. `inspectCanon` returns both.
  */
 import { hashCanon } from "./hash";
 import type { Canon, CausalEdge, EdgeKind, Entity, EntityKind, Fact, WorkBinding } from "./types";
@@ -21,6 +46,8 @@ const ENTITY_KINDS: ReadonlySet<string> = new Set([
   "Location",
   "Faction",
   "Institution",
+  "Object", // P-004: artifacts/relics/regalia — in the core because it is
+  // ubiquitous across fictional canons, not an Ordos peculiarity.
   "Event",
   "Work",
 ]);
@@ -39,8 +66,10 @@ const EDGE_KINDS: ReadonlySet<string> = new Set([
 /* -------------------------------------------------------------------------- */
 
 /**
- * Validate the structure of `raw` (throwing on malformed shape or semantic
- * errors) and return a canon with its content hash recomputed via `hashCanon`.
+ * Validate the structure of `raw` (throwing on malformed shape or fatal
+ * semantic errors) and return a canon with its content hash recomputed via
+ * `hashCanon`. Notices (deliberate incompleteness, cycles the engine handles by
+ * design) are NOT fatal — use `inspectCanon` to read them.
  */
 export function loadCanon(raw: unknown): Canon {
   const record = asRecord(raw, "canon");
@@ -52,6 +81,13 @@ export function loadCanon(raw: unknown): Canon {
   const workBindings = requireArray(record.workBindings, "workBindings").map((v, i) => parseWorkBinding(v, i));
 
   const canon: Canon = { canonId, version, entities, facts, edges, workBindings, hash: "" };
+  // P-004: declared intentional gaps. Absent key => absent from the canon AND
+  // from the content hash, so pre-P-004 canons hash bit-for-bit identically.
+  if (record.unspecified !== undefined) {
+    canon.unspecified = requireArray(record.unspecified, "unspecified").map((v, i) =>
+      requireString(v, `unspecified[${i}]`)
+    );
+  }
 
   const problems = validateCanon(canon);
   if (problems.length > 0) {
@@ -66,18 +102,30 @@ export function loadCanon(raw: unknown): Canon {
 /* validator                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Semantic validation. Returns an empty array when the canon is sound. */
-export function validateCanon(canon: Canon): string[] {
+/** What validation found: fatal problems, and deliberate-by-design observations. */
+export interface CanonInspection {
+  /** The canon is genuinely broken; do not trust a world derived from it. */
+  errors: string[];
+  /** Deliberate incompleteness or cycles the engine handles by design. */
+  notices: string[];
+}
+
+/**
+ * Full validation. Separates fatal errors from notices about structures the
+ * engine handles deliberately (see the module header).
+ */
+export function inspectCanon(canon: Canon): CanonInspection {
   const errors: string[] = [];
+  const notices: string[] = [];
 
   /* --- id uniqueness across every id-bearing node ---------------------- */
-  const declared = new Map<string, string>();
+  const declaredAs = new Map<string, string>();
   const register = (id: string, where: string): void => {
-    const prior = declared.get(id);
+    const prior = declaredAs.get(id);
     if (prior !== undefined) {
       errors.push(`duplicate id "${id}" (declared as ${prior} and as ${where})`);
     } else {
-      declared.set(id, where);
+      declaredAs.set(id, where);
     }
   };
   for (const e of canon.entities) register(e.id, `entity (kind ${e.kind})`);
@@ -93,16 +141,58 @@ export function validateCanon(canon: Canon): string[] {
   const eventIds = new Set(canon.entities.filter((e) => e.kind === "Event").map((e) => e.id));
   const factIds = new Set(canon.facts.map((f) => f.id));
 
+  /**
+   * Ids the canon declares as intentionally undeclared. A reference to one of
+   * these is a NOTICE (the case-K mechanism); a reference to anything else
+   * unknown is an ERROR (a typo).
+   */
+  const unspecified = new Set(canon.unspecified ?? []);
+  for (const id of unspecified) {
+    if (entityIds.has(id) || factIds.has(id)) {
+      errors.push(`unspecified id "${id}" is also declared — it cannot be both`);
+    }
+  }
+
+  /** Route a dangling reference to errors or notices per the canon's intent. */
+  const reference = (id: string, message: string): void => {
+    if (unspecified.has(id)) {
+      notices.push(`${message} — declared unspecified, so it stays UNKNOWN by design`);
+    } else {
+      errors.push(message);
+    }
+  };
+
   /* --- fact references ------------------------------------------------- */
   for (const f of canon.facts) {
     if (!entityIds.has(f.subject)) {
       errors.push(`fact ${f.id}: subject "${f.subject}" is not a known entity`);
     }
     if (f.validFrom !== null && !eventIds.has(f.validFrom)) {
-      errors.push(`fact ${f.id}: validFrom "${f.validFrom}" is not a known event`);
+      reference(f.validFrom, `fact ${f.id}: validFrom "${f.validFrom}" is not a known event`);
     }
     if (f.validTo !== null && !eventIds.has(f.validTo)) {
-      errors.push(`fact ${f.id}: validTo "${f.validTo}" is not a known event`);
+      reference(f.validTo, `fact ${f.id}: validTo "${f.validTo}" is not a known event`);
+    }
+    // Convention-based object check (P-004). Facts legitimately carry literal
+    // objects (strings like "ash", numbers, booleans, null), so NOT every
+    // object can be required to be an entity id. But every id in all seed
+    // canons follows the convention "prefix/slug", so a STRING object that
+    // contains "/" and is neither a known entity nor a known fact is almost
+    // certainly a typo'd reference (e.g. "loc/valdarr") — report it rather than
+    // loading a plausible-looking world. A literal string containing "/" (say a
+    // flavour predicate whose value is "ash/ember") would false-positive here;
+    // accepted, because the convention is enforced by the seed canons and
+    // entity-valued objects are the only objects that ever carry a "/".
+    if (
+      typeof f.object === "string" &&
+      f.object.includes("/") &&
+      !entityIds.has(f.object) &&
+      !factIds.has(f.object)
+    ) {
+      reference(
+        f.object,
+        `fact ${f.id}: object "${f.object}" looks like an id reference but is not a known entity or fact`
+      );
     }
   }
 
@@ -110,10 +200,10 @@ export function validateCanon(canon: Canon): string[] {
   const knownEndpoints = new Set([...entityIds, ...factIds]);
   for (const ed of canon.edges) {
     if (!knownEndpoints.has(ed.from)) {
-      errors.push(`edge ${ed.id}: from "${ed.from}" is not a known entity or fact`);
+      reference(ed.from, `edge ${ed.id}: from "${ed.from}" is not a known entity or fact`);
     }
     if (!knownEndpoints.has(ed.to)) {
-      errors.push(`edge ${ed.id}: to "${ed.to}" is not a known entity or fact`);
+      reference(ed.to, `edge ${ed.id}: to "${ed.to}" is not a known entity or fact`);
     }
   }
 
@@ -125,25 +215,49 @@ export function validateCanon(canon: Canon): string[] {
     }
     for (const ev of wb.events) {
       if (!eventIds.has(ev)) {
-        errors.push(`workBinding "${wb.workId}": event "${ev}" is not a known event`);
+        reference(ev, `workBinding "${wb.workId}": event "${ev}" is not a known event`);
       }
     }
     for (const ev of findDuplicates(wb.events)) {
       errors.push(`workBinding "${wb.workId}": duplicate event "${ev}" in binding`);
     }
+    for (const fid of wb.facts ?? []) {
+      if (!factIds.has(fid)) {
+        errors.push(`workBinding "${wb.workId}": fact "${fid}" is not a known fact`);
+      }
+    }
   }
 
-  /* --- REQUIRES and PRECEDES must each form a DAG ----------------------- */
+  /* --- cycles: NOTICES, not errors ------------------------------------- */
+  // P-003 made both of these first-class engine behaviours, so a canon
+  // containing one is not broken:
+  //   REQUIRES cycle  -> an unfounded set; well-founded semantics rejects it as
+  //                      UNSUPPORTED unless some group reaches outside the cycle.
+  //   PRECEDES cycle  -> a temporalViolation when it occurs among occurring
+  //                      events; the events themselves stay ESTABLISHED.
   const requiresCycle = findCycle(buildAdjacency(canon.edges, "REQUIRES"));
   if (requiresCycle !== null) {
-    errors.push(`REQUIRES cycle: ${requiresCycle.join(" -> ")}`);
+    notices.push(
+      `REQUIRES cycle: ${requiresCycle.join(" -> ")} — unfounded unless externally grounded (well-founded semantics)`
+    );
   }
   const precedesCycle = findCycle(buildAdjacency(canon.edges, "PRECEDES"));
   if (precedesCycle !== null) {
-    errors.push(`PRECEDES cycle: ${precedesCycle.join(" -> ")}`);
+    notices.push(
+      `PRECEDES cycle: ${precedesCycle.join(" -> ")} — reported as a temporalViolation when these events occur`
+    );
   }
 
-  return errors;
+  return { errors, notices };
+}
+
+/**
+ * Fatal problems only. Returns an empty array when the canon can be trusted.
+ * Every pre-P-004 caller keeps its exact meaning; deliberate incompleteness and
+ * engine-handled cycles now surface through `inspectCanon().notices` instead.
+ */
+export function validateCanon(canon: Canon): string[] {
+  return inspectCanon(canon).errors;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -201,7 +315,16 @@ function parseWorkBinding(value: unknown, index: number): WorkBinding {
   const events = requireArray(r.events, `workBindings[${index}].events`).map((e, j) =>
     requireString(e, `workBindings[${index}].events[${j}]`)
   );
-  return { workId, events };
+  const wb: WorkBinding = { workId, events };
+  // P-004: optional fact-requirement list. Absent key => absent from the
+  // binding AND from the content hash (backward compatible, pre-P-004 canons
+  // hash bit-for-bit identically).
+  if (r.facts !== undefined) {
+    wb.facts = requireArray(r.facts, `workBindings[${index}].facts`).map((f, j) =>
+      requireString(f, `workBindings[${index}].facts[${j}]`)
+    );
+  }
+  return wb;
 }
 
 /* -------------------------------------------------------------------------- */

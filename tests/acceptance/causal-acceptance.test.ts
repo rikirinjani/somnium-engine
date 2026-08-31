@@ -402,7 +402,7 @@ describe("case J: contradictory canon", () => {
   });
 
   it("derive still returns a usable world — the contradiction is preserved, not repaired, not fatal", () => {
-    expect(world.hash).toMatch(/^[0-9a-f]{8}$/);
+    expect(world.identityHash).toMatch(/^[0-9a-f]{8}$/);
     expect(world.contradictions.length).toBe(2);
     // unrelated events remain ESTABLISHED despite the contradictory pair
     expect(statusOf(world, ids.A.blight)).toBe("ESTABLISHED");
@@ -456,7 +456,7 @@ describe("determinism and replay", () => {
     ];
     const a = derive(canon, chain);
     const b = derive(canon, chain);
-    expect(a.hash).toBe(b.hash);
+    expect(a.identityHash).toBe(b.identityHash);
     expect(a.judgments).toEqual(b.judgments);
     expect(a.statuses).toEqual(b.statuses);
     expect(a.contradictions).toEqual(b.contradictions);

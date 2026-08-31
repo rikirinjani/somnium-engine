@@ -3,8 +3,8 @@
  *
  * The derived world produced by derive(canon, interventions, rp?). This is a
  * pure memoizable value: same canon + same interventions + same rewind point
- * => identical WorldState (same hash). No randomness, no Date.now(), no LLM,
- * no network — everything is a deterministic function of the inputs.
+ * => identical WorldState (same identityHash). No randomness, no Date.now(), no
+ * LLM, no network — everything is a deterministic function of the inputs.
  *
  * Pipeline (P-003):
  *   1. buildModel(canon, interventions)  — post-intervention causal graph
@@ -20,9 +20,11 @@
  *   4. Effective facts: canon facts whose validity window is satisfied by the
  *      final judgments (`occurs`), then fact interventions (setFact/relocate/
  *      retractFact) applied in order.
- *   5. Work statuses from member-event statuses + fact overrides.
- *   6. Contradiction records (never auto-repaired) + temporal violations.
- *   7. Content hash over the deterministic projection of everything above.
+ * 5. Work statuses from member-event statuses + fact requirements/overrides.
+ * 6. Contradiction records (never auto-repaired) + temporal violations.
+ * 7. Two content hashes (P-004, docs §18.4):
+ *      stateHash    — "are these the same WORLD?" effective state only;
+ *      identityHash — "was this world reached the same WAY?" the memo key.
  *
  * INTERVENTION ORDER IS PART OF THE WORLD'S IDENTITY, but not uniformly.
  * Measured semantics (executable spec: src/derive/ordering.test.ts):
@@ -34,15 +36,15 @@
  *   - `setFact` / `relocate` / `retractFact` are ASSIGNMENTS to a
  *     (subject, predicate) cell — last write wins — so they do NOT commute.
  *
- * The content hash folds the intervention list in under exactly that split (see
- * `canonicalInterventions`): set-like marks as a sorted deduplicated set, every
+ * `canonicalInterventions` folds the intervention list into `identityHash`
+ * under exactly that split: set-like marks as a sorted deduplicated set, every
  * sequential kind in ACTUAL order. Hashing the raw ordered list would split
  * genuinely identical worlds; hashing only the derived projection collided a
  * no-op intervention chain with the baseline. P-001 hashed a fully sorted list,
  * silently assuming commutativity that does not hold.
  * The `interventions` field on the WorldState keeps the full ordered chain.
  */
-import type { Canon, Fact } from "../canon/types";
+import type { Canon, Fact, WorkBinding } from "../canon/types";
 import { canonicalJson, hashState } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
@@ -71,8 +73,20 @@ export interface WorldState {
   contradictions: ContradictionRecord[];
   /** PRECEDES cycles among occurring events — unsatisfiable timelines */
   temporalViolations: TemporalViolation[];
-  /** content hash of the world (memoization key / replay fingerprint) */
-  hash: string;
+  /**
+   * "Are these the same WORLD?" — effective state only, provenance-independent.
+   * Folded from canon + judgments + statuses + facts + workStatuses +
+   * contradictions + temporalViolations. DELIBERATELY excludes `rpId` and
+   * `interventions`: a world is the same world regardless of how it was reached.
+   */
+  stateHash: string;
+  /**
+   * "Was this world reached the same WAY?" — full derivation identity; the memo
+   * key. Folded from stateHash + rpId + the canonical intervention form
+   * (canonicalInterventions), so keying a memo on it can never hand back a
+   * state carrying someone else's provenance.
+   */
+  identityHash: string;
 }
 
 /** A fact as visible in a derived world (may differ from canon by overrides). */
@@ -176,7 +190,32 @@ function applyFactInterventions(facts: FactView[], interventions: Intervention[]
   return current;
 }
 
-/** Canonical Work -> classification from member-event statuses + overrides. */
+/**
+ * Does a Work depend on an (effective) fact? P-004: the UNION of three rules.
+ *   1. the fact is listed in `work.facts` — an explicit STATE requirement
+ *      ("the investiture is this story only if the Seal is in the right hands");
+ *   2. the fact's validity window is anchored to a member event — `validFrom` or
+ *      `validTo` is one of the Work's events, i.e. the Work's events bring the
+ *      fact about or end it;
+ *   3. the fact's subject is a member event — a fact ABOUT the event itself.
+ *      Pre-P-004 `computeWorkStatuses` used exactly this rule and only this
+ *      rule; it is a legitimate subset of the dependency relation, not the
+ *      whole definition (it made ALTERED unreachable under a canon where the
+ *      overridable facts are about characters and the Works are about events).
+ */
+function workDependsOnFact(canon: Canon, work: WorkBinding, fact: FactView): boolean {
+  if (work.facts !== undefined && work.facts.includes(fact.id)) return true;
+  if (work.events.includes(fact.subject)) return true;
+  const members = new Set(work.events);
+  return canon.facts.some(
+    (cf) =>
+      cf.id === fact.id &&
+      ((cf.validFrom !== null && members.has(cf.validFrom)) ||
+        (cf.validTo !== null && members.has(cf.validTo)))
+  );
+}
+
+/** Canonical Work -> classification from member-event statuses + fact state. */
 function computeWorkStatuses(
   canon: Canon,
   statuses: Record<string, EventStatus>,
@@ -184,15 +223,33 @@ function computeWorkStatuses(
 ): Record<string, WorkStatus> {
   const result: Record<string, WorkStatus> = {};
   const overridden = facts.filter((f) => f.overridden === true);
+  const effectiveById = new Map(facts.map((f) => [f.id, f]));
   for (const work of canon.workBindings) {
     const members = work.events.map((e) => statuses[e] ?? "UNKNOWN");
     const any = (s: EventStatus): boolean => members.includes(s);
     const allEstablished = members.every((m) => m === "ESTABLISHED");
-    const affectedByOverride = overridden.some((f) => work.events.includes(f.subject));
+
+    // Classification cascade (P-004, ordered; absent `facts` on the Work makes
+    // step 2 a no-op, so behaviour is identical to pre-P-004):
+    //   1. event-status rules first: any EXCLUDED / UNSUPPORTED / CONTRADICTORY
+    //      member => IMPOSSIBLE (pre-existing).
+    //   2. missing required facts: a fact listed in `work.facts` that is NOT
+    //      effective in this world => IMPOSSIBLE — the story cannot hold as
+    //      written.
+    //   3. all members ESTABLISHED AND any fact the Work depends on has been
+    //      overridden => ALTERED (see workDependsOnFact for the dependency
+    //      union).
+    //   4. all members ESTABLISHED => PRESERVED.
+    //   5. any CONTINGENT member (and not all established) => UNREACHABLE.
+    //   6. otherwise => UNKNOWN.
+    const missingRequired = (work.facts ?? []).some((id) => !effectiveById.has(id));
+    const affectedByOverride = allEstablished && overridden.some((f) => workDependsOnFact(canon, work, f));
 
     if (any("EXCLUDED") || any("UNSUPPORTED") || any("CONTRADICTORY")) {
       result[work.workId] = "IMPOSSIBLE";
-    } else if (allEstablished && affectedByOverride) {
+    } else if (missingRequired) {
+      result[work.workId] = "IMPOSSIBLE";
+    } else if (affectedByOverride) {
       result[work.workId] = "ALTERED";
     } else if (allEstablished) {
       result[work.workId] = "PRESERVED";
@@ -244,11 +301,11 @@ function interventionKey(iv: Intervention): string {
  *     sequential writes: to the edge set, or to a (subject, predicate) cell.
  *     Kept in ACTUAL order, because reordering them changes the world.
  *
- * This is what makes `hash` a sound identity. Hashing the raw ordered list would
- * split worlds that are genuinely identical (two orders of the same negations);
- * hashing only the derived content collided a no-op intervention chain with the
- * baseline, letting a hash-keyed memo return a state carrying the wrong
- * `interventions` provenance.
+ * This is what makes `identityHash` a sound identity. Hashing the raw ordered
+ * list would split worlds that are genuinely identical (two orders of the same
+ * negations); hashing only the derived content collided a no-op intervention
+ * chain with the baseline, letting a hash-keyed memo return a state carrying
+ * the wrong `interventions` provenance.
  */
 function canonicalInterventions(interventions: Intervention[]): {
   setLike: string[];
@@ -272,7 +329,7 @@ function canonicalInterventions(interventions: Intervention[]): {
  * are set-like marks (idempotent, order-free); `severEdge` / `addEdge` are
  * sequential edge-set writes and `setFact` / `relocate` / `retractFact` are
  * sequential cell assignments, so both of those classes are order-sensitive.
- * The hash encodes exactly that split via `canonicalInterventions`.
+ * `identityHash` encodes exactly that split via `canonicalInterventions`.
  */
 export function derive(
   canon: Canon,
@@ -304,28 +361,44 @@ export function derive(
     workStatuses,
     contradictions,
     temporalViolations: violations,
-    hash: "",
+    stateHash: "",
+    identityHash: "",
   };
 
-  // Content hash over the deterministic projection (canonicalJson sorts keys).
+  // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4):
+  //
+  //   stateHash — "are these the same WORLD?" The effective state only:
+  //   canon + judgments + statuses + effective facts + work statuses +
+  //   contradictions + temporal violations. DELIBERATELY excludes `rpId` and
+  //   `interventions`: a world is the same world regardless of how it was
+  //   reached, and "did two different intervention chains reach the same world?"
+  //   must be answerable (that is the deferred minimum-intervention search's
+  //   immediate neighbourhood, and cross-canon genericity is exactly where
+  //   convergent branches show up).
+  //
+  //   identityHash — "was this world reached the same WAY?" The full derivation
+  //   identity: stateHash + rpId + the canonical intervention form. This is the
+  //   memo key: keying a memo on stateHash alone could hand back a state
+  //   carrying someone else's `interventions` provenance.
+  //
   // `canonicalInterventions` folds the intervention list in under its MEASURED
   // commutation semantics: set-like marks (negateEvent / forceEvent) as a sorted
   // deduplicated set, every sequential kind (severEdge / addEdge / setFact /
-  // relocate / retractFact) in ACTUAL order. Hashing the derived content alone
-  // collided a no-op intervention chain with the baseline, which would let a
-  // hash-keyed memo hand back a state carrying the wrong `interventions`
-  // provenance.
-  world.hash = hashState({
+  // relocate / retractFact) in ACTUAL order.
+  world.stateHash = hashState({
     canonId: canon.canonId,
     canonHash: canon.hash,
-    interventions: canonicalInterventions(interventions),
-    rpId,
     judgments: world.judgments,
     statuses,
     facts,
     workStatuses,
     contradictions,
     temporalViolations: violations,
+  });
+  world.identityHash = hashState({
+    stateHash: world.stateHash,
+    rpId,
+    interventions: canonicalInterventions(interventions),
   });
 
   return world;
