@@ -422,9 +422,10 @@ describe("an intervention may never manufacture an occurrence", () => {
 
     it("a fact write about a declared non-event subject is still legal", () => {
       // The gate must not over-fire. A fact's subject may be any declared
-      // entity — Character, Location, Object, EventType, Work — none of which is
-      // a causal node. Only `declared` (events + facts) gates causal truth;
-      // `declaredSubjects` (all entities + facts) gates fact writes.
+      // ENTITY — Character, Location, Object, EventType, Work — none of which is
+      // a causal node. Two different vocabularies, for two different questions:
+      // `declared` (events + facts) gates causal truth, while the fact-legality
+      // rule in src/canon/fact-rules.ts gates assertions and admits any entity.
       const withSubjects = mk(
         [
           { id: "ev/real", kind: "Event", name: "Real" },
