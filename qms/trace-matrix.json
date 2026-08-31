@@ -136,6 +136,49 @@
         "qms/records/nonconformities/2026-08-31T08-54-34-ncr-003-unsupported-state-claim.json"
       ],
       "status": "verified"
+    },
+    {
+      "requirement_id": "req-005",
+      "requirement_title": "Repeatable events and occurrence identity — what is the identity of an event occurrence in a partially ordered fictional world?",
+      "requirement_source": "docs/ARCHITECTURE-RECONNAISSANCE.md §19",
+      "spec": [
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §19.1 (Event is already an Occurrence; declarational identity)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §19.2 (probe results, measured before any change)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §19.3 (ten routes, the two invariants, the three lessons)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §19.4 (falsifiable predictions)",
+        "docs/ARCHITECTURE-RECONNAISSANCE.md §19.5-19.7 (intervention / diff / hash semantics)",
+        "src/canon/types.ts (EntityKind gains EventType; INSTANCE_OF named in the core)",
+        "src/canon/fact-rules.ts (the single fact-legality authority)"
+      ],
+      "tasks": [
+        "ontology: EventType entity kind; INSTANCE_OF named by the core; CanonicalEventReference REJECTED as citation, not world structure",
+        "occurrence identity is declarational — the canon id and nothing else",
+        "query/occurrence.ts: occurrencesOfType, occurrenceCount, typeOfOccurrence, declaredEventTypes, diffOccurrences",
+        "diff: three predicates (setChanged / substituted / typeCeased) replacing one insufficient boolean",
+        "both seed canons carry a recurrence pattern of deliberately DIFFERENT shape (Verrin independent-parallel, Ordos competing-alternative)",
+        "cross-canon capability 11 parameterized over both canons",
+        "truth invariant: cannotBeTainted — no conflict about an undeclared id may lift its truth",
+        "taint discipline: a conflict may only contradict a DECIDED value",
+        "assertion invariant: factAssertionError at three call sites; instance_of has a typed Event -> EventType signature",
+        "differential claim: an intervention may assert no more than canon may, over 352 triples",
+        "world-observable claim: a refused write leaves the world identical to the empty chain apart from its record",
+        "remediation across ten routes and six L2 rejections (ncr-004)"
+      ],
+      "tests": [
+        "src/query/occurrence.test.ts",
+        "src/canon/fact-rules.test.ts",
+        "src/derive/taint.test.ts",
+        "tests/acceptance/cross-canon-acceptance.test.ts"
+      ],
+      "verification": [
+        "qms/records/verifications/2026-08-31T21-13-42-ver-005-p005-l2-gate.json",
+        "verify-facts (scripts/verify-facts.ts)"
+      ],
+      "nonconformities": [
+        "qms/records/nonconformities/2026-08-31T06-21-25-ncr-004-four-false-universals.json"
+      ],
+      "status": "verified-with-residual-risk",
+      "residual_risks": "docs/ARCHITECTURE-RECONNAISSANCE.md §19.11 items 10 and 11"
     }
   ]
 }
