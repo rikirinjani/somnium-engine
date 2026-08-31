@@ -53,5 +53,5 @@
   "nonconformities": [
     "qms/records/nonconformities/2026-08-31T02-46-51-ncr-002-refuted-claim-survived.json"
   ],
-  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium Engine\\tests\\acceptance\\causal-acceptance.test.ts"
+  "evidence_path": "tests/acceptance/causal-acceptance.test.ts"
 }

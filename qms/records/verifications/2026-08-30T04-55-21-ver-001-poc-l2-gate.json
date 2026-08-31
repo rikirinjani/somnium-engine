@@ -18,5 +18,5 @@
   "linked_tasks": [
     "P-001 PoC build (4 lanes: scaffold, canon+Verrin, derive core, timeline/diff/query/cli)"
   ],
-  "evidence_path": "C:\\Users\\think\\Project_v2\\Somnium-poc\\tests\\acceptance\\poc-acceptance.test.ts"
+  "evidence_path": "tests/acceptance/poc-acceptance.test.ts"
 }

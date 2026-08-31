@@ -27,7 +27,7 @@
     "Verrin seed-library PoC demonstrates all 10 capabilities: baseline canon, one Rewind Point, one intervention, causal propagation, changed character state, changed event reachability, branch genealogy, world diff, multi-depth intervention, deterministic replay."
   ],
   "references": [
-    "C:\\Users\\think\\Project_v2\\Kronos Engine\\ (ancestor, read-only; not modified)",
-    "C:\\Users\\think\\Project_v2\\Somnium Engine\\docs\\ARCHITECTURE-RECONNAISSANCE.md"
+    "../Kronos Engine (ancestor, read-only; not modified - separate repository)",
+    "docs/ARCHITECTURE-RECONNAISSANCE.md"
   ]
 }

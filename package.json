@@ -2,6 +2,7 @@
   "name": "somnium-engine",
   "version": "0.1.0",
   "description": "Deterministic counterfactual narrative engine for fictional canons. Sibling of Kronos Engine; shares no code.",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
