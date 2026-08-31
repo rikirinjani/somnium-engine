@@ -529,7 +529,43 @@ function softSupported(node: string, model: DerivationModel, truth: Map<string, 
   return false;
 }
 
-/** A conflict detected in Phase D, carrying its provenance. */
+/**
+ * Apply a conflict to a node's truth: a conflict may only ever CONTRADICT A
+ * DECIDED VALUE, never decide an undecided one (P-005 guard B).
+ *
+ * `BOTH` means "this world asserts P and ¬P", which is meaningless until the
+ * world has asserted something — so `taintTruth("NEITHER")` is `NEITHER`.
+ *
+ * EXPORTED only so its unit behaviour can be pinned. `derive` cannot currently
+ * reach the `NEITHER` branch (see the discipline block in `propagateJudgments`),
+ * so a test through `derive` would give it no coverage at all.
+ */
+export function taintTruth(base: TruthValue): TruthValue {
+  return base === "NEITHER" ? "NEITHER" : joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE");
+}
+
+/**
+ * Conflict kinds that describe an INCOHERENT INTERVENTION rather than an
+ * inconsistent world. They are reported as records and never touch truth: the
+ * world did not assert anything contradictory, the caller asked for something
+ * the canon cannot express.
+ *
+ * EXPORTED so a test can assert the classification is TOTAL over
+ * `ConflictNote["kind"]` — a new kind added to the union without being
+ * classified is the enumeration failure ncr-004 is about.
+ */
+export const ABOUT_THE_INTERVENTION: ReadonlySet<ConflictNote["kind"]> = new Set([
+  "forced-undeclared",
+  "fact-write-illegal",
+]);
+
+/** Conflict kinds that describe an inconsistent WORLD, and so do taint truth. */
+export const ABOUT_THE_WORLD: ReadonlySet<ConflictNote["kind"]> = new Set([
+  "forced-vs-negated",
+  "forced-vs-refuted",
+  "excludes",
+  "invariant",
+]);
 export interface ConflictNote {
   node: string;
   kind:
@@ -691,22 +727,31 @@ export function propagateJudgments(model: DerivationModel): {
    * time. (B) is a property of the taint operation itself, so it holds for every
    * present and future conflict kind, on declared and undeclared nodes alike.
    * A rejection is additionally NOT a conflict about the world — it is a refused
-   * intervention — so it is also excluded from tainting by name below. Two
-   * independent guards, either sufficient.
+   * intervention — so it is also excluded from tainting by name below.
+   *
+   * THE TWO GUARDS ARE NOT SYMMETRIC, and an earlier draft of this comment
+   * claimed they were ("two independent guards, either sufficient"). Mutation
+   * testing by the seventh L2 gate measured otherwise:
+   *
+   *   - name list removed, (B) kept  ->  114 of 264 refused writes still move
+   *     world state. (B) stops route 8 proper (0 dormant promotions, 0 count
+   *     changes) but not a refused write tainting an already-DECIDED subject,
+   *     e.g. verrin `ev/ashfall-falls` TRUE -> BOTH, flipping
+   *     `work/verrin-ashfall` PRESERVED -> IMPOSSIBLE.
+   *   - (B) removed, name list kept  ->  0 world moves across the same 264.
+   *
+   * So `ABOUT_THE_INTERVENTION` is the LOAD-BEARING guard and (B) is a narrower
+   * BACKSTOP. (B) is currently unreachable through `derive` — the gate made
+   * `taint(NEITHER)` throw and found 0 hits across 4,386 derivations, because
+   * the four world-level kinds gate on `occursNow`/`forcedBy`, which decide a
+   * node before any conflict about it can fire. It is kept deliberately: it
+   * makes the taint operation sound on its own terms, and it is the defence if a
+   * future conflict kind's predicate does NOT imply a decided node. Its unit
+   * behaviour is pinned directly in `taint.test.ts`, since `derive` cannot reach
+   * it.
    */
   const cannotBeTainted = (node: string): boolean =>
     !model.declared.has(node) && !model.facts.has(node);
-
-  /**
-   * Conflict kinds that describe an INCOHERENT INTERVENTION rather than an
-   * inconsistent world. They are reported as records and never touch truth: the
-   * world did not assert anything contradictory, the caller asked for something
-   * the canon cannot express.
-   */
-  const ABOUT_THE_INTERVENTION: ReadonlySet<ConflictNote["kind"]> = new Set([
-    "forced-undeclared",
-    "fact-write-illegal",
-  ]);
 
   const conflicted = new Set(
     conflicts
@@ -714,17 +759,10 @@ export function propagateJudgments(model: DerivationModel): {
       .map((c) => c.node)
   );
 
-  /**
-   * Apply a conflict to a node's truth. Guard (B): only a decided value can be
-   * contradicted, so tainting can never RAISE truth out of `NEITHER`.
-   */
-  const taint = (base: TruthValue): TruthValue =>
-    base === "NEITHER" ? "NEITHER" : joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE");
-
   const judgments = new Map<string, Judgment>();
   for (const node of model.nodeIds) {
     const base = truth.get(node) ?? "NEITHER";
-    const finalTruth: TruthValue = conflicted.has(node) ? taint(base) : base;
+    const finalTruth: TruthValue = conflicted.has(node) ? taintTruth(base) : base;
 
     let support: SupportKind;
     if (model.negated.has(node)) support = "NONE";
