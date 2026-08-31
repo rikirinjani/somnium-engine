@@ -781,7 +781,7 @@ Explicitly **not** recommended next: minimum-intervention search. It remains rea
 
 **Question.** Can Somnium represent a fictional world in which the same *kind* of thing happens more than once, while preserving deterministic identity, causality, temporal ordering, and branch provenance?
 
-**Method note, stated honestly.** P-004 wrote its predictions before touching the engine at all. P-005 differs: the mission's questions were largely answerable by *read-only probe* against the existing engine, so §19.2 records what the engine already does, measured before any change. §19.3 then states falsifiable predictions about what remains to be built. Nothing in §19.2 is a prediction dressed up as a result, and nothing in §19.3 was written after the corresponding code.
+**Method note, stated honestly.** P-004 wrote its predictions before touching the engine at all. P-005 differs: the mission's questions were largely answerable by *read-only probe* against the existing engine, so §19.2 records what the engine already does, measured before any change. §19.4 then states falsifiable predictions about what remains to be built. Nothing in §19.2 is a prediction dressed up as a result. Note the structural weakness this leaves: §§19.1–19.4 and 19.5+ were committed together, so unlike P-004 there is no git evidence that the predictions preceded the code — the reader has only the record and whatever corroboration the artefacts provide.
 
 ### 19.1 The ontology question — Event is already an Occurrence
 
@@ -852,17 +852,23 @@ The engine asserts that an occurrence it has never heard of not only happened bu
 
 | Route | Result | Correct? |
 |---|---|---|
-| `addEdge` endpoint | `UNKNOWN` | yes — `hardSupport` consults `declared` (P-003 case K) |
+| `addEdge`, undeclared id as REQUIRES **source** | `UNKNOWN` | yes — `hardSupport`'s no-support-rules branch consults `declared` (P-003 case K) |
+| `addEdge`, undeclared id as REQUIRES **target** | **`ESTABLISHED`, support `HARD`** | **no — invented history** |
 | `negateEvent` | `EXCLUDED` | harmless — removing a non-thing |
 | **`forceEvent`** | **`ESTABLISHED`, support `HARD`** | **no — invented history** |
 
-The cause: `positiveFixpoint` sets `TRUE` for a forced node *before* consulting support, so the `declared` gate that protects every other path is bypassed. P-003 built that gate specifically so that absence of knowledge could not become fact; `forceEvent` walks around it.
+**Two independent holes in the same wall.** P-003 built the `declared` gate so that absence of knowledge could not become fact. Both of these walked around it:
+
+1. `positiveFixpoint` sets `TRUE` for a forced node *before* consulting support, so `forceEvent` never reaches the gate at all.
+2. The gate lived only in `hardSupport`'s *no-support-rules* branch. An `addEdge` intervention naming a fresh id as a REQUIRES **target** gives that id support rules, so it fell through to `disjoin` and inherited its prerequisite's truth. It chained, too: three added edges produced three `ESTABLISHED` invented occurrences, which then joined an `EventType` and were counted by the occurrence layer.
+
+The first remediation pass fixed (1) and then asserted in prose that "every other route to an undeclared id already respected that gate" — false in the target direction. The L2 gate found (2) by trying to defeat the claim instead of reading it. A third gate was needed for `ENABLES`, which was reporting undeclared targets as `CONTINGENT`. Recorded as ncr-004.
 
 This is precisely the mission's prohibition — *"the engine must not silently manufacture infinite fictional history"* — and it is a live defect on `main`, not a hypothetical. It went unnoticed because both seed canons only ever force *declared* events.
 
 **Occurrence generation rule (the explicit rule the mission asks for):**
 
-> **The set of occurrences is exactly the set canon declares.** Interventions may change an occurrence's status; they may never bring an occurrence into existence. Forcing an undeclared occurrence is a contradiction between the intervention and the canon, and is reported as one.
+> **Only canon declares an occurrence.** Interventions may change an occurrence's status; they may never bring one into existence. An undeclared id can never occur — not by being forced, not by having an edge added to it, not by being enabled. Forcing one is a contradiction between the intervention and the canon, and is reported as one.
 
 ### 19.4 Falsifiable predictions
 
@@ -954,12 +960,12 @@ The mission asks whether the propagation algorithm survives `A → A₁ → B₁
 - **No recursion at all.** `positiveFixpoint` is an iterative worklist over a fixed node set with a `throw`ing pass cap. The node set cannot grow during derivation.
 - **No false bootstrap.** `A₁ REQUIRES A₂` between distinct occurrences is a DAG edge. The unfounded-set phase only fires on genuine `REQUIRES` loops, which recurrence is not.
 - **No accidental cycle detection.** Verified: the `A1 → B1 → A2 → B2` fixture produces zero cycle notices and zero temporal violations, while a genuine `PRECEDES` loop on the same two occurrences still reports one. Revisiting a *type* is not revisiting a *node*.
-- **No duplicate occurrence creation, and none possible.** The node set is `canon events ∪ edge endpoints ∪ intervention targets`, computed once in `buildModel`. Nothing in the pipeline adds a node.
+- **No occurrence can be manufactured.** Be precise about what is guaranteed. The node *set* is `canon events ∪ edge endpoints ∪ intervention targets`, and `addEdge` **can** put a fresh id in it — so the stronger claim "nothing adds a node", which an earlier draft of this section made, is false. What holds is the claim that matters: **an id canon never declared can never occur.** Three independent gates enforce it — `hardSupport` returns `NEITHER` for any undeclared node however many edges point at it, `softSupported` refuses it `SOFT` support, and `forceEvent` on it raises a `forced-undeclared` contradiction. An undeclared id may appear as an `UNKNOWN` node, which is the honest report for something canon does not mention; it can never be `ESTABLISHED`, join an `EventType`, or be counted by `occurrenceCount`. Nothing creates a node *during* derivation, so no fixpoint pass can grow the world.
 - **No oscillation.** Phase A truth values are sticky and monotone in the information order; the assertion that catches a `truthRank` decrease never fires on any recurrence fixture.
 
 **The occurrence generation rule, as implemented:**
 
-> The set of occurrences is exactly the set canon declares. An intervention may change an occurrence's status; it may never bring an occurrence into existence. Forcing an undeclared occurrence is a contradiction between intervention and canon, reported as `contra:<id>:force-undeclared` with the forcing intervention as its provenance.
+> Only canon declares an occurrence. An intervention may change an occurrence's status; it may never bring one into existence. An undeclared id can never occur: `hardSupport` denies it truth however many edges point at it, `softSupported` denies it soft support, and `forceEvent` on it is a contradiction reported as `contra:<id>:force-undeclared` with the forcing intervention as its provenance. Such an id may still appear as an `UNKNOWN` node — the honest report for something canon does not mention.
 
 This closes the defect in §19.3. It is the reason the engine cannot manufacture infinite fictional history: not a depth limit or a recursion guard, but the absence of any mechanism that could create a node.
 

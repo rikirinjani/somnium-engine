@@ -14,7 +14,7 @@ import { INSTANCE_OF } from "../canon/types";
 import { hashCanon } from "../canon/hash";
 import { inspectCanon } from "../canon/canon";
 import { derive } from "../derive/world-state";
-import { forceEvent, negateEvent, retractFact } from "../timeline/types";
+import { addEdge, forceEvent, negateEvent, retractFact, setFact } from "../timeline/types";
 import {
   declaredEventTypes,
   diffOccurrences,
@@ -214,13 +214,18 @@ describe("temporal recurrence is not a causal cycle", () => {
 });
 
 describe("an intervention may never manufacture an occurrence", () => {
-  const canon = mk([{ id: "ev/real", kind: "Event", name: "Real" }], [], []);
+  const canon = mk(
+    [
+      { id: "ev/real", kind: "Event", name: "Real" },
+      { id: "type/t", kind: "EventType", name: "T" },
+    ],
+    [],
+    []
+  );
 
   it("forcing an UNDECLARED occurrence is a contradiction, not a new event", () => {
-    // P-005 DEFECT FIX. Before this, forceEvent on an id canon never declared
-    // returned ESTABLISHED with support HARD and zero contradictions — the
-    // engine inventing fictional history, bypassing the `declared` gate that
-    // every other route already respected.
+    // P-005 DEFECT FIX (1 of 2). Before this, forceEvent on an id canon never
+    // declared returned ESTABLISHED with support HARD and zero contradictions.
     const world = derive(canon, [forceEvent("ev/ghost")]);
     expect(world.statuses["ev/ghost"]).toBe("CONTRADICTORY");
     const record = world.contradictions.find((r) => r.id === "contra:ev/ghost:force-undeclared");
@@ -239,6 +244,87 @@ describe("an intervention may never manufacture an occurrence", () => {
     const world = derive(canon, [negateEvent("ev/ghost")]);
     expect(world.statuses["ev/ghost"]).toBe("EXCLUDED");
     expect(world.contradictions).toEqual([]);
+  });
+
+  /**
+   * P-005 DEFECT FIX (2 of 2), found by the L2 gate after the first fix shipped.
+   *
+   * `addEdge` names arbitrary endpoints, so it could introduce an undeclared id
+   * WITH support rules. The `declared` gate lived only in `hardSupport`'s
+   * no-support-rules branch, so such a node fell through to `disjoin` and
+   * inherited its prerequisite's truth:
+   *
+   *     addEdge({ REQUIRES, from: ev/real, to: ev/ghost })
+   *       -> ev/ghost ESTABLISHED, support HARD, 0 contradictions
+   *
+   * The first fix gated `forceEvent` and the prose then claimed "every other
+   * route already respected that gate" — which was false in the target
+   * direction. These tests exist because a universal claim ("none possible")
+   * shipped with no adversarial test behind it.
+   */
+  describe("every route to an undeclared id, adversarially", () => {
+    it("addEdge with an undeclared TARGET does not promote it", () => {
+      const world = derive(canon, [
+        addEdge({ id: "edge/g", kind: "REQUIRES", from: "ev/real", to: "ev/ghost" }),
+      ]);
+      expect(world.statuses["ev/ghost"]).toBe("UNKNOWN");
+      expect(world.judgments["ev/ghost"]).toMatchObject({ truth: "NEITHER", support: "NONE" });
+    });
+
+    it("addEdge with an undeclared SOURCE keeps dependents UNKNOWN (case K, unchanged)", () => {
+      const world = derive(canon, [
+        addEdge({ id: "edge/s", kind: "REQUIRES", from: "ev/ghost-src", to: "ev/real" }),
+      ]);
+      expect(world.statuses["ev/ghost-src"]).toBe("UNKNOWN");
+      expect(world.statuses["ev/real"]).toBe("UNKNOWN");
+    });
+
+    it("a CHAIN of added edges cannot manufacture a history", () => {
+      // The infinite-fictional-history case: before the fix this produced three
+      // ESTABLISHED invented occurrences and no contradiction.
+      const world = derive(canon, [
+        addEdge({ id: "edge/1", kind: "REQUIRES", from: "ev/real", to: "ev/ga" }),
+        addEdge({ id: "edge/2", kind: "REQUIRES", from: "ev/ga", to: "ev/gb" }),
+        addEdge({ id: "edge/3", kind: "REQUIRES", from: "ev/gb", to: "ev/gc" }),
+      ]);
+      for (const ghost of ["ev/ga", "ev/gb", "ev/gc"]) {
+        expect(world.statuses[ghost]).toBe("UNKNOWN");
+      }
+    });
+
+    it("an ENABLES edge cannot promote an undeclared target either", () => {
+      const world = derive(canon, [
+        addEdge({ id: "edge/e", kind: "ENABLES", from: "ev/real", to: "ev/ghost" }),
+      ]);
+      expect(world.statuses["ev/ghost"]).toBe("UNKNOWN");
+    });
+
+    it("an invented id can never join a type or be counted", () => {
+      // The occurrence layer must not be reachable by fabrication.
+      const world = derive(canon, [
+        addEdge({ id: "edge/g", kind: "REQUIRES", from: "ev/real", to: "ev/ghost" }),
+        setFact("ev/ghost", "instance_of", "type/t"),
+      ]);
+      expect(occurrenceCount(world, "type/t")).toBe(0);
+      expect(occurrencesOfType(world, "type/t").filter((o) => o.occurred)).toEqual([]);
+    });
+
+    it("declared roots and declared chains are unaffected by the gate", () => {
+      // The gate must not over-fire: a declared node with no prerequisites is
+      // still a root, and a declared dependent still inherits.
+      const twoNode = mk(
+        [
+          { id: "ev/a", kind: "Event", name: "A" },
+          { id: "ev/b", kind: "Event", name: "B" },
+        ],
+        [],
+        [{ id: "edge/ab", kind: "REQUIRES", from: "ev/a", to: "ev/b" }],
+        "canon/declared"
+      );
+      const world = derive(twoNode, []);
+      expect(world.statuses["ev/a"]).toBe("ESTABLISHED");
+      expect(world.statuses["ev/b"]).toBe("ESTABLISHED");
+    });
   });
 
   it("the occurrence set never grows beyond what canon declares plus named targets", () => {

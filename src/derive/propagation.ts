@@ -316,15 +316,36 @@ function factWindowTruth(fact: Fact, truth: Map<string, TruthValue>): TruthValue
   return "NEITHER";
 }
 
-/** Hard (REQUIRES) support truth: disjunction over conjunctive sufficient sets. */
+/**
+ * Hard (REQUIRES) support truth: disjunction over conjunctive sufficient sets.
+ *
+ * THE DECLARED GATE APPLIES IN BOTH DIRECTIONS (P-005). An id canon never
+ * declared can never be TRUE, no matter what edges point at it. Nothing SE can
+ * infer brings an occurrence into existence; only canon declares one.
+ *
+ * This was a defect until P-005's second pass. The gate lived only in the
+ * no-support-rules branch, which covered an undeclared REQUIRES *source*
+ * (dependents correctly stayed UNKNOWN — case K) but not an undeclared
+ * *target*: an `addEdge` intervention naming a fresh id gave that id support
+ * rules, so it fell through to `disjoin` and inherited its prerequisite's truth.
+ * Measured before the fix:
+ *
+ *     addEdge({ REQUIRES, from: ev/real, to: ev/ghost })
+ *       -> ev/ghost ESTABLISHED, support HARD, 0 contradictions
+ *
+ * and it chained — three added edges produced three invented occurrences, which
+ * then joined an EventType and were counted by the occurrence layer. Exactly the
+ * "silently manufacture infinite fictional history" the occurrence generation
+ * rule forbids.
+ */
 function hardSupport(node: string, model: DerivationModel, truth: Map<string, TruthValue>): TruthValue {
+  // An undeclared id is under-specified, full stop: it stays NEITHER forever, so
+  // dependents stay UNKNOWN rather than inheriting a fabricated premise.
+  if (!model.declared.has(node)) return "NEITHER";
+
   const groups = model.supportGroups.get(node);
   if (groups === undefined || groups.length === 0) {
-    // A node with no support rules is a root ONLY if canon declares it. An id
-    // that canon merely references (an edge endpoint with no Event entity and no
-    // fact) is under-specified: it stays NEITHER forever, so dependents stay
-    // UNKNOWN rather than inheriting a fabricated premise (case K).
-    return model.declared.has(node) ? "TRUE" : "NEITHER";
+    return "TRUE"; // declared with no prerequisites: a root
   }
   return disjoin(groups.map((g) => conjoin(g.conjuncts.map((c) => truth.get(c) ?? "NEITHER"))));
 }
@@ -370,8 +391,12 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
           // this, `forceEvent("ev/never-declared")` returned ESTABLISHED with
           // support HARD and no contradiction — the engine inventing fictional
           // history, which is exactly what the `declared` gate exists to prevent.
-          // Every other route to an undeclared id already respected that gate;
-          // forcing walked around it because this branch short-circuits support.
+          //
+          // Forcing needs its own gate because this branch short-circuits
+          // support. `hardSupport` has a second, independent gate for the
+          // `addEdge`-undeclared-target route (see its doc block): both were
+          // holes in the same wall, and the first fix here covered only one of
+          // them until the L2 gate found the other.
           next = "TRUE";
         } else {
           next = support;
@@ -441,8 +466,19 @@ function unfoundedSet(model: DerivationModel, truth: Map<string, TruthValue>): S
   return candidates;
 }
 
-/** Phase C: ENABLES can raise support to SOFT. It never changes truth. */
+/**
+ * Phase C: ENABLES can raise support to SOFT. It never changes truth.
+ *
+ * The `declared` gate applies here too (P-005). Soft support is a claim that a
+ * node is *reachable by an enabling path*, which is only meaningful for a node
+ * canon declares. Without this, `addEdge({ENABLES, from: <declared>, to:
+ * <undeclared>})` reported the invented id as CONTINGENT — truth still NEITHER,
+ * so it could not occur or be counted, but the projection implied it was a real
+ * candidate for occurrence. UNKNOWN is the honest answer for something canon
+ * never mentions.
+ */
 function softSupported(node: string, model: DerivationModel, truth: Map<string, TruthValue>): boolean {
+  if (!model.declared.has(node)) return false;
   for (const source of model.enablesIn.get(node) ?? []) {
     const t = truth.get(source) ?? "NEITHER";
     if (t === "TRUE" || t === "BOTH") return true;
