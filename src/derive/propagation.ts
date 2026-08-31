@@ -525,17 +525,20 @@ export function propagateJudgments(model: DerivationModel): {
   for (const node of model.nodeIds) {
     const forceId = model.forcedBy.get(node);
     if (forceId === undefined) continue;
-    if (model.negated.has(node)) {
-      conflicts.push({ node, kind: "forced-vs-negated", other: node, source: forceId });
-      continue;
-    }
-    // P-005: forcing an occurrence canon never declared. Checked BEFORE support,
-    // because an undeclared node has no support to speak of — `hardSupport`
-    // returns NEITHER for it, so the refuted-prerequisite branch below would
-    // never fire and the invented occurrence would pass silently.
+
+    // P-005: forcing an occurrence canon never declared. Checked FIRST, before
+    // negation and before support, because non-existence is the primary defect:
+    // an incoherent intervention about a thing that is not in the world is not
+    // usefully described as "forced and also negated". Checking `negated` first
+    // (an earlier pass did) emitted `forced-vs-negated` instead, which taints
+    // truth to BOTH — see the invariant below.
     const isFact = model.facts.has(node);
     if (!isFact && !model.declared.has(node)) {
       conflicts.push({ node, kind: "forced-undeclared", other: node, source: forceId });
+      continue;
+    }
+    if (model.negated.has(node)) {
+      conflicts.push({ node, kind: "forced-vs-negated", other: node, source: forceId });
       continue;
     }
     const fact = model.facts.get(node);
@@ -582,22 +585,38 @@ export function propagateJudgments(model: DerivationModel): {
   }
 
   /**
-   * Conflicts whose truth value must NOT be flipped to BOTH (P-005).
+   * THE UNDECLARED INVARIANT (P-005).
    *
-   * Every other conflict kind means "the world asserts an impossibility", and
-   * BOTH is the right verdict. `forced-undeclared` means something different:
-   * the INTERVENTION is incoherent, not the world. The world simply does not
-   * contain the occurrence, so its truth stays FALSE and the incoherence is
-   * reported in the records.
+   * No conflict about an id canon never declared may lift its truth above
+   * FALSE. This is a predicate on the NODE, deliberately not a list of conflict
+   * kinds — that distinction is the whole finding.
    *
-   * This matters because `occurs()` accepts BOTH. Flipping a forced undeclared
-   * id to BOTH made the invented occurrence count toward `occurrenceCount`, let
-   * it join an `EventType`, and opened the validity window of any canon fact
-   * anchored to it — an id canon never declared writing world state. Found by
-   * the second L2 gate on this change (ncr-004).
+   * Why it must be node-level. Three successive passes tried to state this rule
+   * and each was defeated by a route the previous fix had not enumerated:
+   *
+   *   1. `forceEvent` bypassed the `declared` gate entirely (Phase A sets TRUE
+   *      before consulting support).
+   *   2. `addEdge`/`ENABLES` gave an undeclared target support rules, so it
+   *      inherited its prerequisite's truth.
+   *   3. The repair of (1) set TRUE and let Phase D join to BOTH. `occurs()`
+   *      accepts BOTH, so the invented occurrence was still counted, still
+   *      joined an `EventType`, and still opened canon fact windows.
+   *   4. Excluding only the `forced-undeclared` KIND left `negateEvent` +
+   *      `forceEvent` on the same ghost emitting `forced-vs-negated` instead —
+   *      not in the exclusion set — which tainted truth to BOTH and restored
+   *      the whole hole. Two individually-harmless interventions composed into
+   *      an unsafe one.
+   *
+   * Gating on kinds means re-enumerating every future conflict kind and every
+   * composition of interventions. Gating on the node means the invariant holds
+   * for all of them: canon defines the vocabulary, so nothing an intervention
+   * says can put a thing canon never mentioned into the world. Recorded as
+   * ncr-004.
    */
-  const NON_TAINTING: ReadonlySet<ConflictNote["kind"]> = new Set(["forced-undeclared"]);
-  const conflicted = new Set(conflicts.filter((c) => !NON_TAINTING.has(c.kind)).map((c) => c.node));
+  const cannotBeTainted = (node: string): boolean =>
+    !model.declared.has(node) && !model.facts.has(node);
+
+  const conflicted = new Set(conflicts.filter((c) => !cannotBeTainted(c.node)).map((c) => c.node));
 
   const judgments = new Map<string, Judgment>();
   for (const node of model.nodeIds) {

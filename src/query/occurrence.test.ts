@@ -14,7 +14,17 @@ import { INSTANCE_OF } from "../canon/types";
 import { hashCanon } from "../canon/hash";
 import { inspectCanon } from "../canon/canon";
 import { derive } from "../derive/world-state";
-import { addEdge, forceEvent, negateEvent, retractFact, setFact } from "../timeline/types";
+import { occurs } from "../derive/judgment";
+import type { Intervention } from "../timeline/types";
+import {
+  addEdge,
+  forceEvent,
+  negateEvent,
+  relocate,
+  retractFact,
+  setFact,
+  severEdge,
+} from "../timeline/types";
 import {
   declaredEventTypes,
   diffOccurrences,
@@ -399,6 +409,172 @@ describe("an intervention may never manufacture an occurrence", () => {
       const world = derive(twoNode, []);
       expect(world.statuses["ev/a"]).toBe("ESTABLISHED");
       expect(world.statuses["ev/b"]).toBe("ESTABLISHED");
+    });
+  });
+
+  /**
+   * THE UNDECLARED INVARIANT, quantified over the intervention vocabulary.
+   *
+   * Three earlier passes each stated this rule as a universal and each was
+   * defeated by a route the previous fix had not enumerated. The fourth defeat
+   * was the sharpest: `negateEvent` and `forceEvent` are each individually
+   * harmless on a ghost, but COMPOSED they emitted `forced-vs-negated` instead
+   * of `forced-undeclared`, which was not in the kind-exclusion set, so truth
+   * was tainted to BOTH and `occurs()` accepted it.
+   *
+   * The lesson is about test shape, not about that one pair: a claim quantified
+   * over "any intervention" needs a test quantified over the vocabulary, not a
+   * hand-picked list of routes. These tests enumerate every kind alone and every
+   * kind composed with `forceEvent` (the only kind that asserts occurrence), and
+   * assert the invariant directly rather than checking statuses.
+   */
+  describe("the undeclared invariant, over the whole intervention vocabulary", () => {
+    const GHOST = "ev/ghost";
+
+    /** Every intervention kind, applied to the same undeclared id. */
+    const SINGLE: Array<[string, Intervention]> = [
+      ["negateEvent", negateEvent(GHOST)],
+      ["forceEvent", forceEvent(GHOST)],
+      ["setFact", setFact(GHOST, INSTANCE_OF, "type/t")],
+      ["relocate", relocate(GHOST, "loc/nowhere")],
+      ["retractFact", retractFact(GHOST)],
+      ["severEdge", severEdge(GHOST)],
+      ["addEdge/target", addEdge({ id: "edge/gt", kind: "REQUIRES", from: "ev/real", to: GHOST })],
+      ["addEdge/source", addEdge({ id: "edge/gs", kind: "REQUIRES", from: GHOST, to: "ev/real" })],
+      ["addEdge/enables", addEdge({ id: "edge/ge", kind: "ENABLES", from: "ev/real", to: GHOST })],
+      ["addEdge/excludes", addEdge({ id: "edge/gx", kind: "EXCLUDES", from: "ev/real", to: GHOST })],
+      ["addEdge/invariant", addEdge({ id: "edge/gi", kind: "INVARIANT", from: "ev/real", to: GHOST })],
+      ["addEdge/precedes", addEdge({ id: "edge/gp", kind: "PRECEDES", from: "ev/real", to: GHOST })],
+      ["addEdge/motivates", addEdge({ id: "edge/gm", kind: "MOTIVATES", from: "ev/real", to: GHOST })],
+    ];
+
+    /** The canon under test: one declared occurrence, one type, two windowed facts. */
+    function invariantCanon(): Canon {
+      return mk(
+        [
+          { id: "ev/real", kind: "Event", name: "Real" },
+          { id: "type/t", kind: "EventType", name: "T" },
+        ],
+        [
+          instanceOf("fact/real-t", "ev/real", "type/t"),
+          // a window that would OPEN if the ghost occurred
+          { id: "fact/opens", subject: "ev/real", predicate: "note", object: "opened", validFrom: GHOST, validTo: null, source: "canon" },
+          // a window that would CLOSE if the ghost occurred
+          { id: "fact/closes", subject: "ev/real", predicate: "note2", object: "closed", validFrom: null, validTo: GHOST, source: "canon" },
+        ],
+        [],
+        "canon/invariant"
+      );
+    }
+
+    /**
+     * The invariant, asserted directly: the GHOST is absent from the world.
+     *
+     * Deliberately NOT "the declared occurrence count is unchanged". The
+     * `addEdge/source` case taught that lesson: adding `ev/ghost REQUIRES
+     * ev/real` legitimately makes `ev/real` stop occurring, because its new
+     * prerequisite is unknown (P-003 case K). The declared count dropping to 0
+     * is correct there. What must never happen is the ghost itself occurring.
+     */
+    function expectGhostAbsent(world: ReturnType<typeof derive>): void {
+      const judgment = world.judgments[GHOST];
+      // Either the id never became a node at all, or it is a node that does not occur.
+      if (judgment !== undefined) {
+        expect(occurs(judgment)).toBe(false);
+      }
+      // it never counts as an occurrence of the type
+      expect(
+        occurrencesOfType(world, "type/t")
+          .filter((o) => o.occurred)
+          .map((o) => o.occurrenceId)
+      ).not.toContain(GHOST);
+      // a window that opens at the ghost never opens...
+      expect(world.facts.some((f) => f.id === "fact/opens")).toBe(false);
+      // ...and a window that closes at the ghost is never retired
+      expect(world.facts.some((f) => f.id === "fact/closes")).toBe(true);
+    }
+
+    it.each(SINGLE)("%s alone cannot make the ghost occur", (_label, iv) => {
+      const world = derive(invariantCanon(), [iv]);
+      expectGhostAbsent(world);
+    });
+
+    it.each(SINGLE)("%s COMPOSED with forceEvent cannot make the ghost occur", (_label, iv) => {
+      // Composition is where the fourth defeat lived: two individually-safe
+      // interventions producing an unsafe world.
+      const world = derive(invariantCanon(), [iv, forceEvent(GHOST)]);
+      expectGhostAbsent(world);
+    });
+
+    it("negateEvent + forceEvent on a ghost reports force-undeclared, not force-vs-negate", () => {
+      // The specific defeat, pinned. Non-existence is the primary defect: an
+      // incoherent intervention about a thing not in the world is not usefully
+      // described as "forced and also negated".
+      for (const chain of [
+        [negateEvent(GHOST), forceEvent(GHOST)],
+        [forceEvent(GHOST), negateEvent(GHOST)],
+      ]) {
+        const world = derive(invariantCanon(), chain);
+        expect(world.judgments[GHOST]).toMatchObject({ truth: "FALSE" });
+        expect(world.contradictions.map((r) => r.id)).toEqual([`contra:${GHOST}:force-undeclared`]);
+      }
+    });
+
+    it("scales: many ghosts through the composed route cannot inflate a count", () => {
+      const chain = [1, 2, 3, 4, 5].flatMap((n) => [
+        negateEvent(`ev/g${n}`),
+        forceEvent(`ev/g${n}`),
+        setFact(`ev/g${n}`, INSTANCE_OF, "type/t"),
+      ]);
+      const world = derive(invariantCanon(), chain);
+      expect(occurrenceCount(world, "type/t")).toBe(1);
+      expect(world.contradictions.filter((r) => /force-undeclared/.test(r.id)).length).toBe(5);
+    });
+
+    it("the invariant holds for EVERY non-declared node in the derived world", () => {
+      // The invariant stated directly, rather than as a list of routes: whatever
+      // ends up in the node set, nothing canon failed to declare may occur.
+      const canonUnderTest = invariantCanon();
+      const declared = new Set([
+        ...canonUnderTest.entities.filter((e) => e.kind === "Event").map((e) => e.id),
+        ...canonUnderTest.facts.map((f) => f.id),
+      ]);
+      const world = derive(canonUnderTest, [
+        negateEvent(GHOST),
+        forceEvent(GHOST),
+        forceEvent("ev/other-ghost"),
+        addEdge({ id: "edge/g1", kind: "REQUIRES", from: "ev/real", to: "ev/third-ghost" }),
+        setFact(GHOST, INSTANCE_OF, "type/t"),
+      ]);
+
+      const offenders = Object.entries(world.judgments)
+        .filter(([id, j]) => !declared.has(id) && occurs(j))
+        .map(([id]) => id);
+      expect(offenders).toEqual([]);
+    });
+
+    it("does NOT over-fire: declared nodes still reach BOTH on a real conflict", () => {
+      // The gate is a predicate on the node, so it must not weaken the
+      // contradiction model P-003 built for declared nodes.
+      const declaredCanon = mk(
+        [
+          { id: "ev/a", kind: "Event", name: "A" },
+          { id: "ev/b", kind: "Event", name: "B" },
+        ],
+        [],
+        [{ id: "edge/ab", kind: "REQUIRES", from: "ev/a", to: "ev/b" }],
+        "canon/over-fire"
+      );
+
+      // forced-vs-negated on a DECLARED node still taints
+      const negForce = derive(declaredCanon, [negateEvent("ev/a"), forceEvent("ev/a")]);
+      expect(negForce.judgments["ev/a"]).toMatchObject({ truth: "BOTH" });
+      expect(negForce.statuses["ev/a"]).toBe("CONTRADICTORY");
+
+      // forced-vs-refuted on a DECLARED node still taints
+      const forcedRefuted = derive(declaredCanon, [negateEvent("ev/a"), forceEvent("ev/b")]);
+      expect(forcedRefuted.judgments["ev/b"]).toMatchObject({ truth: "BOTH" });
+      expect(forcedRefuted.statuses["ev/b"]).toBe("CONTRADICTORY");
     });
   });
 
