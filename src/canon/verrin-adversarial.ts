@@ -222,6 +222,11 @@ export function verrinAdversarialCanon(): Canon {
     facts: facts.map((f) => ({ ...f })),
     edges: edges.map((e) => ({ ...e })),
     workBindings: workBindings.map((w) => ({ ...w, events: [...w.events] })),
+    // The case-K probe (property K). Declaring the id is how the canon states
+    // that this gap is DELIBERATE: a reference to an undeclared id and a typo are
+    // structurally identical, so intent has to be asserted. Without this the
+    // five edges sourced from it are (correctly) reported as dangling errors.
+    unspecified: [ADV_IDS.K.unspecified],
   };
   return { ...body, hash: hashCanon(body) };
 }

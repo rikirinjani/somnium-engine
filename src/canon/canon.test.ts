@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 import { inspectCanon, loadCanon, validateCanon } from "./canon";
 import { hashState } from "./hash";
 import { verrinCanon } from "./verrin";
+import { verrinAdversarialCanon } from "./verrin-adversarial";
+import { ordosCanon } from "./ordos";
+import { derive } from "../derive/world-state";
 import type { Canon } from "./types";
 
 describe("loadCanon", () => {
@@ -214,5 +217,45 @@ describe("hashState", () => {
     expect(hashState({ b: 1, a: 2 })).toBe(hashState({ a: 2, b: 1 }));
     expect(hashState({ nested: { y: 1, x: [3, 2, 1] } })).toBe(hashState({ nested: { x: [3, 2, 1], y: 1 } }));
     expect(hashState({ a: 1, b: 2 })).not.toBe(hashState({ a: 2, b: 1 }));
+  });
+});
+
+/**
+ * P-004 §18.7: nothing ever validated the adversarial fixture, which is exactly
+ * how the validator drifted out of step with the engine for two whole phases.
+ * Every seed canon is now validated here, so that gap cannot reopen silently.
+ */
+describe("every seed canon validates", () => {
+  const SEEDS: Array<{ name: string; canon: Canon; expectedNotices: number }> = [
+    { name: "verrin", canon: verrinCanon(), expectedNotices: 0 },
+    // five declared-unspecified references (the case-K probe) + two cycles
+    { name: "verrin-adversarial", canon: verrinAdversarialCanon(), expectedNotices: 7 },
+    // one declared-unspecified reference (the disputed parentage)
+    { name: "ordos", canon: ordosCanon(), expectedNotices: 1 },
+  ];
+
+  it.each(SEEDS)("$name has zero validation errors", ({ canon }) => {
+    expect(validateCanon(canon)).toEqual([]);
+  });
+
+  it.each(SEEDS)("$name reports exactly its expected notices", ({ canon, expectedNotices }) => {
+    expect(inspectCanon(canon).notices.length).toBe(expectedNotices);
+  });
+
+  it.each(SEEDS)("$name derives a usable world", ({ canon }) => {
+    const world = derive(canon, []);
+    expect(Object.keys(world.statuses).length).toBeGreaterThan(0);
+    expect(world.canonId).toBe(canon.canonId);
+  });
+
+  it("an adversarial fixture is not exempt: removing its `unspecified` declaration makes the dangling references errors again", () => {
+    // Proof the zero-error result is earned by the declaration, not by the
+    // validator having simply stopped checking.
+    const canon = verrinAdversarialCanon();
+    const undeclared: Canon = { ...canon };
+    delete undeclared.unspecified;
+    const errors = validateCanon(undeclared);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.every((e) => /ev\/adv-unspecified/.test(e))).toBe(true);
   });
 });

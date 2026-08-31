@@ -621,7 +621,7 @@ P-003 left one hash carrying several distinct questions at once. Before changing
 3. **Universe / lineage identity** — "where does this world sit in the branch tree?" Already a separate mechanism: `Universe.id`, `parent`, `lineageOf`. Not a hash question.
 4. **Rewind-point integrity** — tamper detection over a canonical cut. Already separate: `computeRewindHash(canonId, anchorEvent, cut, canonHash)`. **This must remain untouched and unambiguous** whatever else changes.
 
-The open question is whether (1) and (2) can share one value. P-003's answer — fold both into `hash` — is *sound as a memo key*, because a memo keyed on state alone can return a world carrying someone else's provenance. But it makes one question unanswerable: **"did two different intervention chains reach the same world?"** That is not a hypothetical; it is the immediate neighbourhood of the deferred minimum-intervention search (§10), and a cross-canon genericity exercise is exactly where convergent branches should be observable. §18.7 records the decision and its justification.
+The open question is whether (1) and (2) can share one value. P-003's answer — fold both into `hash` — is *sound as a memo key*, because a memo keyed on state alone can return a world carrying someone else's provenance. But it makes one question unanswerable: **"did two different intervention chains reach the same world?"** That is not a hypothetical; it is the immediate neighbourhood of the deferred minimum-intervention search (§10), and a cross-canon genericity exercise is exactly where convergent branches should be observable. §18.9 records the decision and its justification.
 
 ---
 
@@ -673,7 +673,7 @@ P-001's `validateCanon` treated three things as fatal that P-003 subsequently ma
 
 **Fix.** `inspectCanon` returns `{ errors, notices }`. Errors mean the canon cannot be trusted (duplicate ids, a subject that is not an entity, a work binding pointing at a non-Work, an object that looks like a typo'd id, an *undeclared* dangling reference). Notices mean the canon is deliberately incomplete or cyclic in a way the engine handles by design. `validateCanon` returns the errors, so every existing caller keeps its meaning.
 
-The interesting part is how a canon states intent. A deliberate unknown and a typo are **structurally identical** — both are a reference to an id that does not exist. No amount of analysis can distinguish them, so the canon must declare which it means, via `Canon.unspecified`. That is what lets the validator enforce referential integrity without outlawing incompleteness. All three canons now validate with zero errors; the adversarial fixture reports two notices and Ordos one.
+The interesting part is how a canon states intent. A deliberate unknown and a typo are **structurally identical** - both are a reference to an id that does not exist. No amount of analysis can distinguish them, so the canon must declare which it means, via `Canon.unspecified`. That is what lets the validator enforce referential integrity without outlawing incompleteness. All three canons now validate with zero errors: Verrin reports no notices, Ordos one, and the adversarial fixture seven (five declared-unspecified references plus the two cycles). A test now validates all three, because the finding in this section is precisely that nothing ever validated the adversarial one.
 
 ### 18.8 Verrin-specific assumptions, classified
 
