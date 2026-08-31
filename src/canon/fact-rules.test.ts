@@ -30,7 +30,8 @@ import { validateCanon } from "./canon";
 import { verrinCanon } from "./verrin";
 import { ordosCanon } from "./ordos";
 import { derive } from "../derive/world-state";
-import { setFact } from "../timeline/types";
+import { negateEvent, setFact } from "../timeline/types";
+import { occurrenceCount } from "../query/occurrence";
 
 /** A canon with one of every entity kind, so every position can be exercised. */
 function vocabularyCanon(): Canon {
@@ -287,9 +288,6 @@ describe("an intervention may assert no more than canon may", () => {
   });
 
   it("`unspecified` is the ONE deliberate asymmetry, and only in the safe direction", () => {
-    // A canon may excuse an unresolved id reference by declaring intent; an
-    // intervention has no such mechanism. So canon can be MORE permissive here,
-    // never less — the direction that cannot manufacture world state.
     const withUnspecified: Canon = { ...base, unspecified: ["loc/ghost"] };
     const probe: Canon = {
       ...withUnspecified,
@@ -310,6 +308,123 @@ describe("an intervention may assert no more than canon may", () => {
     const world = derive(withUnspecified, [setFact("char/vara", "located_in", "loc/ghost")]);
     expect(world.facts.some((f) => f.object === "loc/ghost")).toBe(false); // intervention: refused
     expect(world.contradictions.length).toBe(1);
+  });
+
+  /**
+   * ROUTE 8, and the observable the differential claim was originally stated over.
+   *
+   * The first version of this suite compared "would canon accept this fact?"
+   * against "did the fact appear in `world.facts`?" — which is a claim about the
+   * FACT LIST, not about the WORLD. Gate 6 found the gap: a *refused* write
+   * pushed a conflict note whose node is the write's subject, and the old taint
+   * expression evaluated `joinTruth("NEITHER", "TRUE") = TRUE` for a dormant
+   * declared node. So a rejected intervention PROMOTED a dormant event to
+   * ESTABLISHED, inflating occurrence counts and opening fact windows.
+   *
+   * The honest observable is therefore the whole world:
+   *
+   *   > A refused intervention leaves the world identical to the empty chain,
+   *   > apart from its contradiction record.
+   *
+   * And the fixture matters as much as the assertion. `vocabularyCanon` has NO
+   * dormant declared event, which is exactly why 352 triples passed while the
+   * shipped canons were corruptible. These run against the seed canons, which do.
+   */
+  const SHIPPED = [
+    { name: "verrin", canon: verrinCanon() },
+    { name: "ordos", canon: ordosCanon() },
+  ];
+
+  /** Everything about a world except its contradiction records. */
+  function worldExceptRecords(world: ReturnType<typeof derive>): string {
+    // `stateHash` is deliberately NOT compared: it hashes `contradictions` too
+    // (P-003 made contradictions first-class members of the world), so a refused
+    // write legitimately moves it. That is the record being part of world
+    // identity, which is correct and desirable — not route 8. Route 8's signature
+    // was judgments/statuses/facts/workStatuses/counts moving, which is exactly
+    // what this compares.
+    return JSON.stringify({
+      judgments: world.judgments,
+      statuses: world.statuses,
+      facts: world.facts,
+      workStatuses: world.workStatuses,
+      temporalViolations: world.temporalViolations,
+    });
+  }
+
+  it.each(SHIPPED)(
+    "$name: a refused write leaves the world untouched apart from its record",
+    ({ canon }) => {
+      const baseline = worldExceptRecords(derive(canon, []));
+      const vocabulary = buildFactVocabulary(canon);
+
+      // Every declared entity × a phantom object, for both id-shaped and
+      // slash-free phantoms and for `instance_of` and an ordinary predicate.
+      const violations: string[] = [];
+      for (const entity of canon.entities) {
+        for (const predicate of [INSTANCE_OF, "located_in"]) {
+          for (const phantom of ["type/ghost", "phantomtype"]) {
+            // only exercise triples the rule actually refuses
+            if (factAssertionError(entity.id, predicate, phantom, vocabulary) === null) continue;
+            const world = derive(canon, [setFact(entity.id, predicate, phantom)]);
+            if (worldExceptRecords(world) !== baseline) {
+              violations.push(`${entity.id} --${predicate}--> ${phantom}`);
+            }
+            // and the refusal is always reported
+            if (world.contradictions.length === 0) {
+              violations.push(`${entity.id} --${predicate}--> ${phantom} (silent)`);
+            }
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    }
+  );
+
+  it.each(SHIPPED)("$name: a refused write cannot promote a dormant event", ({ canon }) => {
+    // The specific mechanism, pinned per canon: find every declared event that is
+    // UNKNOWN at baseline and confirm no refused write can wake it.
+    const baseline = derive(canon, []);
+    const dormant = Object.entries(baseline.statuses)
+      .filter(([, status]) => status === "UNKNOWN")
+      .map(([id]) => id);
+    expect(dormant.length).toBeGreaterThan(0); // the fixture gap this test closes
+
+    for (const entity of canon.entities) {
+      const world = derive(canon, [setFact(entity.id, INSTANCE_OF, "phantomtype")]);
+      for (const id of dormant) {
+        expect(world.statuses[id]).toBe("UNKNOWN");
+      }
+    }
+  });
+
+  it.each(SHIPPED)("$name: a refused write cannot change an occurrence count", ({ canon }) => {
+    const baseline = derive(canon, []);
+    const types = canon.entities.filter((e) => e.kind === "EventType").map((e) => e.id);
+    expect(types.length).toBeGreaterThan(0);
+
+    for (const entity of canon.entities) {
+      const world = derive(canon, [setFact(entity.id, INSTANCE_OF, "phantomtype")]);
+      for (const type of types) {
+        expect(occurrenceCount(world, type)).toBe(occurrenceCount(baseline, type));
+      }
+    }
+  });
+
+  it("a refused write composed with a real one is still inert on its own account", () => {
+    // Route 8's composition variant: on Verrin, `negateEvent(ev/vara-vow)` alone
+    // gives an oath count of 1. Adding a refused write used to restore it to 2,
+    // because the note tainted the negated node's FALSE into BOTH, and BOTH occurs.
+    const canon = verrinCanon();
+    const negateOnly = derive(canon, [negateEvent("ev/vara-vow")]);
+    const withRefused = derive(canon, [
+      negateEvent("ev/vara-vow"),
+      setFact("ev/vara-vow", INSTANCE_OF, "phantomtype"),
+    ]);
+    expect(occurrenceCount(withRefused, "type/oath-sworn")).toBe(
+      occurrenceCount(negateOnly, "type/oath-sworn")
+    );
+    expect(withRefused.statuses["ev/vara-vow"]).toBe(negateOnly.statuses["ev/vara-vow"]);
   });
 });
 

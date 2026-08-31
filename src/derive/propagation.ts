@@ -656,43 +656,75 @@ export function propagateJudgments(model: DerivationModel): {
   }
 
   /**
-   * THE UNDECLARED INVARIANT (P-005).
+   * THE UNDECLARED INVARIANT (P-005), and the TAINT DISCIPLINE that carries it.
    *
-   * No conflict about an id canon never declared may lift its truth above
-   * FALSE. This is a predicate on the NODE, deliberately not a list of conflict
-   * kinds — that distinction is the whole finding.
+   * Two rules, both predicates rather than lists of conflict kinds.
    *
-   * Why it must be node-level. Three successive passes tried to state this rule
-   * and each was defeated by a route the previous fix had not enumerated:
+   * (A) `cannotBeTainted` — no conflict about an id canon never declared may
+   *     lift its truth above FALSE. Canon defines the vocabulary, so nothing an
+   *     intervention says can put a thing canon never mentioned into the world.
    *
-   *   1. `forceEvent` bypassed the `declared` gate entirely (Phase A sets TRUE
-   *      before consulting support).
-   *   2. `addEdge`/`ENABLES` gave an undeclared target support rules, so it
-   *      inherited its prerequisite's truth.
-   *   3. The repair of (1) set TRUE and let Phase D join to BOTH. `occurs()`
-   *      accepts BOTH, so the invented occurrence was still counted, still
-   *      joined an `EventType`, and still opened canon fact windows.
-   *   4. Excluding only the `forced-undeclared` KIND left `negateEvent` +
-   *      `forceEvent` on the same ghost emitting `forced-vs-negated` instead —
-   *      not in the exclusion set — which tainted truth to BOTH and restored
-   *      the whole hole. Two individually-harmless interventions composed into
-   *      an unsafe one.
+   * (B) `taint` — a conflict may only ever CONTRADICT A DECIDED VALUE. It may
+   *     never decide an undecided one. `BOTH` means "this world asserts P and
+   *     ¬P", which is only meaningful once the world has asserted something.
    *
-   * Gating on kinds means re-enumerating every future conflict kind and every
-   * composition of interventions. Gating on the node means the invariant holds
-   * for all of them: canon defines the vocabulary, so nothing an intervention
-   * says can put a thing canon never mentioned into the world. Recorded as
-   * ncr-004.
+   * (B) exists because (A) was not enough, and the way it failed is the most
+   *     instructive moment in this whole sequence. Route 8: a *refused* fact
+   *     write pushed a `fact-write-illegal` note whose node is the write's
+   *     SUBJECT. That subject is usually declared, so (A) correctly let it into
+   *     the taint set — and the old taint expression,
+   *
+   *         joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE")
+   *
+   *     evaluated to joinTruth("NEITHER", "TRUE") = TRUE for a dormant node.
+   *     A rejected intervention therefore PROMOTED a dormant declared event to
+   *     ESTABLISHED. Measured on shipped Ordos:
+   *     `setFact("ev/galen-invested", instance_of, "phantomtype")` — a write the
+   *     engine refuses — moved `ev/galen-invested` UNKNOWN -> ESTABLISHED,
+   *     inflated `occurrenceCount("type/investiture")` 1 -> 2, opened
+   *     `fact/seal-held-galen` so both Seal holders were effective at once, and
+   *     did NOT report the canon `EXCLUDES` violation (the fact NODE stayed
+   *     NEITHER, so Phase D.2's `occursNow` never fired). 150 refused writes
+   *     across the three shipped canons changed world state.
+   *
+   * Fixing only the kind would have been the ncr-004 mistake for the seventh
+   * time. (B) is a property of the taint operation itself, so it holds for every
+   * present and future conflict kind, on declared and undeclared nodes alike.
+   * A rejection is additionally NOT a conflict about the world — it is a refused
+   * intervention — so it is also excluded from tainting by name below. Two
+   * independent guards, either sufficient.
    */
   const cannotBeTainted = (node: string): boolean =>
     !model.declared.has(node) && !model.facts.has(node);
 
-  const conflicted = new Set(conflicts.filter((c) => !cannotBeTainted(c.node)).map((c) => c.node));
+  /**
+   * Conflict kinds that describe an INCOHERENT INTERVENTION rather than an
+   * inconsistent world. They are reported as records and never touch truth: the
+   * world did not assert anything contradictory, the caller asked for something
+   * the canon cannot express.
+   */
+  const ABOUT_THE_INTERVENTION: ReadonlySet<ConflictNote["kind"]> = new Set([
+    "forced-undeclared",
+    "fact-write-illegal",
+  ]);
+
+  const conflicted = new Set(
+    conflicts
+      .filter((c) => !ABOUT_THE_INTERVENTION.has(c.kind) && !cannotBeTainted(c.node))
+      .map((c) => c.node)
+  );
+
+  /**
+   * Apply a conflict to a node's truth. Guard (B): only a decided value can be
+   * contradicted, so tainting can never RAISE truth out of `NEITHER`.
+   */
+  const taint = (base: TruthValue): TruthValue =>
+    base === "NEITHER" ? "NEITHER" : joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE");
 
   const judgments = new Map<string, Judgment>();
   for (const node of model.nodeIds) {
     const base = truth.get(node) ?? "NEITHER";
-    const finalTruth: TruthValue = conflicted.has(node) ? joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE") : base;
+    const finalTruth: TruthValue = conflicted.has(node) ? taint(base) : base;
 
     let support: SupportKind;
     if (model.negated.has(node)) support = "NONE";
