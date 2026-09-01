@@ -58,6 +58,8 @@ import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
 import { evaluateConstraints } from "./constraints";
 import type { ConstraintViolationRecord } from "./constraints";
+import { semanticState } from "./semantic";
+import type { CanonicalEdge } from "./semantic";
 
 export interface WorldState {
   canonId: string;
@@ -88,10 +90,24 @@ export interface WorldState {
    */
   constraintViolations: ConstraintViolationRecord[];
   /**
-   * "Are these the same WORLD?" — effective state only, provenance-independent.
-   * Folded from canon + judgments + statuses + facts + workStatuses +
-   * contradictions + temporalViolations. DELIBERATELY excludes `rpId` and
-   * `interventions`: a world is the same world regardless of how it was reached.
+   * P-007 — the effective causal LAW of this world: the canon's edge set after
+   * severEdge/addEdge interventions, canonicalized (id, kind, from, to) and
+   * sorted by id. The world's meaning includes WHY things happen, not just
+   * WHETHER: severing a load-bearing REQUIRES edge can leave every verdict
+   * unchanged (the event becomes a root) while the world's causal structure is
+   * genuinely different. Part of the effective world, folded into `stateHash`
+   * and diffed as `edgeChanges`.
+   */
+  edges: CanonicalEdge[];
+  /**
+   * "Are these the same WORLD?" — effective state only, provenance-independent
+   * BY CONSTRUCTION (P-007): folded from canon + the canonical semantic
+   * projection (src/derive/semantic.ts) — statuses, fact content, the effective
+   * edge set, work classifications, contradiction content, temporal violations,
+   * constraint violations. Lineage (judgments' forced/negated marks, facts'
+   * source/overridden flags, contradictions' source, `rpId`, `interventions`)
+   * is DELIBERATELY excluded: a world is the same world regardless of how it
+   * was reached, and "reached differently" is `identityHash`'s question.
    */
   stateHash: string;
   /**
@@ -251,7 +267,17 @@ function computeWorkStatuses(
   facts: FactView[]
 ): Record<string, WorkStatus> {
   const result: Record<string, WorkStatus> = {};
-  const overridden = facts.filter((f) => f.overridden === true);
+  // P-007 (D4): ALTERED is VALUE-BASED, not touch-based. A fact is
+  // altered-from-canon iff its effective object differs from the canon fact
+  // of the same id, or canon never declared that fact id. The old rule keyed
+  // on the `overridden` lineage flag, so an idempotent write (the value
+  // restored to canon's) still flipped a Work to ALTERED — record churn
+  // becoming semantic change, exactly what P-007 forbids.
+  const canonObjectById = new Map(canon.facts.map((f) => [f.id, f.object]));
+  const altered = facts.filter((f) => {
+    const canonObject = canonObjectById.get(f.id);
+    return canonObject === undefined || canonObject !== f.object;
+  });
   const effectiveById = new Map(facts.map((f) => [f.id, f]));
   for (const work of canon.workBindings) {
     const members = work.events.map((e) => statuses[e] ?? "UNKNOWN");
@@ -265,20 +291,20 @@ function computeWorkStatuses(
     //   2. missing required facts: a fact listed in `work.facts` that is NOT
     //      effective in this world => IMPOSSIBLE — the story cannot hold as
     //      written.
-    //   3. all members ESTABLISHED AND any fact the Work depends on has been
-    //      overridden => ALTERED (see workDependsOnFact for the dependency
-    //      union).
+    //   3. all members ESTABLISHED AND any fact the Work depends on is
+    //      altered-from-canon (value differs, or canon never declared it)
+    //      => ALTERED (see workDependsOnFact for the dependency union).
     //   4. all members ESTABLISHED => PRESERVED.
     //   5. any CONTINGENT member (and not all established) => UNREACHABLE.
     //   6. otherwise => UNKNOWN.
     const missingRequired = (work.facts ?? []).some((id) => !effectiveById.has(id));
-    const affectedByOverride = allEstablished && overridden.some((f) => workDependsOnFact(canon, work, f));
+    const affectedByAlteration = allEstablished && altered.some((f) => workDependsOnFact(canon, work, f));
 
     if (any("EXCLUDED") || any("UNSUPPORTED") || any("CONTRADICTORY")) {
       result[work.workId] = "IMPOSSIBLE";
     } else if (missingRequired) {
       result[work.workId] = "IMPOSSIBLE";
-    } else if (affectedByOverride) {
+    } else if (affectedByAlteration) {
       result[work.workId] = "ALTERED";
     } else if (allEstablished) {
       result[work.workId] = "PRESERVED";
@@ -397,21 +423,28 @@ export function derive(
     contradictions,
     temporalViolations: violations,
     constraintViolations: [],
+    // P-007: the effective causal LAW — the resolved edge set this world was
+    // derived under (severEdge/addEdge applied in order), canonicalized.
+    edges: model.edges.map((e) => ({ id: e.id, kind: e.kind, from: e.from, to: e.to })),
     stateHash: "",
     identityHash: "",
   };
   world.constraintViolations = evaluateConstraints(canon, world);
 
-  // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4):
+  // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4;
+  // P-007 made the first provenance-independent BY CONSTRUCTION):
   //
-  //   stateHash — "are these the same WORLD?" The effective state only:
-  //   canon + judgments + statuses + effective facts + work statuses +
-  //   contradictions + temporal violations. DELIBERATELY excludes `rpId` and
-  //   `interventions`: a world is the same world regardless of how it was
-  //   reached, and "did two different intervention chains reach the same world?"
-  //   must be answerable (that is the deferred minimum-intervention search's
-  //   immediate neighbourhood, and cross-canon genericity is exactly where
-  //   convergent branches show up).
+  //   stateHash — "are these the same WORLD?" The effective state only, folded
+  //   from canon + the canonical semantic projection (src/derive/semantic.ts):
+  //   statuses, fact CONTENT (no source/overridden lineage flags), the effective
+  //   edge set, work statuses, contradiction CONTENT (no source), temporal
+  //   violations, constraint violations. Judgments are NOT folded — statuses is
+  //   their world-semantic projection; the forced/negated marks are lineage.
+  //   DELIBERATELY excludes `rpId` and `interventions`: a world is the same
+  //   world regardless of how it was reached, and "did two different
+  //   intervention chains reach the same world?" must be answerable (that is
+  //   the deferred minimum-intervention search's immediate neighbourhood, and
+  //   cross-canon genericity is exactly where convergent branches show up).
   //
   //   identityHash — "was this world reached the same WAY?" The full derivation
   //   identity: stateHash + rpId + the canonical intervention form. This is the
@@ -422,19 +455,14 @@ export function derive(
   // commutation semantics: set-like marks (negateEvent / forceEvent) as a sorted
   // deduplicated set, every sequential kind (severEdge / addEdge / setFact /
   // relocate / retractFact) in ACTUAL order.
+  //
+  // P-007 INVARIANT: worldDiff(A, B) is empty ⟺ stateHash(A) === stateHash(B)
+  // (same canon) — both sides consume the SAME semanticState projection, so the
+  // invariant holds by construction (32-bit hash collisions excepted).
   world.stateHash = hashState({
     canonId: canon.canonId,
     canonHash: canon.hash,
-    judgments: world.judgments,
-    statuses,
-    facts,
-    workStatuses,
-    contradictions,
-    temporalViolations: violations,
-    // P-006: constraint violations are part of the effective world — a world in
-    // which a cardinality bound is exceeded is a DIFFERENT world (stateHash
-    // changes), while identityHash continues to fold lineage on top.
-    constraintViolations: world.constraintViolations,
+    semantic: semanticState(world),
   });
   world.identityHash = hashState({
     stateHash: world.stateHash,

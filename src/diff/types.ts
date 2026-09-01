@@ -1,12 +1,38 @@
 /**
- * Somnium Engine — diff types.
+ * Somnium Engine — diff types (P-007: semantic WorldDiff).
  *
  * ONE generic typed diff over the derived world store, with typed projections
  * (CharacterDiff, EventDiff, RelationshipDiff, ...) computed by filtering the
  * same WorldDiff. This kills KE's dual-diff divergence problem by construction.
+ *
+ * P-007 — WHAT A DIFF MEANS. WorldDiff describes changes in the EFFECTIVE
+ * FICTIONAL WORLD (the canonical semantic projection, src/derive/semantic.ts),
+ * not changes in implementation records or intervention history. Two
+ * consequences, both measured before this change (experiments/p007/probes.ts):
+ *
+ *   1. Record churn is not semantic change: an idempotent write, a force of an
+ *      already-true event, a sever+re-add net zero — all produce an EMPTY diff
+ *      and equal stateHash. Lineage difference is identityHash's question.
+ *   2. Semantic change is never hidden: the effective edge set (the causal
+ *      law), constraint violations, temporal violations, and work-status
+ *      changes are all diffed. A world where the oath is caused by the blight
+ *      and a world where it is uncaused are DIFFERENT worlds even when every
+ *      verdict coincides.
+ *
+ * The invariant this shape serves (INV): for two worlds from the same canon,
+ * worldDiff(A, B) is empty ⟺ stateHash(A) === stateHash(B). Both sides
+ * consume the same semanticState projection.
+ *
+ * CONTENT-SET semantics: every record dimension (contradictions, constraint
+ * violations, temporal violations) is compared by FULL canonical content, not
+ * by id. Two records may share an id and differ in content (the same
+ * fact-write-illegal id with different phantom objects; the same violation id
+ * with observed=2 vs observed=3) — id-diffing would hide exactly the semantic
+ * differences this diff exists to surface.
  */
 import type { EventStatus, WorkStatus } from "../derive/lattice";
-import type { Fact } from "../canon/types";
+import type { TemporalViolation } from "../derive/propagation";
+import type { ConstraintViolationRecord } from "../derive/constraints";
 
 export interface ContradictionRecord {
   id: string;
@@ -30,9 +56,31 @@ export interface FactOverride {
   to: unknown;
 }
 
+/** A fact's world-semantic content as a diff entry (validity windows included). */
+export interface FactDelta {
+  id: string;
+  subject: string;
+  predicate: string;
+  object: string | number | boolean | null;
+  validFrom: string | null;
+  validTo: string | null;
+}
+
+/** A contradiction's world-semantic content as a diff entry (no lineage). */
+export interface ContradictionDelta {
+  id: string;
+  a: string;
+  b: string;
+  detail: string;
+  detectedAt: string;
+}
+
 export interface EdgeChange {
   edgeId: string;
   added: boolean; // true = added in branch, false = removed in branch
+  kind: string;
+  from: string;
+  to: string;
 }
 
 export interface ReachabilityChange {
@@ -41,18 +89,30 @@ export interface ReachabilityChange {
   to: boolean;
 }
 
+export interface WorkStatusChange {
+  workId: string;
+  from: WorkStatus;
+  to: WorkStatus;
+}
+
 export interface WorldDiff {
   statusChanges: StatusChange[];
-  factAdditions: Fact[];
-  factRemovals: Fact[];
+  factAdditions: FactDelta[];
+  factRemovals: FactDelta[];
+  /** same fact id in both worlds, any differing field — one entry per field */
   factOverrides: FactOverride[];
+  /** the effective causal LAW changed (P-007: no longer reserved-empty) */
   edgeChanges: EdgeChange[];
-  contradictionsIntroduced: ContradictionRecord[];
-  contradictionsResolved: ContradictionRecord[];
+  contradictionsIntroduced: ContradictionDelta[];
+  contradictionsResolved: ContradictionDelta[];
+  constraintViolationsIntroduced: ConstraintViolationRecord[];
+  constraintViolationsResolved: ConstraintViolationRecord[];
+  temporalViolationsIntroduced: TemporalViolation[];
+  temporalViolationsResolved: TemporalViolation[];
   reachabilityChanges: ReachabilityChange[];
-  /** canonical Work -> classification in the branch. */
-  workStatuses: Record<string, WorkStatus>;
-  /** content hash of the diff (for BranchRecord.diffHash). */
+  /** work classification DELTA (P-007: was a branch snapshot) */
+  workStatusChanges: WorkStatusChange[];
+  /** deterministic content hash of the diff itself */
   hash: string;
 }
 

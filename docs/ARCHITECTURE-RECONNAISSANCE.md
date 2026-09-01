@@ -213,6 +213,8 @@ Known v1 limitation: multiple effective facts sharing one `(subject, predicate)`
 
 **Recommendation: ONE generic typed diff over the derived fact/status store, with typed projections. Not six separate differs.**
 
+> **P-007 SUPERSEDES the shape below.** The P-001 sketch is kept for the record; the shipped shape is in `src/diff/types.ts` and specified in docs/P007-WORLDDIFF.md. The differences P-007 forced: `workStatuses` became a *delta* (`workStatusChanges`) because a branch snapshot made `worldDiff(A, A)` non-empty; `edgeChanges` became a real dimension (the effective causal law is part of world identity) and carries edge content; constraint violations (P-006) and temporal violations gained introduced/resolved dimensions; fact and contradiction entries became canonical *content* (validity windows in, lineage `source`/`overridden` out).
+
 ```ts
 interface WorldDiff {
   statusChanges: Record<string, { from: EventStatus; to: EventStatus }>;   // per event / work / constraint
@@ -712,8 +714,8 @@ stateHash: string;
 identityHash: string;
 ```
 
-- `stateHash` = `hashState({ canonId, canonHash, judgments, statuses, facts, workStatuses, contradictions, temporalViolations })`. Deliberately **excludes** `rpId` and interventions.
-- `identityHash` = `hashState({ stateHash, rpId, interventions: canonicalInterventions(interventions) })`, with `canonicalInterventions` unchanged from P-003 (set-like marks sorted and deduplicated; sequential kinds in actual order).
+- `stateHash` = `hashState({ canonId, canonHash, semantic: semanticState(world) })`. Deliberately **excludes** `rpId` and interventions. **Superseded by P-007** — see docs/P007-WORLDDIFF.md. P-004 wrote this as `hashState({ canonId, canonHash, judgments, statuses, facts, workStatuses, contradictions, temporalViolations })`; P-007 replaced the inline field list with the canonical semantic projection (`src/derive/semantic.ts`), which (a) drops lineage that was leaking in (`judgments`' `forced`/`negated` marks, `facts.source`/`overridden`, `contradictions.source`), and (b) adds the effective edge set and the P-006 constraint violations. The *meaning* of the field is unchanged; the composition is now shared with `worldDiff` so that an empty diff and hash equality cannot disagree.
+- `identityHash` = `hashState({ stateHash, rpId, interventions: canonicalInterventions(interventions) })`, with `canonicalInterventions` unchanged from P-003 (set-like marks sorted and deduplicated; sequential kinds in actual order). **Unchanged by P-005/P-006/P-007.**
 - The ambiguous `hash` field is **removed, not aliased.** Its meaning was the defect; keeping the name would keep the defect.
 - **Universe/lineage identity** is not a hash: it is `Universe.id` + `parent` + `lineageOf`, and it already worked.
 - **Rewind-point integrity** is not a hash question either, and `computeRewindHash` / `RewindPoint.derivedHash` were left completely untouched. Tamper detection remains unambiguous — it is the one mechanism in the engine that must never acquire a second meaning.
@@ -832,7 +834,7 @@ A `PRECEDES` cycle can only arise between the *same* occurrence ids, which is a 
 
 **Case G — convergence.** Two branches reaching the same outcome by *different* occurrences (`settled` supported by `rite-a` OR `rite-b`, negate one or the other) produce **different** `stateHash`es. This is correct and worth stating: occurrence statuses are part of the effective state, so "which rite happened" is a difference *in the world*, not merely in its history. False convergence is structurally impossible here.
 
-**Case H — same state, different provenance.** Where two intervention chains genuinely produce the same effective world (P-004's `setFact` vs `relocate`, or a duplicated set-like mark), `stateHash` matches and `identityHash` differs. The P-004 split already answers the mission's question; §19.6 records the formal semantics.
+**Case H — same state, different provenance.** Where two intervention chains genuinely produce the same effective world (P-004's `setFact` vs `relocate`, or a duplicated set-like mark), `stateHash` matches and `identityHash` differs. The P-004 split already answers the mission's question; §19.6 records the formal semantics. **P-007 narrowed which chains qualify: the sever+re-add / add+sever pair no longer converges, because the effective edge set is now part of world identity (the two chains leave genuinely different causal laws). The `setFact`/`relocate` and duplicated-mark cases are unaffected and remain the convergence witnesses. See docs/P007-WORLDDIFF.md §6.**
 
 **Type membership needs no core change.** An `instance_of` fact from occurrence to type validates with zero errors, and the occurrences of a type are recoverable by filtering effective facts. The type *layer* is free; only the type *entity kind* is missing.
 
@@ -996,7 +998,7 @@ The mission asks whether `stateHash` equality is *expected* and `identityHash` e
 
 **Formal semantics, restated:**
 
-- `stateHash` = the identity of the **world**. Canon + judgments + effective facts + work statuses + contradictions + temporal violations. Excludes `rpId` and interventions. Two worlds sharing a `stateHash` *are the same world*.
+- `stateHash` = the identity of the **world**. Canon + judgments + effective facts + work statuses + contradictions + temporal violations. Excludes `rpId` and interventions. Two worlds sharing a `stateHash` *are the same world*. **(P-006 added constraint violations; P-007 replaced the field list with the canonical semantic projection — dropping the lineage that was leaking in and adding the effective edge set. See docs/P007-WORLDDIFF.md §5. The invariant "two worlds sharing a `stateHash` are the same world" is unchanged and now provable against the diff.)**
 - `identityHash` = the identity of the **derivation**. `stateHash` + `rpId` + the canonicalized intervention list. Two worlds sharing an `identityHash` were reached the same way.
 
 Therefore: `stateHash(A) == stateHash(B)` with `identityHash(A) != identityHash(B)` is **expected and legitimate**. It is the signature of genealogical convergence. Measured on Ordos, retracting two type-membership facts in either order:

@@ -1,15 +1,20 @@
 /**
  * Somnium Engine — world diff unit tests (hand-built WorldStates).
+ *
+ * P-007: the diff compares the canonical semantic projection. Fixtures here
+ * build WorldStates directly, so they carry the P-007 `edges` field; the
+ * assertions check the delta shape (FactDelta with windows, ContradictionDelta
+ * without lineage, workStatusChanges DELTA, real edgeChanges).
  */
 import { describe, expect, it } from "vitest";
 import { hashState } from "../canon/hash";
-import type { Fact } from "../canon/types";
+import type { FactView } from "../derive/world-state";
 import type { ContradictionRecord } from "./types";
 import { worldDiff } from "./diff";
 import type { WorldState } from "../derive/world-state";
 
-function fact(id: string, subject: string, predicate: string, object: string | number | boolean | null): Fact {
-  return { id, subject, predicate, object, validFrom: null, validTo: null, source: "canon" };
+function fact(id: string, subject: string, predicate: string, object: string | number | boolean | null): FactView {
+  return { id, subject, predicate, object, source: "canon", validFrom: null, validTo: null };
 }
 
 function makeState(overrides: Partial<WorldState>): WorldState {
@@ -24,6 +29,7 @@ function makeState(overrides: Partial<WorldState>): WorldState {
     contradictions: [],
     temporalViolations: [],
     constraintViolations: [],
+    edges: [],
     stateHash: "00000000",
     identityHash: "00000000",
     ...overrides,
@@ -63,9 +69,18 @@ describe("worldDiff", () => {
     expect(d.statusChanges).toContainEqual({ entityId: "ev/exodus", from: "ESTABLISHED", to: "UNSUPPORTED" });
   });
 
-  it("reports fact removals sorted by id", () => {
+  it("reports fact removals sorted by id, carrying content and windows", () => {
     const d = worldDiff(baseline, branch);
     expect(d.factRemovals.map((f) => f.id)).toEqual(["fact/blight", "fact/exodus"]);
+    // FactDelta carries the full semantic content — no lineage `source`.
+    expect(d.factRemovals[0]).toEqual({
+      id: "fact/blight",
+      subject: "ev/blight-begins",
+      predicate: "cause",
+      object: "the-blight",
+      validFrom: null,
+      validTo: null,
+    });
   });
 
   it("reports fact additions sorted by id", () => {
@@ -88,10 +103,32 @@ describe("worldDiff", () => {
     ]);
   });
 
-  it("reports contradictions introduced and resolved", () => {
+  it("reports a validity-window change as its own override field, not as an object change", () => {
+    const b = makeState({ statuses: {}, facts: [VARA_VALDAR], workStatuses: {}, contradictions: [] });
+    const br = makeState({
+      statuses: {},
+      facts: [{ ...VARA_VALDAR, validTo: "ev/exodus" }],
+      workStatuses: {},
+      contradictions: [],
+    });
+    const d = worldDiff(b, br);
+    expect(d.factOverrides).toEqual([
+      { factId: "fact/vara-valdar", field: "validTo", from: null, to: "ev/exodus" },
+    ]);
+  });
+
+  it("reports contradictions introduced and resolved, without lineage source", () => {
     const d = worldDiff(baseline, branch);
     expect(d.contradictionsIntroduced.map((c) => c.id)).toEqual(["contra/1"]);
     expect(d.contradictionsResolved).toEqual([]);
+    // ContradictionDelta: semantic content only.
+    expect(d.contradictionsIntroduced[0]).toEqual({
+      id: "contra/1",
+      a: "ev/exodus",
+      b: "ev/blight-begins",
+      detail: "exodus requires the blight which is negated",
+      detectedAt: "ev/exodus",
+    });
 
     const reversed = worldDiff(branch, baseline);
     expect(reversed.contradictionsResolved.map((c) => c.id)).toEqual(["contra/1"]);
@@ -104,13 +141,30 @@ describe("worldDiff", () => {
     expect(d.reachabilityChanges).toContainEqual({ eventId: "ev/blight-begins", from: true, to: false });
   });
 
-  it("carries the branch work statuses", () => {
+  it("reports the work-status DELTA, not a branch snapshot", () => {
     const d = worldDiff(baseline, branch);
-    expect(d.workStatuses["work/verrin-ashfall"]).toBe("IMPOSSIBLE");
+    expect(d.workStatusChanges).toEqual([
+      { workId: "work/verrin-ashfall", from: "PRESERVED", to: "IMPOSSIBLE" },
+    ]);
   });
 
-  it("reserves edgeChanges as empty in v1", () => {
-    expect(worldDiff(baseline, branch).edgeChanges).toEqual([]);
+  it("reports edge changes: added and removed edges of the causal law", () => {
+    const withEdge = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/oath-requires-blight", kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath" }],
+    });
+    const withoutEdge = makeState({ statuses: {}, facts: [], workStatuses: {}, contradictions: [] });
+    const d = worldDiff(withoutEdge, withEdge);
+    expect(d.edgeChanges).toEqual([
+      { edgeId: "edge/oath-requires-blight", added: true, kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath" },
+    ]);
+    const reversed = worldDiff(withEdge, withoutEdge);
+    expect(reversed.edgeChanges).toEqual([
+      { edgeId: "edge/oath-requires-blight", added: false, kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath" },
+    ]);
   });
 
   it("produces a deterministic 8-hex content hash excluding the hash field", () => {
@@ -120,5 +174,22 @@ describe("worldDiff", () => {
     expect(d1.hash).toBe(d2.hash);
     const { hash: _ignored, ...rest } = d1;
     expect(d1.hash).toBe(hashState(rest));
+  });
+
+  it("self-diff is the identity: every delta array empty", () => {
+    const d = worldDiff(baseline, baseline);
+    expect(d.statusChanges).toEqual([]);
+    expect(d.factAdditions).toEqual([]);
+    expect(d.factRemovals).toEqual([]);
+    expect(d.factOverrides).toEqual([]);
+    expect(d.edgeChanges).toEqual([]);
+    expect(d.contradictionsIntroduced).toEqual([]);
+    expect(d.contradictionsResolved).toEqual([]);
+    expect(d.constraintViolationsIntroduced).toEqual([]);
+    expect(d.constraintViolationsResolved).toEqual([]);
+    expect(d.temporalViolationsIntroduced).toEqual([]);
+    expect(d.temporalViolationsResolved).toEqual([]);
+    expect(d.reachabilityChanges).toEqual([]);
+    expect(d.workStatusChanges).toEqual([]);
   });
 });

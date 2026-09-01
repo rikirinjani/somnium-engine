@@ -7,8 +7,8 @@
  * "relationship" = facts whose subject and object are both characters.
  */
 import { hashState } from "../canon/hash";
-import type { Canon, EntityKind, Fact } from "../canon/types";
-import type { FactOverride, StatusChange, TypedDiff, WorldDiff } from "./types";
+import type { Canon, EntityKind } from "../canon/types";
+import type { FactDelta, FactOverride, StatusChange, TypedDiff, WorldDiff } from "./types";
 
 export type ProjectionKind =
   | "character"
@@ -39,17 +39,8 @@ function buildKindMap(canon: Canon): Map<string, string> {
 }
 
 function hashOf(d: WorldDiff): string {
-  return hashState({
-    statusChanges: d.statusChanges,
-    factAdditions: d.factAdditions,
-    factRemovals: d.factRemovals,
-    factOverrides: d.factOverrides,
-    edgeChanges: d.edgeChanges,
-    contradictionsIntroduced: d.contradictionsIntroduced,
-    contradictionsResolved: d.contradictionsResolved,
-    reachabilityChanges: d.reachabilityChanges,
-    workStatuses: d.workStatuses,
-  });
+  const { hash: _excluded, ...content } = d;
+  return hashState(content);
 }
 
 export function projectDiff(d: WorldDiff, canon: Canon, kind: ProjectionKind): WorldDiff {
@@ -59,7 +50,7 @@ export function projectDiff(d: WorldDiff, canon: Canon, kind: ProjectionKind): W
   const isRelationship = kind === "relationship";
 
   // Fact subjects; relationship = both endpoints are characters.
-  const factMatches = (f: Fact): boolean =>
+  const factMatches = (f: FactDelta): boolean =>
     isRelationship
       ? typeof f.object === "string" &&
         kindOf(f.subject) === "Character" &&
@@ -91,8 +82,13 @@ export function projectDiff(d: WorldDiff, canon: Canon, kind: ProjectionKind): W
     edgeChanges: d.edgeChanges,
     contradictionsIntroduced: d.contradictionsIntroduced,
     contradictionsResolved: d.contradictionsResolved,
+    constraintViolationsIntroduced: d.constraintViolationsIntroduced,
+    constraintViolationsResolved: d.constraintViolationsResolved,
+    temporalViolationsIntroduced: d.temporalViolationsIntroduced,
+    temporalViolationsResolved: d.temporalViolationsResolved,
     reachabilityChanges: d.reachabilityChanges,
-    workStatuses: { ...d.workStatuses },
+    // P-007: a DELTA filtered to Work entities (was an unfiltered branch snapshot).
+    workStatusChanges: d.workStatusChanges.filter((w) => kindOf(w.workId) === "Work"),
     hash: "",
   };
   projected.hash = hashOf(projected);

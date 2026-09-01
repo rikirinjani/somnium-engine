@@ -294,7 +294,7 @@ describe.each(CASES)("capability 9: world diff [$name]", (c) => {
     const d = worldDiff(baseline, branch);
     expect(d.statusChanges.length).toBeGreaterThan(0);
     expect(d.hash).toMatch(/^[0-9a-f]{8}$/);
-    expect(d.workStatuses[c.fragileWork]).toBe("IMPOSSIBLE");
+    expect(d.workStatusChanges.some((w) => w.workId === c.fragileWork && w.to === "IMPOSSIBLE")).toBe(true);
     expect(d.statusChanges.some((s) => s.entityId === c.rootEvent && s.to === "EXCLUDED")).toBe(true);
   });
 });
@@ -574,15 +574,46 @@ describe("ordos: structures Verrin never exercised", () => {
   });
 
   it("a WorkBinding.facts requirement moves its Work off PRESERVED", () => {
+    // P-007 CHANGED THE MECHANISM, not the invariant. The claim under test is
+    // still "the Work's declared fact requirement is load-bearing": break the
+    // required fact and the Work leaves PRESERVED.
+    //
+    // What changed: ALTERED used to fire on the `overridden` LINEAGE FLAG, so
+    // writing the required fact back to its OWN value ("same value written
+    // back") moved the Work to ALTERED — a write with no value change was
+    // treated as a change to the world. P-007 (D4) makes ALTERED value-based:
+    // altered-from-canon means the effective object DIFFERS from canon's. See
+    // experiments/p007/predictions.md D4 and src/diff/semantic.test.ts.
+    //
+    // Consequence for THIS canon: a same-value write is no longer an
+    // alteration, and any GENUINE value change to (seal, held_by) also refutes
+    // fact/seal-held-vaela as a causal prerequisite of the rite (a member
+    // event), so the cascade reaches IMPOSSIBLE before ALTERED can apply.
+    // Ordos therefore has no value-based ALTERED route through `work.facts`.
+    // That route remains covered on a canon where the required fact is not
+    // also a prerequisite — src/derive/world-state.test.ts, "a required fact
+    // that is effective but overridden => ALTERED".
     const baseline = derive(canon, []);
     expect(workStatusOf(baseline, O.works.investitureOfVaela)).toBe("PRESERVED");
-    // Same value written back: events all still established, but the required
-    // fact is now overridden => ALTERED, not PRESERVED.
-    const altered = derive(canon, [setFact(O.objects.seal, "held_by", O.characters.vaela)], rp);
-    expect(workStatusOf(altered, O.works.investitureOfVaela)).toBe("ALTERED");
+
+    // Same value written back: no value change, so no alteration (P-007 D4).
+    const sameValue = derive(canon, [setFact(O.objects.seal, "held_by", O.characters.vaela)], rp);
+    expect(workStatusOf(sameValue, O.works.investitureOfVaela)).toBe("PRESERVED");
+
+    // A DIFFERENT holder refutes the required fact, which gates the rite =>
+    // the Work cannot hold as written.
+    const differentValue = derive(canon, [setFact(O.objects.seal, "held_by", O.characters.galen)], rp);
+    expect(workStatusOf(differentValue, O.works.investitureOfVaela)).toBe("IMPOSSIBLE");
+
     // Required fact gone entirely => IMPOSSIBLE.
     const gone = derive(canon, [retractFact(O.facts.sealHeldVaela)], rp);
     expect(workStatusOf(gone, O.works.investitureOfVaela)).toBe("IMPOSSIBLE");
+
+    // And the Work is still reachable by ALTERED on this canon — through the
+    // OTHER dependency rule (a fact its member events bring about): the
+    // warden_of fact is anchored to ev/vaela-invested, a member event.
+    const altered = derive(canon, [setFact(O.characters.vaela, "warden_of", O.faction.council)], rp);
+    expect(workStatusOf(altered, O.works.investitureOfVaela)).toBe("ALTERED");
   });
 
   it("has a genuinely partial temporal order (two unordered chains)", () => {

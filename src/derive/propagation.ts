@@ -128,6 +128,14 @@ export interface DerivationModel {
    * holds, so its node is FALSE.
    */
   overriddenCells: Map<string, string | number | boolean | null>;
+  /**
+   * The FULL resolved edge set (canon edges after severEdge/addEdge, in order),
+   * sorted by id (P-007). The world's effective causal LAW: the individual
+   * buckets below are views over it for propagation, but the whole set is the
+   * world-semantic surface — "the oath happens BECAUSE of the blight" vs "the
+   * oath is uncaused" are different worlds even when every verdict coincides.
+   */
+  edges: CausalEdge[];
 }
 
 /** Cell key for a fact's (subject, predicate) — the unit a setFact writes to. */
@@ -305,6 +313,7 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
     facts,
     retracted,
     overriddenCells,
+    edges,
   };
 }
 

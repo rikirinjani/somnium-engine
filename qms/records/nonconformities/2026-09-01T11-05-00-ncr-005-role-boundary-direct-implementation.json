@@ -1,0 +1,18 @@
+{
+  "ncr_id": "ncr-005",
+  "title": "Role-boundary deviation: orchestrator implemented P-007 directly",
+  "category": "records/nonconformities",
+  "date": "2026-09-01T11:05:00Z",
+  "severity": "major",
+  "description": "Rule 3 (role boundaries) assigns implementation code to the fixer lane; the coordinator/orchestrator does not write code. P-007's implementation lane was dispatched five times (fix-1..fix-5, ses_fa41bea87ffeMfKnpcO8M0V0r2, ses_fa4166da9ffeLae477DYLwgA1V, ses_fa40de25affee2e0be89IfeuI5, ses_fa407a7b4ffeI7nurPgZatKow2, ses_fa403f81cffe2DInXaS0Fjg9Bd) and every dispatch failed at spawn with 'Insufficient balance' (opencode.ai workspace billing). None of the five sessions executed a single tool call; the worktree was verified clean after each failure. The user was offered the two options (fix billing / approve direct implementation) and responded 'continue' three times, which was taken as approval to proceed in-session.",
+  "root_cause": "External billing failure made the fixer lane unavailable. The choice was between blocking an approved, fully-specified task indefinitely and crossing the role boundary under documented deviation.",
+  "what_was_done": "The orchestrator implemented P-007 directly in the p007 worktree, following the same bounded spec that was prepared for the fixer dispatch (experiments/p007/predictions.md + the dispatch brief). The L2 verifier gate remains an independent subagent (verifier lane) and is still required before close-out - the deviation does not extend to verification.",
+  "containment": [
+    "The implementation follows a pre-committed falsifiable-prediction document (9f5245b) written before any code, unchanged by the implementation.",
+    "The L2 verifier gate (independent verifier subagent) is mandatory before the change is accepted; if verifier dispatch also fails on billing, the task BLOCKS rather than self-verifying.",
+    "This NCR is filed before implementation begins, not retroactively."
+  ],
+  "corrective_action": "When billing is restored, future implementation work returns to the fixer lane. If the verifier gate cannot run due to the same billing failure, P-007 remains unmerged/unaccepted until it can.",
+  "linked_task": "P-007 WorldDiff semantic integrity (req-007)",
+  "trace_id": "somnium-p007-direct-implementation"
+}

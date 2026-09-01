@@ -27,7 +27,7 @@
 | T1/T2 | PRECEDES recurrence ≠ causal cycle ≠ contradiction; may be cardinality violation | **CONFIRMED** |
 | I1 | Creating a 2nd occurrence is allowed but flags the world | **CONFIRMED** |
 | I2 | Removing restores validity (no historical counter) | **CONFIRMED** (M tests) |
-| H1/H2 | Violation changes stateHash; identityHash semantics preserved | **PARTIALLY CONFIRMED** — stateHash/identityHash semantics verified (gate claim 6). But H1 also predicted the violation would appear in `WorldDiff` as a constraint-delta record; **WorldDiff has no constraint-delta field and `diff.hash` does not fold it — unimplemented**. Deferred to P-007 (diff surface for constraint violations). Found by the L2 gate. |
+| H1/H2 | Violation changes stateHash; identityHash semantics preserved | **PARTIALLY CONFIRMED** — stateHash/identityHash semantics verified (gate claim 6). But H1 also predicted the violation would appear in `WorldDiff` as a constraint-delta record; **WorldDiff has no constraint-delta field and `diff.hash` does not fold it — unimplemented**. Deferred to P-007 (diff surface for constraint violations). Found by the L2 gate. **RESOLVED in P-007: `constraintViolationsIntroduced` / `constraintViolationsResolved` are real dimensions folded into `diff.hash` — see docs/P007-WORLDDIFF.md §7.** |
 | C3 | Parameterized cross-canon baseline test | **CONFIRMED** (ncr-004 rule) |
 | A2 | All world representations agree on cardinality state | **CONFIRMED** (K tests assert diagnostic.observed === query count) |
 
