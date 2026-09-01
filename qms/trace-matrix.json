@@ -179,6 +179,39 @@
       ],
       "status": "verified-with-residual-risk",
       "residual_risks": "docs/ARCHITECTURE-RECONNAISSANCE.md §19.11 items 10 and 11"
+    },
+    {
+      "requirement_id": "req-006",
+      "requirement_title": "Constraint-layer cardinality — AT_MOST_ONE / AT_LEAST_ONE over the effective occurrence set",
+      "requirement_source": "experiments/p006/predictions.md (falsifiable predictions, written before implementation)",
+      "spec": [
+        "docs/P006-CARDINALITY.md (report: ontology, placement decision, semantics)",
+        "experiments/p006/predictions.md (A–X predictions with Falsified-by clauses)",
+        "src/canon/types.ts (CardinalityConstraint {id, typeId, bound, note?})",
+        "src/derive/constraints.ts (evaluation over effective occurrences)"
+      ],
+      "tasks": [
+        "Canon.constraints: {id, typeId, bound}[]; absent => hash unchanged (backward compatible, frozen hashes preserved)",
+        "WorldState.constraintViolations: ConstraintViolationRecord[] (typeId, bound, observed, limit, detail), folded into stateHash; identityHash unchanged",
+        "violation semantics: no silent mutation, no auto-removal, no event declared impossible; third phenomenon orthogonal to causal impossibility (UNSUPPORTED) and contradiction (CONTRADICTORY/BOTH)",
+        "EXACTLY_ONE = AT_LEAST_ONE + AT_MOST_ONE (compositional, no third primitive)",
+        "global per-EventType scope (smallest both canons require); scoped forms documented as future abstraction",
+        "Ordos declares AT_MOST_ONE on rite-of-binding and investiture; Verrin exercises unconstrained recurrence",
+        "fact-level EXCLUDES retained as a distinct value-exclusivity axis (X1–X3)",
+        "evaluated over occurrences, not writes; multi-depth recomputation, not a historical counter",
+        "28 new tests (A–M, K adversarial routes, C3 cross-canon parameterized over {verrin, ordos})"
+      ],
+      "tests": [
+        "src/derive/constraints.test.ts",
+        "tests/acceptance/cross-canon-acceptance.test.ts (recurrence data)"
+      ],
+      "verification": [
+        "qms/records/verifications/2026-09-01T10-27-38-ver-006-p006-l2-gate.json",
+        "verify-facts (scripts/verify-facts.ts)"
+      ],
+      "nonconformities": [],
+      "status": "verified",
+      "residual_risks": "H1's WorldDiff clause (constraint-delta record in WorldDiff) unimplemented — deferred to P-007; acknowledged in docs/P006-CARDINALITY.md §1 H1/H2 row"
     }
   ]
 }
