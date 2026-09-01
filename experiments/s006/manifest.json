@@ -1,0 +1,46 @@
+{
+  "experiment": "S006 — long-horizon state transmission study",
+  "status": "FROZEN",
+  "frozen": {
+    "commit": "5b41deda54076b2212c5877e95892be8c19cb6cc",
+    "short": "5b41ded",
+    "branch_at_freeze": "occurrence",
+    "tag": "somnium-p005-final",
+    "tag_type": "annotated",
+    "tag_verified": "tag dereferences to 5b41deda54076b2212c5877e95892be8c19cb6cc",
+    "baseline_test_count": 479,
+    "baseline_test_files": 21,
+    "baseline_tsc": "exit 0",
+    "baseline_verify_facts": "ALL CHECKS PASSED (3/3)",
+    "baseline_retrace": "trace-clean",
+    "acceptance_suites": {
+      "poc-acceptance": 14,
+      "causal-acceptance": 33,
+      "depth-acceptance": 14,
+      "cross-canon-acceptance": 89
+    },
+    "verifier_history": "7 L2 gates: 6 REJECT, 1 APPROVE-WITH-RESIDUAL-RISK (ver-005)",
+    "constraint": "DO NOT MODIFY the tagged commit. DO NOT retrofit P-005 after this point."
+  },
+  "experiment_branch": "experiment/long-horizon-state",
+  "experiment_branch_base": "5b41deda54076b2212c5877e95892be8c19cb6cc",
+  "repository": "C:\\Users\\think\\Project_v2\\Somnium-occurrence",
+  "engine": "Somnium Engine (sibling of Kronos/Causality Engine; deterministic counterfactual narrative engine)",
+  "runtime": {
+    "platform": "win32",
+    "node": "node via pi-node (version captured at run time)",
+    "model_used": "none in engine core (deterministic TS); agentic worker arms would require an LLM and are called out separately",
+    "seeds": "deterministic; every harness script uses fixed seeds; no Math.random in derive path (asserted by existing invariants)"
+  },
+  "freeze_verified": {
+    "branch": "occurrence",
+    "head": "5b41deda54076b2212c5877e95892be8c19cb6cc",
+    "worktree_clean": true,
+    "tests_479": true,
+    "tsc_clean": true,
+    "verify_facts_3_of_3": true,
+    "retrace_clean": true
+  },
+  "task_definition": "S-006P-005 freeze + long-horizon state transmission study. Part I freeze here; Parts II-XII measured on the frozen engine without modification.",
+  "discipline": "Do not modify P-005 semantics to make the experiment succeed. If the state representation is insufficient, report the deficiency. Task succeeds even if the hypothesis fails."
+}
