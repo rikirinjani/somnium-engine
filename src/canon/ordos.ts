@@ -386,6 +386,16 @@ export function ordosCanon(): Canon {
     // structurally identical to a typo, so intent has to be stated. Without it,
     // validation would (correctly) call this a dangling reference.
     unspecified: [ORDOS_IDS.undeclared.heirProofSworn],
+    // P-006: the two rites of binding and the two investitures are competing
+    // alternatives — at most one may complete. Previously approximated by
+    // fact-level EXCLUDES on the Seal-holder facts; now declared as type-level
+    // cardinality over occurrences. (The EXCLUDES stays: it constrains value
+    // exclusivity — who holds the Seal — which is a different axis. See
+    // experiments/p006/predictions.md §4.)
+    constraints: [
+      { id: "constraint/rite-at-most-one", typeId: ORDOS_IDS.types.riteOfBinding, bound: "AT_MOST_ONE" as const, note: "at most one rite of binding may complete" },
+      { id: "constraint/investiture-at-most-one", typeId: ORDOS_IDS.types.investiture, bound: "AT_MOST_ONE" as const, note: "at most one investiture may complete" },
+    ],
   };
   return { ...body, hash: hashCanon(body) };
 }

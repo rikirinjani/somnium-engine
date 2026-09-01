@@ -124,6 +124,32 @@ export interface WorkBinding {
 }
 
 /**
+ * P-006 — cardinality constraint over an EventType (the generic constraint
+ * layer). Declared on the CANON, evaluated over the EFFECTIVE occurrence set of
+ * each derived world.
+ *
+ * Semantics (see experiments/p006/predictions.md):
+ *   - the constraint is over OCCURRENCES (via instance_of), not over writes;
+ *   - a violated bound is reported as a ConstraintViolationRecord in the
+ *     derived WorldState — it does NOT mutate the world to become valid, does
+ *     NOT declare events impossible, and is NOT a contradiction (BOTH);
+ *   - evaluated per-world: a later branch that removes an occurrence returns to
+ *     validity; there is no accumulating historical counter;
+ *   - global per EventType is the smallest scope both seed canons require.
+ *
+ * Omitted => no cardinality constraints, so a canon that never sets the field
+ * behaves exactly as pre-P-006 (absent key is absent from the content hash).
+ */
+export interface CardinalityConstraint {
+  id: string; // e.g. "constraint/rite-at-most-one"
+  /** the EventType id being constrained */
+  typeId: string;
+  bound: "AT_MOST_ONE" | "AT_LEAST_ONE";
+  /** narrative note, never hashed into semantics */
+  note?: string;
+}
+
+/**
  * The immutable, versioned canon document. Content-hashed; never edited in
  * place — a change produces a new canon version.
  */
@@ -151,6 +177,14 @@ export interface Canon {
    * Omitted => the canon claims to be complete, so every reference must resolve.
    */
   unspecified?: string[];
+  /**
+   * P-006 — generic cardinality constraints over EventTypes. Evaluated over the
+   * effective occurrence set in every derived world.
+   *
+   * Omitted => a canon with no cardinality declarations behaves exactly as
+   * pre-P-006 (absent key is absent from the content hash).
+   */
+  constraints?: CardinalityConstraint[];
   /** Content hash over sorted-key JSON of everything above (FNV-1a). */
   hash: string;
 }

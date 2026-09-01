@@ -56,6 +56,8 @@ import { occurs, projectStatus } from "./judgment";
 import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
 import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
+import { evaluateConstraints } from "./constraints";
+import type { ConstraintViolationRecord } from "./constraints";
 
 export interface WorldState {
   canonId: string;
@@ -75,6 +77,16 @@ export interface WorldState {
   contradictions: ContradictionRecord[];
   /** PRECEDES cycles among occurring events — unsatisfiable timelines */
   temporalViolations: TemporalViolation[];
+  /**
+   * P-006 — cardinality constraint violations (AT_MOST_ONE / AT_LEAST_ONE over
+   * an EventType), evaluated over the effective occurrence set of THIS world.
+   *
+   * Distinct from contradictions (the world asserting P and ¬P) and from causal
+   * impossibility (UNSUPPORTED). A violated constraint does NOT mutate the world
+   * to become valid; the extra occurrence keeps its causal status. Part of the
+   * effective world, therefore folded into `stateHash`.
+   */
+  constraintViolations: ConstraintViolationRecord[];
   /**
    * "Are these the same WORLD?" — effective state only, provenance-independent.
    * Folded from canon + judgments + statuses + facts + workStatuses +
@@ -372,6 +384,8 @@ export function derive(
   const violations = temporalViolations(model, judgments);
   const rpId = rp?.id ?? null;
 
+  // Construct the world once; P-006 constraint evaluation reads occurrenceCount
+  // which reads effective facts, so it needs the world to exist first.
   const world: WorldState = {
     canonId: canon.canonId,
     interventions: [...interventions], // full ordered chain from baseline
@@ -382,9 +396,11 @@ export function derive(
     workStatuses,
     contradictions,
     temporalViolations: violations,
+    constraintViolations: [],
     stateHash: "",
     identityHash: "",
   };
+  world.constraintViolations = evaluateConstraints(canon, world);
 
   // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4):
   //
@@ -415,6 +431,10 @@ export function derive(
     workStatuses,
     contradictions,
     temporalViolations: violations,
+    // P-006: constraint violations are part of the effective world — a world in
+    // which a cardinality bound is exceeded is a DIFFERENT world (stateHash
+    // changes), while identityHash continues to fold lineage on top.
+    constraintViolations: world.constraintViolations,
   });
   world.identityHash = hashState({
     stateHash: world.stateHash,
