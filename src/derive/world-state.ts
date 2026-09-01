@@ -45,6 +45,8 @@
  * The `interventions` field on the WorldState keeps the full ordered chain.
  */
 import type { Canon, Fact, WorkBinding } from "../canon/types";
+import type { FactVocabulary } from "../canon/fact-rules";
+import { factAssertionError } from "../canon/fact-rules";
 import { canonicalJson, hashState } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
@@ -54,6 +56,8 @@ import { occurs, projectStatus } from "./judgment";
 import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
 import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
+import { evaluateConstraints } from "./constraints";
+import type { ConstraintViolationRecord } from "./constraints";
 
 export interface WorldState {
   canonId: string;
@@ -73,6 +77,16 @@ export interface WorldState {
   contradictions: ContradictionRecord[];
   /** PRECEDES cycles among occurring events — unsatisfiable timelines */
   temporalViolations: TemporalViolation[];
+  /**
+   * P-006 — cardinality constraint violations (AT_MOST_ONE / AT_LEAST_ONE over
+   * an EventType), evaluated over the effective occurrence set of THIS world.
+   *
+   * Distinct from contradictions (the world asserting P and ¬P) and from causal
+   * impossibility (UNSUPPORTED). A violated constraint does NOT mutate the world
+   * to become valid; the extra occurrence keeps its causal status. Part of the
+   * effective world, therefore folded into `stateHash`.
+   */
+  constraintViolations: ConstraintViolationRecord[];
   /**
    * "Are these the same WORLD?" — effective state only, provenance-independent.
    * Folded from canon + judgments + statuses + facts + workStatuses +
@@ -173,16 +187,31 @@ function overrideFact(
   return out;
 }
 
-/** Fact interventions applied in order over the effective fact list. */
-function applyFactInterventions(facts: FactView[], interventions: Intervention[]): FactView[] {
+/**
+ * Fact interventions applied in order over the effective fact list.
+ *
+ * Uses `factAssertionError` — the SAME function `validateCanon` and `buildModel`
+ * apply — because this function and `buildModel`'s `overriddenCells` are TWO
+ * VIEWS OF THE SAME FACT and must agree. §18.6 was exactly this defect (fact
+ * nodes ignoring fact interventions), and gating only one side here recreated it
+ * twice in one sitting: first the subject rule, then the object rule. One
+ * function at every call site makes the views incapable of disagreeing, and
+ * makes the claim differential: an intervention may assert no more than canon may.
+ */
+function applyFactInterventions(
+  facts: FactView[],
+  interventions: Intervention[],
+  vocabulary: FactVocabulary
+): FactView[] {
   let current = facts;
   for (const iv of interventions) {
     if (iv.kind === "setFact" || iv.kind === "relocate") {
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
-      if (typeof predicate === "string") {
-        current = overrideFact(current, iv.target, predicate, object);
-      }
+      if (typeof predicate !== "string") continue;
+      const value = (object ?? null) as string | number | boolean | null;
+      if (factAssertionError(iv.target, predicate, value, vocabulary) !== null) continue;
+      current = overrideFact(current, iv.target, predicate, value);
     } else if (iv.kind === "retractFact") {
       current = current.filter((f) => f.id !== iv.target);
     }
@@ -344,13 +373,19 @@ export function derive(
     statusMap.set(node, projectStatus(judgment));
   }
 
-  const facts = applyFactInterventions(computeEffectiveFacts(canon, judgments), interventions);
+  const facts = applyFactInterventions(
+    computeEffectiveFacts(canon, judgments),
+    interventions,
+    model.factVocabulary
+  );
   const statuses = toSortedRecord(statusMap);
   const workStatuses = computeWorkStatuses(canon, statuses, facts);
   const contradictions = detectContradictions(conflicts);
   const violations = temporalViolations(model, judgments);
   const rpId = rp?.id ?? null;
 
+  // Construct the world once; P-006 constraint evaluation reads occurrenceCount
+  // which reads effective facts, so it needs the world to exist first.
   const world: WorldState = {
     canonId: canon.canonId,
     interventions: [...interventions], // full ordered chain from baseline
@@ -361,9 +396,11 @@ export function derive(
     workStatuses,
     contradictions,
     temporalViolations: violations,
+    constraintViolations: [],
     stateHash: "",
     identityHash: "",
   };
+  world.constraintViolations = evaluateConstraints(canon, world);
 
   // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4):
   //
@@ -394,6 +431,10 @@ export function derive(
     workStatuses,
     contradictions,
     temporalViolations: violations,
+    // P-006: constraint violations are part of the effective world — a world in
+    // which a cardinality bound is exceeded is a DIFFERENT world (stateHash
+    // changes), while identityHash continues to fold lineage on top.
+    constraintViolations: world.constraintViolations,
   });
   world.identityHash = hashState({
     stateHash: world.stateHash,

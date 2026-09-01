@@ -28,6 +28,7 @@ function makeState(overrides: Partial<WorldState>): WorldState {
     workStatuses: {},
     contradictions: [],
     temporalViolations: [],
+    constraintViolations: [],
     stateHash: "00000000",
     identityHash: "00000000",
     ...overrides,

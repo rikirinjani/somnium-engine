@@ -55,6 +55,33 @@ function render(note: ConflictNote): ContradictionRecord {
         note.source,
         note.node
       );
+    case "forced-undeclared":
+      return buildContradiction(
+        `contra:${note.node}:force-undeclared`,
+        note.node,
+        note.node,
+        `occurrence ${note.node} is forced but canon never declares it — an intervention may change an occurrence's status, never bring one into existence`,
+        note.source,
+        note.node
+      );
+    case "fact-write-illegal": {
+      // ONE record kind for every fact-legality rule. The specific rule travels
+      // in `factError.reason`, so adding a rule needs no new ConflictNote kind —
+      // and cannot create an unreachable one, which is what happened when there
+      // were separate `-subject` and `-object` kinds and Phase D.0 hardcoded the
+      // first (the second was dead code, and the docs promised a record the
+      // engine could not emit).
+      const reason = note.factError?.reason ?? "illegal";
+      const detail = note.factError?.detail ?? "illegal fact assertion";
+      return buildContradiction(
+        `contra:${note.node}:fact-write-illegal:${reason}`,
+        note.node,
+        note.factError?.offender ?? note.node,
+        `cannot write ${note.node}.${note.other}: ${detail} — canon defines the vocabulary, an intervention selects among it`,
+        note.source,
+        note.node
+      );
+    }
     case "excludes":
       return buildContradiction(
         `contra:${note.edgeId ?? "excludes"}:excludes:${note.node}`,

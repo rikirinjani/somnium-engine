@@ -45,15 +45,21 @@ export function hashCanon(canon: {
   facts: unknown;
   edges: unknown;
   workBindings: unknown;
+  constraints?: unknown;
 }): string {
-  return hashState({
+  const base: Record<string, unknown> = {
     canonId: canon.canonId,
     version: canon.version,
     entities: canon.entities,
     facts: canon.facts,
     edges: canon.edges,
     workBindings: canon.workBindings,
-  });
+  };
+  // P-006: constraints are part of the canon document. Absent key => absent
+  // from the hash, so a canon that never declares constraints is bit-for-bit
+  // identical to pre-P-006.
+  if (canon.constraints !== undefined) base.constraints = canon.constraints;
+  return hashState(base);
 }
 
 /**

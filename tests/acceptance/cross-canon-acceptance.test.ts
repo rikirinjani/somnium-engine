@@ -36,6 +36,13 @@ import { projectDiff } from "../../src/diff/projections";
 import { computeDepth, computeDivergence } from "../../src/depth/depth";
 import { statusOf, workStatusOf } from "../../src/query/status";
 import { reachable, subjectFact } from "../../src/query/query";
+import {
+  declaredEventTypes,
+  diffOccurrences,
+  occurrenceCount,
+  occurrencesOfType,
+  typeOfOccurrence,
+} from "../../src/query/occurrence";
 import { validateRewindPoint } from "../../src/timeline/rewind-point";
 import { branchUniverse, createUniverse, lineageOf } from "../../src/timeline/universe";
 import type { Intervention, RewindPoint } from "../../src/timeline/types";
@@ -59,6 +66,23 @@ interface CanonCase {
   unknownEvent: string;
   /** a 3-step chain for the multi-depth replay capability */
   chain: Intervention[];
+  /**
+   * P-005: a recurring event type. Both canons must carry one, and they express
+   * recurrence DIFFERENTLY — that contrast is the genericity test.
+   */
+  recurrence: {
+    typeId: string;
+    /** every declared occurrence of the type, sorted by id */
+    occurrences: string[];
+    /** how many of them actually occur at baseline */
+    baselineCount: number;
+    /** an intervention chain that shifts WHICH occurrence carries the type */
+    shift: Intervention[];
+    /** after `shift`: occurrences that stop occurring */
+    shiftRemoved: string[];
+    /** after `shift`: occurrences that start occurring */
+    shiftAdded: string[];
+  };
 }
 
 const O = ORDOS_IDS;
@@ -88,6 +112,19 @@ const CASES: CanonCase[] = [
       setFact("char/vara", "located_in", "loc/thornhollow"),
       setFact("char/vara", "located_in", "loc/stonehall"),
     ],
+    // Verrin's recurrence shape: INDEPENDENT PARALLEL occurrences. Two people
+    // swear binding oaths in answer to the same catastrophe; neither requires
+    // the other, and they have different consequences (Kael's summons the
+    // Wardens, Vara's does not). Removing one therefore only REMOVES — nothing
+    // steps into its place, because the occurrences were never competing.
+    recurrence: {
+      typeId: "type/oath-sworn",
+      occurrences: ["ev/kael-oath", "ev/vara-vow"],
+      baselineCount: 2,
+      shift: [negateEvent("ev/kael-oath")],
+      shiftRemoved: ["ev/kael-oath"],
+      shiftAdded: [],
+    },
   },
   {
     name: "ordos",
@@ -121,6 +158,20 @@ const CASES: CanonCase[] = [
       setFact(O.objects.seal, "held_by", O.characters.galen),
       setFact(O.objects.seal, "held_by", O.characters.myrra),
     ],
+    // Ordos's recurrence shape: COMPETING ALTERNATIVES. Two rites of one kind
+    // feed a single outcome disjunctively, and at most one can complete, so only
+    // ONE occurs at baseline (Galen's hangs on the unsettled parentage). Shifting
+    // therefore both REMOVES and ADDS — the type persists through a different
+    // occurrence. This is the contrast with Verrin, where removing an occurrence
+    // only removes.
+    recurrence: {
+      typeId: O.types.riteOfBinding,
+      occurrences: [O.events.riteBindingGalen, O.events.riteBindingVaela],
+      baselineCount: 1,
+      shift: [negateEvent(O.events.vaelaRecognised), forceEvent(O.events.galenRecognised)],
+      shiftRemoved: [O.events.riteBindingVaela],
+      shiftAdded: [O.events.riteBindingGalen],
+    },
   },
 ];
 
@@ -546,5 +597,150 @@ describe("ordos: structures Verrin never exercised", () => {
         (e.from.includes("galen") && e.to.includes("vaela"))
     );
     expect(crossLinks).toEqual([]);
+  });
+});
+
+/* ========================================================================== */
+/* P-005: repeatable events and occurrence identity, for BOTH canons          */
+/* ========================================================================== */
+
+describe.each(CASES)("capability 11: repeatable events [$name]", (c) => {
+  const r = c.recurrence;
+
+  it("declares the recurring type, and the type is NOT a causal node", () => {
+    expect(declaredEventTypes(c.canon)).toContain(r.typeId);
+    // A type does not occur, so it can neither ground nor refute anything.
+    const baseline = derive(c.canon, []);
+    expect(baseline.statuses[r.typeId]).toBeUndefined();
+    expect(baseline.judgments[r.typeId]).toBeUndefined();
+  });
+
+  it("binds every declared occurrence to the type", () => {
+    const baseline = derive(c.canon, []);
+    expect(occurrencesOfType(baseline, r.typeId).map((o) => o.occurrenceId)).toEqual(r.occurrences);
+    for (const id of r.occurrences) {
+      expect(typeOfOccurrence(baseline, id)).toBe(r.typeId);
+    }
+  });
+
+  it("counts how many occurrences of the type actually happen at baseline", () => {
+    const baseline = derive(c.canon, []);
+    expect(occurrenceCount(baseline, r.typeId)).toBe(r.baselineCount);
+  });
+
+  it("keeps occurrences of one type independently addressable", () => {
+    // The identity claim: each occurrence can be intervened on separately, and
+    // doing so produces a different world. Two occurrences of one type are never
+    // interchangeable.
+    const seen = new Set<string>();
+    for (const id of r.occurrences) {
+      const world = derive(c.canon, [negateEvent(id)], c.rp);
+      expect(statusOf(world, id)).toBe("EXCLUDED");
+      seen.add(world.stateHash);
+    }
+    expect(seen.size).toBe(r.occurrences.length);
+  });
+
+  it("reports the occurrence-set diff for a shift", () => {
+    const baseline = derive(c.canon, []);
+    const shifted = derive(c.canon, r.shift, c.rp);
+    const d = diffOccurrences(baseline, shifted, r.typeId);
+    expect(d.removed).toEqual(r.shiftRemoved);
+    expect(d.added).toEqual(r.shiftAdded);
+  });
+
+  it("distinguishes a lost sibling from a substitution", () => {
+    // This is where the two canons DIVERGE, which is the genericity result.
+    // A single boolean could not carry it, so the diff reports three predicates:
+    //   Verrin — independent occurrences: removing one only REMOVES.
+    //   Ordos  — competing alternatives: removing one lets the other step in.
+    // Both are `setChanged`; only Ordos is `substituted`.
+    const baseline = derive(c.canon, []);
+    const shifted = derive(c.canon, r.shift, c.rp);
+    const d = diffOccurrences(baseline, shifted, r.typeId);
+
+    expect(d.setChanged).toBe(true);
+    expect(d.substituted).toBe(r.shiftAdded.length > 0 && r.shiftRemoved.length > 0);
+    expect(d.typeCeased).toBe(false); // the kind of thing still happens in both
+  });
+
+  it("is deterministic across repeated derivation", () => {
+    const a = derive(c.canon, r.shift, c.rp);
+    const b = derive(c.canon, r.shift, c.rp);
+    expect(a.stateHash).toBe(b.stateHash);
+    expect(a.identityHash).toBe(b.identityHash);
+    expect(diffOccurrences(derive(c.canon, []), a, r.typeId)).toEqual(
+      diffOccurrences(derive(c.canon, []), b, r.typeId)
+    );
+  });
+
+  it("never manufactures an occurrence: a forced undeclared id stays out of the world", () => {
+    // The world provably does not contain it (truth FALSE), and the incoherent
+    // intervention is reported. An earlier pass gave it truth BOTH, which
+    // `occurs()` accepts — so the invented occurrence was counted. See ncr-004.
+    const ghost = `${r.typeId.replace("type/", "ev/")}-undeclared-occurrence`;
+    const world = derive(c.canon, [forceEvent(ghost)], c.rp);
+
+    expect(world.judgments[ghost]).toMatchObject({ truth: "FALSE", forced: true });
+    expect(world.contradictions.some((x) => x.id === `contra:${ghost}:force-undeclared`)).toBe(true);
+    // it did not join the type...
+    expect(occurrencesOfType(world, r.typeId).map((o) => o.occurrenceId)).toEqual(r.occurrences);
+    // ...and even when an intervention tries to enrol it, it is not counted.
+    const enrolled = derive(
+      c.canon,
+      [forceEvent(ghost), setFact(ghost, "instance_of", r.typeId)],
+      c.rp
+    );
+    expect(occurrenceCount(enrolled, r.typeId)).toBe(r.baselineCount);
+  });
+
+  it("type membership is intervenable without changing whether the occurrence happened", () => {
+    const baseline = derive(c.canon, []);
+    const first = r.occurrences[0] as string;
+    const membership = c.canon.facts.find(
+      (f) => f.subject === first && f.predicate === "instance_of"
+    );
+    expect(membership).toBeDefined();
+
+    const unlinked = derive(c.canon, [retractFact(membership!.id)], c.rp);
+    expect(occurrencesOfType(unlinked, r.typeId).map((o) => o.occurrenceId)).not.toContain(first);
+    // The occurrence's own status is untouched — membership and occurrence are
+    // independent claims, which is why the type layer is ordinary facts.
+    expect(statusOf(unlinked, first)).toBe(statusOf(baseline, first));
+  });
+});
+
+describe("cross-canon: the two canons express recurrence DIFFERENTLY", () => {
+  it("Verrin's occurrences are independent; Ordos's are competing alternatives", () => {
+    // The genericity claim: one engine, one occurrence model, two narrative
+    // shapes. If this test could not be written over both canons, the model
+    // would be fitted to whichever canon came first.
+    const verrin = CASES.find((c) => c.name === "verrin")!;
+    const ordos = CASES.find((c) => c.name === "ordos")!;
+
+    // Verrin: both oaths occur at baseline; removing one leaves one.
+    expect(verrin.recurrence.baselineCount).toBe(2);
+    expect(verrin.recurrence.shiftAdded).toEqual([]);
+
+    // Ordos: only one rite occurs at baseline; shifting swaps which one.
+    expect(ordos.recurrence.baselineCount).toBe(1);
+    expect(ordos.recurrence.shiftAdded.length).toBe(1);
+
+    // ...and both are read by the SAME query functions.
+    for (const c of CASES) {
+      const baseline = derive(c.canon, []);
+      expect(occurrencesOfType(baseline, c.recurrence.typeId).length).toBe(
+        c.recurrence.occurrences.length
+      );
+    }
+  });
+
+  it("both canons keep every occurrence of a type distinctly identified", () => {
+    for (const c of CASES) {
+      const baseline = derive(c.canon, []);
+      const ids = occurrencesOfType(baseline, c.recurrence.typeId).map((o) => o.occurrenceId);
+      expect(new Set(ids).size).toBe(ids.length); // no collapsing
+      expect(ids).toEqual([...ids].sort()); // deterministic order
+    }
   });
 });

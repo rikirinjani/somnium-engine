@@ -54,6 +54,8 @@
  *               the source is not tainted (the rule blames the violation).
  */
 import type { Canon, CausalEdge, Fact } from "../canon/types";
+import type { FactAssertionError, FactVocabulary } from "../canon/fact-rules";
+import { buildFactVocabulary, factAssertionError } from "../canon/fact-rules";
 import type { Intervention } from "../timeline/types";
 import type { Judgment, SupportKind, TruthValue } from "./judgment";
 import { conjoin, disjoin, joinTruth, occurs, truthRank } from "./judgment";
@@ -82,6 +84,26 @@ export interface DerivationModel {
    * a true premise (adversarial case K).
    */
   declared: Set<string>;
+  /**
+   * The declared vocabulary a fact assertion may draw on (P-005/ncr-004).
+   *
+   * Held here so `buildModel` and `applyFactInterventions` decide fact-write
+   * legality with the SAME function `validateCanon` uses — see
+   * `src/canon/fact-rules.ts`. The invariant is differential: **an intervention
+   * may assert no more than canon may.**
+   */
+  factVocabulary: FactVocabulary;
+  /**
+   * `setFact`/`relocate` interventions rejected because the fact they would
+   * write would be illegal as canon. Rejected, not applied, and reported as a
+   * contradiction — never silently dropped.
+   */
+  rejectedFactWrites: {
+    subject: string;
+    predicate: string;
+    source: string;
+    error: FactAssertionError;
+  }[];
   /** target -> alternative sufficient support sets (sorted by group) */
   supportGroups: Map<string, SupportGroup[]>;
   /** target -> sorted ENABLES source ids */
@@ -151,6 +173,12 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
     if (entity.kind === "Event") declared.add(entity.id);
   }
   for (const fact of canon.facts) declared.add(fact.id);
+
+  // The declared vocabulary a fact assertion may draw on. Owned by
+  // src/canon/fact-rules.ts so `validateCanon` and the intervention path decide
+  // legality with the SAME function — the invariant is differential: an
+  // intervention may assert no more than canon may (ncr-004).
+  const factVocabulary = buildFactVocabulary(canon);
 
   // The NODE SET is narrower: events, plus only those facts that actually
   // participate in the graph as an edge endpoint, plus intervention targets.
@@ -226,6 +254,7 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
   const forcedBy = new Map<string, string>();
   const retracted = new Set<string>();
   const overriddenCells = new Map<string, string | number | boolean | null>();
+  const rejectedFactWrites: DerivationModel["rejectedFactWrites"] = [];
   for (const iv of interventions) {
     if (iv.kind === "negateEvent") negated.add(iv.target);
     else if (iv.kind === "forceEvent") forcedBy.set(iv.target, iv.id);
@@ -237,10 +266,21 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
       if (typeof predicate === "string") {
-        overriddenCells.set(
-          cellKey(iv.target, predicate),
-          (object ?? null) as string | number | boolean | null
-        );
+        const value = (object ?? null) as string | number | boolean | null;
+        // The SAME function `validateCanon` uses (src/canon/fact-rules.ts), so an
+        // intervention may assert no more than canon may. Shared with
+        // world-state.ts's effective-fact list: two views of one fact.
+        const error = factAssertionError(iv.target, predicate, value, factVocabulary);
+        if (error !== null) {
+          rejectedFactWrites.push({
+            subject: iv.target,
+            predicate,
+            source: iv.id,
+            error,
+          });
+        } else {
+          overriddenCells.set(cellKey(iv.target, predicate), value);
+        }
       }
     }
   }
@@ -253,6 +293,8 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
   return {
     nodeIds,
     declared,
+    factVocabulary,
+    rejectedFactWrites,
     supportGroups,
     enablesIn,
     precedesEdges,
@@ -316,15 +358,36 @@ function factWindowTruth(fact: Fact, truth: Map<string, TruthValue>): TruthValue
   return "NEITHER";
 }
 
-/** Hard (REQUIRES) support truth: disjunction over conjunctive sufficient sets. */
+/**
+ * Hard (REQUIRES) support truth: disjunction over conjunctive sufficient sets.
+ *
+ * THE DECLARED GATE APPLIES IN BOTH DIRECTIONS (P-005). An id canon never
+ * declared can never be TRUE, no matter what edges point at it. Nothing SE can
+ * infer brings an occurrence into existence; only canon declares one.
+ *
+ * This was a defect until P-005's second pass. The gate lived only in the
+ * no-support-rules branch, which covered an undeclared REQUIRES *source*
+ * (dependents correctly stayed UNKNOWN — case K) but not an undeclared
+ * *target*: an `addEdge` intervention naming a fresh id gave that id support
+ * rules, so it fell through to `disjoin` and inherited its prerequisite's truth.
+ * Measured before the fix:
+ *
+ *     addEdge({ REQUIRES, from: ev/real, to: ev/ghost })
+ *       -> ev/ghost ESTABLISHED, support HARD, 0 contradictions
+ *
+ * and it chained — three added edges produced three invented occurrences, which
+ * then joined an EventType and were counted by the occurrence layer. Exactly the
+ * "silently manufacture infinite fictional history" the occurrence generation
+ * rule forbids.
+ */
 function hardSupport(node: string, model: DerivationModel, truth: Map<string, TruthValue>): TruthValue {
+  // An undeclared id is under-specified, full stop: it stays NEITHER forever, so
+  // dependents stay UNKNOWN rather than inheriting a fabricated premise.
+  if (!model.declared.has(node)) return "NEITHER";
+
   const groups = model.supportGroups.get(node);
   if (groups === undefined || groups.length === 0) {
-    // A node with no support rules is a root ONLY if canon declares it. An id
-    // that canon merely references (an edge endpoint with no Event entity and no
-    // fact) is under-specified: it stays NEITHER forever, so dependents stay
-    // UNKNOWN rather than inheriting a fabricated premise (case K).
-    return model.declared.has(node) ? "TRUE" : "NEITHER";
+    return "TRUE"; // declared with no prerequisites: a root
   }
   return disjoin(groups.map((g) => conjoin(g.conjuncts.map((c) => truth.get(c) ?? "NEITHER"))));
 }
@@ -363,7 +426,21 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
         if (model.forcedBy.has(node)) {
           // do(X happens) asserts occurrence. A refuted prerequisite makes this
           // a conflict, recorded in Phase D rather than resolved here.
-          next = "TRUE";
+          //
+          // P-005: but forcing cannot bring an UNDECLARED occurrence into
+          // existence, so the `declared` gate applies here too. An undeclared
+          // forced id is FALSE — the world does not contain it — and Phase D
+          // records a `forced-undeclared` contradiction naming the incoherent
+          // intervention. The contradiction lives in the records, not in the
+          // truth value.
+          //
+          // An earlier pass set TRUE here and let Phase D join it to BOTH. That
+          // looked right (status CONTRADICTORY) but was wrong where it mattered:
+          // `occurs()` accepts BOTH, so the invented occurrence was counted by
+          // `occurrenceCount`, joined an `EventType`, and opened the validity
+          // window of any canon fact anchored to it — an id canon never declared
+          // writing world state. Found by the second L2 gate (ncr-004).
+          next = model.declared.has(node) || model.facts.has(node) ? "TRUE" : "FALSE";
         } else {
           next = support;
         }
@@ -432,8 +509,19 @@ function unfoundedSet(model: DerivationModel, truth: Map<string, TruthValue>): S
   return candidates;
 }
 
-/** Phase C: ENABLES can raise support to SOFT. It never changes truth. */
+/**
+ * Phase C: ENABLES can raise support to SOFT. It never changes truth.
+ *
+ * The `declared` gate applies here too (P-005). Soft support is a claim that a
+ * node is *reachable by an enabling path*, which is only meaningful for a node
+ * canon declares. Without this, `addEdge({ENABLES, from: <declared>, to:
+ * <undeclared>})` reported the invented id as CONTINGENT — truth still NEITHER,
+ * so it could not occur or be counted, but the projection implied it was a real
+ * candidate for occurrence. UNKNOWN is the honest answer for something canon
+ * never mentions.
+ */
 function softSupported(node: string, model: DerivationModel, truth: Map<string, TruthValue>): boolean {
+  if (!model.declared.has(node)) return false;
   for (const source of model.enablesIn.get(node) ?? []) {
     const t = truth.get(source) ?? "NEITHER";
     if (t === "TRUE" || t === "BOTH") return true;
@@ -441,14 +529,75 @@ function softSupported(node: string, model: DerivationModel, truth: Map<string, 
   return false;
 }
 
-/** A conflict detected in Phase D, carrying its provenance. */
+/**
+ * Apply a conflict to a node's truth: a conflict may only ever CONTRADICT A
+ * DECIDED VALUE, never decide an undecided one (P-005 guard B).
+ *
+ * `BOTH` means "this world asserts P and ¬P", which is meaningless until the
+ * world has asserted something — so `taintTruth("NEITHER")` is `NEITHER`.
+ *
+ * EXPORTED only so its unit behaviour can be pinned. `derive` cannot currently
+ * reach the `NEITHER` branch (see the discipline block in `propagateJudgments`),
+ * so a test through `derive` would give it no coverage at all.
+ */
+export function taintTruth(base: TruthValue): TruthValue {
+  return base === "NEITHER" ? "NEITHER" : joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE");
+}
+
+/**
+ * Conflict kinds that describe an INCOHERENT INTERVENTION rather than an
+ * inconsistent world. They are reported as records and never touch truth: the
+ * world did not assert anything contradictory, the caller asked for something
+ * the canon cannot express.
+ *
+ * EXPORTED so a test can assert the classification is TOTAL over
+ * `ConflictNote["kind"]` — a new kind added to the union without being
+ * classified is the enumeration failure ncr-004 is about.
+ */
+export const ABOUT_THE_INTERVENTION: ReadonlySet<ConflictNote["kind"]> = new Set([
+  "forced-undeclared",
+  "fact-write-illegal",
+]);
+
+/** Conflict kinds that describe an inconsistent WORLD, and so do taint truth. */
+export const ABOUT_THE_WORLD: ReadonlySet<ConflictNote["kind"]> = new Set([
+  "forced-vs-negated",
+  "forced-vs-refuted",
+  "excludes",
+  "invariant",
+]);
 export interface ConflictNote {
   node: string;
-  kind: "forced-vs-negated" | "forced-vs-refuted" | "excludes" | "invariant";
+  kind:
+    | "forced-vs-negated"
+    | "forced-vs-refuted"
+    /**
+     * P-005: do(X happens) named an occurrence canon never declared. An
+     * intervention may change an occurrence's status; it may never bring one
+     * into existence.
+     */
+    | "forced-undeclared"
+    /**
+     * P-005/ncr-004: `setFact`/`relocate` would have written a fact that is
+     * ILLEGAL AS CANON — an undeclared subject, an unresolvable id-shaped object,
+     * or an `instance_of` outside its Event -> EventType signature.
+     *
+     * ONE kind, not one per rule. An earlier pass had a `-subject` and a
+     * `-object` kind, and the `-object` case was unreachable because Phase D.0
+     * hardcoded the other — a dead branch that made the docs promise a record the
+     * code could not emit. The specific rule lives in `FactAssertionError.reason`,
+     * which `contradictions.ts` renders into the detail text, so adding a rule
+     * needs no new kind and cannot silently produce an unreachable one.
+     */
+    | "fact-write-illegal"
+    | "excludes"
+    | "invariant";
   other: string;
   /** intervention id, or "canon" for constraint violations */
   source: string;
   edgeId?: string;
+  /** why a fact write was refused; present only for `fact-write-illegal` */
+  factError?: FactAssertionError;
 }
 
 /**
@@ -465,10 +614,36 @@ export function propagateJudgments(model: DerivationModel): {
 
   const conflicts: ConflictNote[] = [];
 
+  // Phase D.0 — fact writes rejected at model-build time (P-005/ncr-004).
+  // `setFact`/`relocate` naming a subject canon never declares. Reported, never
+  // silently dropped: the intervention was incoherent, and a caller who asked
+  // for it must be told.
+  for (const write of model.rejectedFactWrites) {
+    conflicts.push({
+      node: write.subject,
+      kind: "fact-write-illegal",
+      other: write.predicate,
+      source: write.source,
+      factError: write.error,
+    });
+  }
+
   // Phase D.1 — intervention conflicts.
   for (const node of model.nodeIds) {
     const forceId = model.forcedBy.get(node);
     if (forceId === undefined) continue;
+
+    // P-005: forcing an occurrence canon never declared. Checked FIRST, before
+    // negation and before support, because non-existence is the primary defect:
+    // an incoherent intervention about a thing that is not in the world is not
+    // usefully described as "forced and also negated". Checking `negated` first
+    // (an earlier pass did) emitted `forced-vs-negated` instead, which taints
+    // truth to BOTH — see the invariant below.
+    const isFact = model.facts.has(node);
+    if (!isFact && !model.declared.has(node)) {
+      conflicts.push({ node, kind: "forced-undeclared", other: node, source: forceId });
+      continue;
+    }
     if (model.negated.has(node)) {
       conflicts.push({ node, kind: "forced-vs-negated", other: node, source: forceId });
       continue;
@@ -516,12 +691,78 @@ export function propagateJudgments(model: DerivationModel): {
     }
   }
 
-  const conflicted = new Set(conflicts.map((c) => c.node));
+  /**
+   * THE UNDECLARED INVARIANT (P-005), and the TAINT DISCIPLINE that carries it.
+   *
+   * Two rules, both predicates rather than lists of conflict kinds.
+   *
+   * (A) `cannotBeTainted` — no conflict about an id canon never declared may
+   *     lift its truth above FALSE. Canon defines the vocabulary, so nothing an
+   *     intervention says can put a thing canon never mentioned into the world.
+   *
+   * (B) `taint` — a conflict may only ever CONTRADICT A DECIDED VALUE. It may
+   *     never decide an undecided one. `BOTH` means "this world asserts P and
+   *     ¬P", which is only meaningful once the world has asserted something.
+   *
+   * (B) exists because (A) was not enough, and the way it failed is the most
+   *     instructive moment in this whole sequence. Route 8: a *refused* fact
+   *     write pushed a `fact-write-illegal` note whose node is the write's
+   *     SUBJECT. That subject is usually declared, so (A) correctly let it into
+   *     the taint set — and the old taint expression,
+   *
+   *         joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE")
+   *
+   *     evaluated to joinTruth("NEITHER", "TRUE") = TRUE for a dormant node.
+   *     A rejected intervention therefore PROMOTED a dormant declared event to
+   *     ESTABLISHED. Measured on shipped Ordos:
+   *     `setFact("ev/galen-invested", instance_of, "phantomtype")` — a write the
+   *     engine refuses — moved `ev/galen-invested` UNKNOWN -> ESTABLISHED,
+   *     inflated `occurrenceCount("type/investiture")` 1 -> 2, opened
+   *     `fact/seal-held-galen` so both Seal holders were effective at once, and
+   *     did NOT report the canon `EXCLUDES` violation (the fact NODE stayed
+   *     NEITHER, so Phase D.2's `occursNow` never fired). 150 refused writes
+   *     across the three shipped canons changed world state.
+   *
+   * Fixing only the kind would have been the ncr-004 mistake for the seventh
+   * time. (B) is a property of the taint operation itself, so it holds for every
+   * present and future conflict kind, on declared and undeclared nodes alike.
+   * A rejection is additionally NOT a conflict about the world — it is a refused
+   * intervention — so it is also excluded from tainting by name below.
+   *
+   * THE TWO GUARDS ARE NOT SYMMETRIC, and an earlier draft of this comment
+   * claimed they were ("two independent guards, either sufficient"). Mutation
+   * testing by the seventh L2 gate measured otherwise:
+   *
+   *   - name list removed, (B) kept  ->  114 of 264 refused writes still move
+   *     world state. (B) stops route 8 proper (0 dormant promotions, 0 count
+   *     changes) but not a refused write tainting an already-DECIDED subject,
+   *     e.g. verrin `ev/ashfall-falls` TRUE -> BOTH, flipping
+   *     `work/verrin-ashfall` PRESERVED -> IMPOSSIBLE.
+   *   - (B) removed, name list kept  ->  0 world moves across the same 264.
+   *
+   * So `ABOUT_THE_INTERVENTION` is the LOAD-BEARING guard and (B) is a narrower
+   * BACKSTOP. (B) is currently unreachable through `derive` — the gate made
+   * `taint(NEITHER)` throw and found 0 hits across 4,386 derivations, because
+   * the four world-level kinds gate on `occursNow`/`forcedBy`, which decide a
+   * node before any conflict about it can fire. It is kept deliberately: it
+   * makes the taint operation sound on its own terms, and it is the defence if a
+   * future conflict kind's predicate does NOT imply a decided node. Its unit
+   * behaviour is pinned directly in `taint.test.ts`, since `derive` cannot reach
+   * it.
+   */
+  const cannotBeTainted = (node: string): boolean =>
+    !model.declared.has(node) && !model.facts.has(node);
+
+  const conflicted = new Set(
+    conflicts
+      .filter((c) => !ABOUT_THE_INTERVENTION.has(c.kind) && !cannotBeTainted(c.node))
+      .map((c) => c.node)
+  );
 
   const judgments = new Map<string, Judgment>();
   for (const node of model.nodeIds) {
     const base = truth.get(node) ?? "NEITHER";
-    const finalTruth: TruthValue = conflicted.has(node) ? joinTruth(base, base === "TRUE" ? "FALSE" : "TRUE") : base;
+    const finalTruth: TruthValue = conflicted.has(node) ? taintTruth(base) : base;
 
     let support: SupportKind;
     if (model.negated.has(node)) support = "NONE";

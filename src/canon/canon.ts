@@ -39,6 +39,7 @@
  * meaning. `inspectCanon` returns both.
  */
 import { hashCanon } from "./hash";
+import { buildFactVocabulary, factAssertionError } from "./fact-rules";
 import type { Canon, CausalEdge, EdgeKind, Entity, EntityKind, Fact, WorkBinding } from "./types";
 
 const ENTITY_KINDS: ReadonlySet<string> = new Set([
@@ -49,6 +50,8 @@ const ENTITY_KINDS: ReadonlySet<string> = new Set([
   "Object", // P-004: artifacts/relics/regalia — in the core because it is
   // ubiquitous across fictional canons, not an Ordos peculiarity.
   "Event",
+  "EventType", // P-005: the KIND of a happening, as distinct from an Event,
+  // which has always been a single occurrence. Not a causal node.
   "Work",
 ]);
 
@@ -163,36 +166,41 @@ export function inspectCanon(canon: Canon): CanonInspection {
   };
 
   /* --- fact references ------------------------------------------------- */
+  //
+  // Subject and object legality come from `factAssertionError` in
+  // ./fact-rules.ts — the SAME function the intervention path uses. That shared
+  // call is what makes the invariant differential and checkable:
+  //
+  //   > An intervention may assert no more than canon may.
+  //
+  // Before P-005/ncr-004 these were two independent implementations, and they
+  // diverged in both directions: the intervention path allowed a canon FACT id
+  // as a subject (which canon forbids), and canon's object check was
+  // convention-based (`includes("/")`) so a slash-free phantom slipped past both.
+  //
+  // The ONE remaining difference is deliberate and one-directional: canon may
+  // DOWNGRADE an unresolved-object error to a notice when the id is declared in
+  // `canon.unspecified`, because a canon can declare intent and an intervention
+  // cannot. That makes the intervention path strictly no MORE permissive than
+  // canon, which is the direction that matters.
+  const factVocabulary = buildFactVocabulary(canon);
   for (const f of canon.facts) {
-    if (!entityIds.has(f.subject)) {
-      errors.push(`fact ${f.id}: subject "${f.subject}" is not a known entity`);
+    const assertionError = factAssertionError(f.subject, f.predicate, f.object, factVocabulary);
+    if (assertionError !== null) {
+      const message = `fact ${f.id}: ${assertionError.detail}`;
+      // Only an unresolved id reference may be excused by `unspecified`; a bad
+      // subject or a mistyped `instance_of` is always an error.
+      if (assertionError.reason === "object-unresolved-id") {
+        reference(assertionError.offender, message);
+      } else {
+        errors.push(message);
+      }
     }
     if (f.validFrom !== null && !eventIds.has(f.validFrom)) {
       reference(f.validFrom, `fact ${f.id}: validFrom "${f.validFrom}" is not a known event`);
     }
     if (f.validTo !== null && !eventIds.has(f.validTo)) {
       reference(f.validTo, `fact ${f.id}: validTo "${f.validTo}" is not a known event`);
-    }
-    // Convention-based object check (P-004). Facts legitimately carry literal
-    // objects (strings like "ash", numbers, booleans, null), so NOT every
-    // object can be required to be an entity id. But every id in all seed
-    // canons follows the convention "prefix/slug", so a STRING object that
-    // contains "/" and is neither a known entity nor a known fact is almost
-    // certainly a typo'd reference (e.g. "loc/valdarr") — report it rather than
-    // loading a plausible-looking world. A literal string containing "/" (say a
-    // flavour predicate whose value is "ash/ember") would false-positive here;
-    // accepted, because the convention is enforced by the seed canons and
-    // entity-valued objects are the only objects that ever carry a "/".
-    if (
-      typeof f.object === "string" &&
-      f.object.includes("/") &&
-      !entityIds.has(f.object) &&
-      !factIds.has(f.object)
-    ) {
-      reference(
-        f.object,
-        `fact ${f.id}: object "${f.object}" looks like an id reference but is not a known entity or fact`
-      );
     }
   }
 

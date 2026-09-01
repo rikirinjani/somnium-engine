@@ -16,7 +16,16 @@
  * (see docs/ARCHITECTURE-RECONNAISSANCE.md §18.2 item 9) — a new kind that
  * silently falls through a projection filter is worse than no new kind.
  *
- * Deliberately NOT here: any kind that only one canon would use. Canon-specific
+ * `EventType` (P-005) is the KIND of a happening, as distinct from an `Event`,
+ * which has always been a single OCCURRENCE of one. `ev/rite-of-binding-vaela`
+ * and `ev/rite-of-binding-galen` are two occurrences; `type/rite-of-binding` is
+ * what they are both instances of. A canon links them with an ordinary
+ * `instance_of` fact — no new edge kind, and an EventType is NOT a causal node:
+ * a type does not occur, so it can neither ground nor refute anything.
+ *
+ * Deliberately NOT here: any kind that only one canon would use, and any
+ * bibliographic notion (source, chapter, section). Citation is not world
+ * structure; a canon that wants it can carry it as ordinary facts. Canon-specific
  * flavour belongs in free-form fact predicates, which is the extension point.
  */
 export type EntityKind =
@@ -26,7 +35,18 @@ export type EntityKind =
   | "Institution"
   | "Object"
   | "Event"
+  | "EventType"
   | "Work";
+
+/**
+ * The canonical predicate linking an occurrence to its type (P-005).
+ *
+ * Named in the core so that occurrence/type queries and the OccurrenceDiff
+ * projection are canon-agnostic, while remaining an ORDINARY fact: it takes part
+ * in validity windows, diffing and interventions exactly like any other, and the
+ * causal engine gives it no special treatment.
+ */
+export const INSTANCE_OF = "instance_of";
 
 export interface Entity {
   id: string; // stable id, e.g. "char/vara"
@@ -104,6 +124,32 @@ export interface WorkBinding {
 }
 
 /**
+ * P-006 — cardinality constraint over an EventType (the generic constraint
+ * layer). Declared on the CANON, evaluated over the EFFECTIVE occurrence set of
+ * each derived world.
+ *
+ * Semantics (see experiments/p006/predictions.md):
+ *   - the constraint is over OCCURRENCES (via instance_of), not over writes;
+ *   - a violated bound is reported as a ConstraintViolationRecord in the
+ *     derived WorldState — it does NOT mutate the world to become valid, does
+ *     NOT declare events impossible, and is NOT a contradiction (BOTH);
+ *   - evaluated per-world: a later branch that removes an occurrence returns to
+ *     validity; there is no accumulating historical counter;
+ *   - global per EventType is the smallest scope both seed canons require.
+ *
+ * Omitted => no cardinality constraints, so a canon that never sets the field
+ * behaves exactly as pre-P-006 (absent key is absent from the content hash).
+ */
+export interface CardinalityConstraint {
+  id: string; // e.g. "constraint/rite-at-most-one"
+  /** the EventType id being constrained */
+  typeId: string;
+  bound: "AT_MOST_ONE" | "AT_LEAST_ONE";
+  /** narrative note, never hashed into semantics */
+  note?: string;
+}
+
+/**
  * The immutable, versioned canon document. Content-hashed; never edited in
  * place — a change produces a new canon version.
  */
@@ -131,6 +177,14 @@ export interface Canon {
    * Omitted => the canon claims to be complete, so every reference must resolve.
    */
   unspecified?: string[];
+  /**
+   * P-006 — generic cardinality constraints over EventTypes. Evaluated over the
+   * effective occurrence set in every derived world.
+   *
+   * Omitted => a canon with no cardinality declarations behaves exactly as
+   * pre-P-006 (absent key is absent from the content hash).
+   */
+  constraints?: CardinalityConstraint[];
   /** Content hash over sorted-key JSON of everything above (FNV-1a). */
   hash: string;
 }

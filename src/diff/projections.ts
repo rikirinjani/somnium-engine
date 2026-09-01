@@ -17,6 +17,7 @@ export type ProjectionKind =
   | "location"
   | "faction"
   | "object" // P-004: artifacts/relics/regalia
+  | "eventType" // P-005: the KIND of a happening
   | "work";
 
 const ENTITY_KIND_FOR_PROJECTION: Record<ProjectionKind, EntityKind | undefined> = {
@@ -26,6 +27,7 @@ const ENTITY_KIND_FOR_PROJECTION: Record<ProjectionKind, EntityKind | undefined>
   location: "Location",
   faction: "Faction",
   object: "Object", // P-004
+  eventType: "EventType", // P-005
   work: "Work",
 };
 
