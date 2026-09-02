@@ -826,7 +826,7 @@ This is the distinction the mission asks for, and it falls out of the existing d
 
 A `PRECEDES` cycle can only arise between the *same* occurrence ids, which is a genuine contradiction (an occurrence before itself) and is already reported.
 
-**Twin occurrences are distinguishable** (case C). Two `Event`s with identical name, performer and location: `negate(rite-1)` → `stateHash 747cf84b`; `negate(rite-2)` → `stateHash 82619cdb`. Distinct.
+**Twin occurrences are distinguishable** (case C). Two `Event`s with identical name, performer and location: `negate(rite-1)` → `stateHash 747cf84b`; `negate(rite-2)` → `stateHash 82619cdb`. Distinct. *(P-007: the specific hash VALUES here are pre-P-007 and no longer reproduce — `stateHash` now folds the canonical semantic projection, adding the effective edge set and dropping lineage. The result the passage records — that the two are **distinct** — is unchanged and is what the claim rests on. Same caveat applies to every pinned hash value in §19.6 and §19.7 below.)*
 
 **Case D** (shared prerequisite, different outcomes): negating `trial-1` leaves the shared `omen` and `trial-2` established, and only `trial-1`'s outcome falls. Correct.
 

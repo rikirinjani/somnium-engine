@@ -47,7 +47,7 @@
 import type { Canon, Fact, WorkBinding } from "../canon/types";
 import type { FactVocabulary } from "../canon/fact-rules";
 import { factAssertionError } from "../canon/fact-rules";
-import { canonicalJson, hashState } from "../canon/hash";
+import { canonicalJson, hashState, sameCanonicalValue } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
@@ -273,10 +273,19 @@ function computeWorkStatuses(
   // on the `overridden` lineage flag, so an idempotent write (the value
   // restored to canon's) still flipped a Work to ALTERED — record churn
   // becoming semantic change, exactly what P-007 forbids.
+  //
+  // The comparison is `sameCanonicalValue`, never `!==` (P-007 gate 2). This
+  // feeds `workStatuses`, which IS a semanticState dimension, so a comparison
+  // that disagrees with the canonical encoding puts a wrong value INTO world
+  // identity — worse than the diff-level version of the same bug, because INV
+  // cannot catch it (both sides read the same wrong value). With `!==`, a canon
+  // fact whose object is NaN read as altered-from-canon against ITSELF, so an
+  // untouched world reported ALTERED and a genuine later change reported no
+  // work-status delta at all.
   const canonObjectById = new Map(canon.facts.map((f) => [f.id, f.object]));
   const altered = facts.filter((f) => {
     const canonObject = canonObjectById.get(f.id);
-    return canonObject === undefined || canonObject !== f.object;
+    return !canonObjectById.has(f.id) || !sameCanonicalValue(canonObject, f.object);
   });
   const effectiveById = new Map(facts.map((f) => [f.id, f]));
   for (const work of canon.workBindings) {

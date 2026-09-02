@@ -71,9 +71,17 @@ export interface CanonicalContradiction {
  * whether same-target REQUIRES edges are conjuncts of one sufficient set or
  * ALTERNATIVE sufficient sets (propagation.ts's `supportGroups`) — that is, it
  * decides the very property that makes an edge load-bearing. Omitting it let
- * two worlds share a `stateHash` and an empty diff while responding differently
- * to the same later intervention, which is the one thing a world identity must
- * never permit. Measured on both seed canons; see docs/P007-WORLDDIFF.md §4.
+ * two worlds share a `stateHash` and an empty diff while their EFFECTIVE
+ * SUPPORT STRUCTURE differed. Measured on both seed canons; docs/P007-WORLDDIFF.md §4.
+ *
+ * The justification is that `group` is effective-world structure, NOT that
+ * same-hash worlds can never diverge under a later intervention. Gate 2 refuted
+ * that stronger form: `derive(c, [])` and `derive(c, [forceEvent(root)])` are
+ * the same world by design (`forced` is lineage — §7/H4), yet appending
+ * `negateEvent(root)` yields EXCLUDED vs CONTRADICTORY. Divergence under a
+ * later intervention is therefore permitted when the difference is LINEAGE; it
+ * is not permitted when the difference is world structure, which is what
+ * `group` is.
  *
  * NORMALIZED, so the fold matches what the derivation actually reads:
  *   - REQUIRES: `group ?? "0"` — the same default `buildModel` applies;

@@ -20,43 +20,50 @@ import { verrinCanon } from "../../src/canon/verrin";
 import { ordosCanon, ORDOS_IDS } from "../../src/canon/ordos";
 import { derive } from "../../src/derive/world-state";
 import { worldDiff } from "../../src/diff/diff";
+import type { WorldDiff } from "../../src/diff/types";
 import { forceEvent, setFact, severEdge, addEdge } from "../../src/timeline/types";
 import type { WorldState } from "../../src/derive/world-state";
 
 const v = verrinCanon();
 const base = derive(v, []);
 
-function summarize(name: string, b: WorldState, w: WorldState): void {
-  const diff = worldDiff(b, w);
-  const empty =
+/** Every delta dimension, not a subset — a partial predicate lies (gate 2). */
+function diffIsEmpty(diff: WorldDiff): boolean {
+  return (
     diff.statusChanges.length === 0 &&
     diff.factAdditions.length === 0 &&
     diff.factRemovals.length === 0 &&
     diff.factOverrides.length === 0 &&
+    diff.edgeChanges.length === 0 &&
     diff.contradictionsIntroduced.length === 0 &&
     diff.contradictionsResolved.length === 0 &&
-    diff.reachabilityChanges.length === 0;
+    diff.constraintViolationsIntroduced.length === 0 &&
+    diff.constraintViolationsResolved.length === 0 &&
+    diff.temporalViolationsIntroduced.length === 0 &&
+    diff.temporalViolationsResolved.length === 0 &&
+    diff.reachabilityChanges.length === 0 &&
+    diff.workStatusChanges.length === 0
+  );
+}
+
+function summarize(name: string, b: WorldState, w: WorldState): void {
+  const diff = worldDiff(b, w);
   console.log(
     `${name}: stateHashD=${b.stateHash !== w.stateHash} identityHashD=${b.identityHash !== w.identityHash} ` +
       `diff[status=${diff.statusChanges.length} +fact=${diff.factAdditions.length} -fact=${diff.factRemovals.length} ` +
-      `ovr=${diff.factOverrides.length} +contra=${diff.contradictionsIntroduced.length} -contra=${diff.contradictionsResolved.length} ` +
-      `reach=${diff.reachabilityChanges.length}] diffEmpty=${empty}`
+      `ovr=${diff.factOverrides.length} edge=${diff.edgeChanges.length} +contra=${diff.contradictionsIntroduced.length} ` +
+      `-contra=${diff.contradictionsResolved.length} constraint=${diff.constraintViolationsIntroduced.length}/${diff.constraintViolationsResolved.length} ` +
+      `temporal=${diff.temporalViolationsIntroduced.length}/${diff.temporalViolationsResolved.length} ` +
+      `work=${diff.workStatusChanges.length} reach=${diff.reachabilityChanges.length}] diffEmpty=${diffIsEmpty(diff)} ` +
+      `INVok=${diffIsEmpty(diff) === (b.stateHash === w.stateHash)}`
   );
 }
 
 // P1 — self-diff: is diff(A, A) the identity?
 {
   const self = worldDiff(base, base);
-  const arraysEmpty =
-    self.statusChanges.length === 0 &&
-    self.factAdditions.length === 0 &&
-    self.factRemovals.length === 0 &&
-    self.factOverrides.length === 0 &&
-    self.contradictionsIntroduced.length === 0 &&
-    self.contradictionsResolved.length === 0 &&
-    self.reachabilityChanges.length === 0;
   console.log(
-    `P1 self-diff: arraysEmpty=${arraysEmpty} workStatusChanges=${self.workStatusChanges.length} hash=${self.hash}`
+    `P1 self-diff: empty=${diffIsEmpty(self)} workStatusChanges=${self.workStatusChanges.length} hash=${self.hash}`
   );
 }
 
@@ -109,7 +116,7 @@ function summarize(name: string, b: WorldState, w: WorldState): void {
   );
 }
 
-// P7 — constraint violation invisible in WorldDiff (the P-006 residual)
+// P7 — the P-006 residual: are constraint violations visible in WorldDiff?
 {
   const o = ordosCanon();
   const obase = derive(o, []);
@@ -123,7 +130,10 @@ function summarize(name: string, b: WorldState, w: WorldState): void {
     `P7 ordos-violation: stateHashD=${obase.stateHash !== oviol.stateHash} ` +
       `violations=${oviol.constraintViolations.map((x) => `${x.typeId}:${x.bound}:obs${x.observed}`).join(", ") || "(none)"} ` +
       `diff[status=${diff.statusChanges.length}] diffHashChanged=${diff.hash !== selfHash} ` +
-      `constraintDimensionInDiff=false`
+      `constraintDimensionInDiff=${diff.constraintViolationsIntroduced.length}/${diff.constraintViolationsResolved.length}`
+  );
+  console.log(
+    `    (pre-change this dimension did not exist — predictions.md §0 P7 records it as absent; it is the P-006 residual P-007 closed)`
   );
 }
 

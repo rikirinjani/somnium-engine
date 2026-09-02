@@ -56,6 +56,7 @@
 import type { Canon, CausalEdge, Fact } from "../canon/types";
 import type { FactAssertionError, FactVocabulary } from "../canon/fact-rules";
 import { buildFactVocabulary, factAssertionError } from "../canon/fact-rules";
+import { sameCanonicalValue } from "../canon/hash";
 import type { Intervention } from "../timeline/types";
 import type { Judgment, SupportKind, TruthValue } from "./judgment";
 import { conjoin, disjoin, joinTruth, occurs, truthRank } from "./judgment";
@@ -349,8 +350,16 @@ function factNodeTruth(
   if (model.overriddenCells.has(cell)) {
     // An override to this cell displaces every canon fact for it except one
     // asserting the same object (writing the same value changes nothing).
+    //
+    // `sameCanonicalValue`, never `!==` (P-007 gate 2). This truth feeds
+    // `statuses`, a semanticState dimension, so a comparison that disagrees
+    // with the canonical encoding would put a wrong value into world identity.
+    // Currently unreachable for non-finite values because `factAssertionError`
+    // refuses them at the write boundary — converted anyway, in the same pass
+    // as the `workStatuses` comparison, because relying on the input layer to
+    // keep a comparison honest is what produced the defect in the first place.
     const written = model.overriddenCells.get(cell);
-    if (written !== fact.object) return "FALSE";
+    if (!sameCanonicalValue(written, fact.object)) return "FALSE";
   }
 
   return factWindowTruth(fact, truth);

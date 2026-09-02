@@ -159,10 +159,33 @@ Ordos reproduces it with `REQUIRES(ev/vaela-invested -> ev/seal-survey)` and
 (`src/diff/semantic.test.ts` D2, `src/diff/adversarial.test.ts`).
 
 If `stateHash` excluded the causal law, these two worlds would be declared
-**the same world** and then respond **differently to the same intervention**.
-For a counterfactual engine that is not a cosmetic gap; it is a broken world
-identity. So: **a causal law is part of world state even when its consequence
-is currently dormant.**
+**the same world** while their effective causal structure differed. So: **a
+causal law is part of world state even when its consequence is currently
+dormant.**
+
+**What this argument does NOT claim — corrected at gate 2.** Earlier drafts of
+this section (and of `semantic.ts`) wrote the justification as an absolute:
+*two worlds sharing a `stateHash` must never respond differently to the same
+later intervention.* That is false, and §7 of this same report refutes it.
+Measured on both canons:
+
+```
+A = derive(c, [])   B = derive(c, [forceEvent(root)])
+  stateHash EQUAL, diff EMPTY, identityHash differs   -- the same world, by design
+
+append negateEvent(root) to each:
+  verrin  ev/blight-begins    EXCLUDED  vs  CONTRADICTORY
+  ordos   ev/old-warden-dies  EXCLUDED  vs  CONTRADICTORY
+```
+
+Divergence under a later intervention is **permitted when the difference is
+lineage** — `forced` is precisely the lineage P-007 deliberately excludes (§7,
+H4, D1), and a memo keyed on `identityHash` is what keeps those branches apart.
+It is **not permitted when the difference is world structure.** The correct
+justification for folding `group` is the narrower one: `group` is effective-world
+structure, not lineage, so excluding it *under-discriminated the world*. Stated
+as an absolute, the claim proves too much and would have condemned P-004's
+forced/negated split as well.
 
 **Scope of the universal — corrected at gate 1.** The first draft of this
 section claimed "ALL edges belong, including kinds that contribute nothing to
@@ -172,11 +195,9 @@ counterexample this report had not considered: **`CausalEdge.group`** — which
 selects whether same-target REQUIRES edges are conjuncts of one sufficient set
 or *alternative* sufficient sets — was omitted from the canonical edge. Two
 worlds differing only in `group` shared a `stateHash` and an empty diff while
-responding differently to `negate ev/maren-return` (UNSUPPORTED vs
-ESTABLISHED). That is the exact failure §2 declares impermissible, hiding
-inside the very dimension this section was arguing for. The ncr-004 lesson,
-one level up: *a universal about a data type must enumerate that type's
-fields.*
+their support structure differed, and `negate ev/maren-return` then gave
+UNSUPPORTED vs ESTABLISHED. The ncr-004 lesson, one level up: *a universal about
+a data type must enumerate that type's fields.*
 
 The corrected claim: **the effective support structure belongs to world
 identity** — every edge's `id`, `kind`, `from`, `to`, and its `group` exactly
@@ -430,10 +451,14 @@ evidence.
 
 ```
 tsc --noEmit                exit 0  (now covers experiments/** too)
-npm test                    591/591 passed, 24 files
+npm test                    602/602 passed, 24 files
 npx tsx scripts/verify-facts.ts  ALL CHECKS PASSED (3/3)
 probes                      experiments/p007/probes.ts and edge-probes.ts both
-                            execute; edge-probes reproduces every §4 measurement
+                            execute against the post-change engine; edge-probes
+                            reproduces every §4 measurement. probes.ts records
+                            POST-change behavior — the pre-change numbers the
+                            predictions were written against are in
+                            predictions.md §0, reproducible at commit 9f5245b
 determinism                 repeated derive: stateHash/identityHash/judgments/
                             facts/contradictions/temporalViolations identical
                             (capability 10, both canons); repeated worldDiff
@@ -441,9 +466,21 @@ determinism                 repeated derive: stateHash/identityHash/judgments/
 frozen tag                  somnium-p005-final = 5b41deda (untouched)
 ```
 
-Baseline was 507. New: 84 tests — 44 + 20 in `semantic.test.ts` (the D2 causal-law
-evidence block plus the gate-1 remediation block), 12 in `adversarial.test.ts`,
-7 in `diff.test.ts`, 1 in `fact-rules.test.ts`.
+Baseline was 507. New: 95 tests — 44 + 20 + 11 in `semantic.test.ts` (D2
+causal-law evidence, gate-1 remediation, gate-2 remediation), 12 in
+`adversarial.test.ts`, 7 in `diff.test.ts`, 1 in `fact-rules.test.ts`.
+
+**Existing tests updated — 6, each a shape or mechanism update with the reason
+recorded in the test body:** `diff.test.ts` (delta shape, FactDelta windows,
+ContradictionDelta without lineage, real `edgeChanges` replacing the
+reserved-empty assertion), `projections.test.ts` (fixture shape),
+`query.test.ts` (new `edges` field), `poc-acceptance.test.ts` capability 8 and
+`cross-canon-acceptance.test.ts` capability 9 (`workStatuses` snapshot →
+`workStatusChanges` delta), `ordering.test.ts` (§1 #3), plus
+`cross-canon-acceptance.test.ts` ALTERED (§1 #4). No semantic assertion was
+weakened; the two invalidated ones were re-expressed through the corrected
+mechanism and the P-004 invariant they used to carry was re-established on a
+pair that genuinely converges.
 
 **Existing tests updated — 6, each a shape or mechanism update with the reason
 recorded in the test body:** `diff.test.ts` (delta shape, FactDelta windows,
@@ -495,6 +532,77 @@ means an appearing/disappearing status key is reported only incidentally (§15.7
 
 ---
 
+## 14c. Gate 2 rejection and remediation
+
+Gate 2 **accepted all four gate-1 fixes as genuinely closed** and rejected on
+two findings: one surviving instance of blocker 2's *class*, and one overclaim
+the remediation itself introduced. Both are the same failure mode at a higher
+level — patching the counterexample rather than the class — which is the third
+occurrence of that pattern in this project (ncr-004, §1b, now this).
+
+**Blocking 1 — the same `!==` defect one field away, at a worse location.**
+`computeWorkStatuses` compared fact objects with `!==` to decide
+altered-from-canon, and `workStatuses` **is** a `semanticState` dimension. So a
+canon fact whose object is `NaN` read as altered against *itself*, with zero
+interventions:
+
+```
+canon fact { id: "fact/hero-power", object: NaN }, work depends on it
+derive(canon, [])                 ->  work/pivot = ALTERED     (must be PRESERVED)
+then setFact(power_level, 9)      ->  workStatusChanges = []    (must report ALTERED)
+```
+
+This is worse than the diff-level version of the same bug, because **INV cannot
+catch it**: both the hash and the diff read the same wrong value, so they agree
+on a falsehood. Introduced by P-007's own D4 rewrite — at `434f896` the same
+canon gives PRESERVED.
+
+The fix converts **every** value comparison feeding a semantic dimension, in one
+pass, rather than the one the counterexample named:
+
+| Site | Feeds | Was | Now |
+|------|-------|-----|-----|
+| `world-state.ts` `computeWorkStatuses` | `workStatuses` | `canonObject !== f.object` | `!sameCanonicalValue(...)` |
+| `propagation.ts` `factNodeTruth` | `statuses` | `written !== fact.object` | `!sameCanonicalValue(...)` |
+| `diff.ts` `factOverrides` | diff dimension | `!==` | `!sameCanonicalValue(...)` (gate 1) |
+| `diff.ts` `contentSetDiff` keys | 3 record dimensions | hand-enumerated field lists | the whole canonical record |
+
+The `contentSetDiff` change is the same lesson applied preemptively: the keys
+listed 7 and 3 fields while `semanticState` spreads each record whole, so a
+future field added to `ConstraintViolationRecord` or `TemporalViolation` would
+have moved `stateHash` with an empty diff. One `contentKey` now serves all
+three.
+
+**Blocking 2 — a new absolute overclaim, introduced while fixing the last one.**
+The remediation justified folding `group` with *"two worlds sharing a
+`stateHash` must never respond differently to the same later intervention."*
+§7 of this report refutes that, on both canons:
+
+```
+A = derive(c, [])   B = derive(c, [forceEvent(root)])
+  stateHash EQUAL, diff EMPTY, identityHash differs   -- the same world, by design
+
+append negateEvent(root):
+  verrin  EXCLUDED  vs  CONTRADICTORY
+  ordos   EXCLUDED  vs  CONTRADICTORY
+```
+
+Divergence under a later intervention is **permitted** when the difference is
+lineage (`forced` is exactly what P-007 excludes) and **forbidden** when it is
+world structure. Stated absolutely, the claim would have condemned P-004's
+forced/negated split. §4 and `semantic.ts` now carry the narrow form, and the
+refutation itself is an executable parameterized test ("gate-2: the group
+justification, stated correctly") so the prose cannot drift back.
+
+**Gate-2 non-blocking notes, all addressed:** `probes.ts`'s local `empty`
+predicate omitted 6 of 13 dimensions and printed a hardcoded
+`constraintDimensionInDiff=false` — both fixed, and the file now reports INV per
+route; `ARCHITECTURE-RECONNAISSANCE.md`'s pinned pre-P-007 hash *values* carry a
+supersession note (the results they support are unchanged); a thinking-out-loud
+comment in `semantic.test.ts` replaced with the measured explanation.
+
+---
+
 ## 15. Remaining risks
 
 1. **A rejected `addEdge` is silent.** A malformed edge intervention is dropped
@@ -526,6 +634,24 @@ means an appearing/disappearing status key is reported only incidentally (§15.7
    `group`, that normalization must be extended in the same commit — the rule
    lives in one function specifically so this is a one-line change with one
    place to look.
+9. **Nothing mechanically enforces `sameCanonicalValue`** (gate 2). Four
+   comparison sites now use it; a fifth added later with `!==` would reintroduce
+   exactly the gate-2 defect, and INV cannot catch it when the site feeds a
+   semantic dimension (both hash and diff read the same wrong value). There is no
+   lint rule, and the type system cannot express "this comparison feeds
+   `semanticState`". The only current defense is the doc comment at each site
+   plus the parameterized non-finite tests. **P-008 candidate:** a single
+   `semanticValueEquals` chokepoint the dimensions are forced through, or a
+   custom lint rule over `src/derive` and `src/diff`.
+10. **The pattern that produced both gate rejections is unfixed** (gate 2's own
+    assessment). Three times now — ncr-004's four false universals, §1b's D4
+    overclaim, and gate 2's two findings — a claim was verified on the instance
+    the counterexample named rather than on its class. The gate-2 fix converted
+    all four comparison sites in one pass and preemptively fixed
+    `contentSetDiff`'s enumerated keys, which is the right shape; whether it
+    generalizes is unproven until the next change of this kind. Recorded here
+    rather than in the NCR because it is an engineering-practice risk, not a
+    process violation.
 
 ---
 

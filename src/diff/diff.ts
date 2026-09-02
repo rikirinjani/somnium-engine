@@ -90,23 +90,20 @@ function contentSetDiff<T>(from: T[], to: T[], key: (record: T) => string): T[] 
   return from.filter((record) => !toKeys.has(key(record)));
 }
 
-/** Exact content keys — the canonical encoding itself, never a digest of it. */
-const contradictionKey = (c: CanonicalContradiction): string =>
-  canonicalJson({ id: c.id, a: c.a, b: c.b, detail: c.detail, detectedAt: c.detectedAt });
-
-const constraintKey = (v: ConstraintViolationRecord): string =>
-  canonicalJson({
-    id: v.id,
-    constraintId: v.constraintId,
-    typeId: v.typeId,
-    bound: v.bound,
-    observed: v.observed,
-    limit: v.limit,
-    detail: v.detail,
-  });
-
-const temporalKey = (t: TemporalViolation): string =>
-  canonicalJson({ edgeIds: t.edgeIds, nodes: t.nodes, detail: t.detail });
+/**
+ * The content key for a record dimension: the WHOLE canonical record, exactly
+ * as `stateHash` folds it (P-007 gate 2).
+ *
+ * Earlier drafts hand-enumerated each record's fields here. That is the
+ * enumeration-wearing-invariant-clothing shape this project keeps being bitten
+ * by: `semanticState` spreads the whole record into the hash, so a field added
+ * to `ConstraintViolationRecord` or `TemporalViolation` would move `stateHash`
+ * while the diff key ignored it — an INV break waiting for the next record
+ * field. Keying on the whole record makes the two views agree by construction,
+ * and `semanticState` has already stripped every lineage field (a
+ * contradiction's `source`) before the record reaches here.
+ */
+const contentKey = (record: unknown): string => canonicalJson(record);
 
 
 export function worldDiff(baseline: WorldState, branch: WorldState): WorldDiff {
@@ -186,34 +183,35 @@ export function worldDiff(baseline: WorldState, branch: WorldState): WorldDiff {
   edgeChanges.sort((x, y) => x.edgeId.localeCompare(y.edgeId) || (x.added === y.added ? 0 : x.added ? 1 : -1));
 
   // contradictions / constraintViolations / temporalViolations: CONTENT-SET
-  // semantics. Same id + different content => introduced AND resolved.
-  const contradictionsIntroduced = contentSetDiff(b.contradictions, a.contradictions, contradictionKey)
+  // semantics over the WHOLE canonical record (see `contentKey`). Same id +
+  // different content => introduced AND resolved.
+  const contradictionsIntroduced = contentSetDiff(b.contradictions, a.contradictions, contentKey)
     .map(toContradictionDelta)
     .sort(byId);
-  const contradictionsResolved = contentSetDiff(a.contradictions, b.contradictions, contradictionKey)
+  const contradictionsResolved = contentSetDiff(a.contradictions, b.contradictions, contentKey)
     .map(toContradictionDelta)
     .sort(byId);
 
   const constraintViolationsIntroduced = contentSetDiff(
     b.constraintViolations,
     a.constraintViolations,
-    constraintKey
+    contentKey
   ).sort(byId);
   const constraintViolationsResolved = contentSetDiff(
     a.constraintViolations,
     b.constraintViolations,
-    constraintKey
+    contentKey
   ).sort(byId);
 
   const temporalViolationsIntroduced = contentSetDiff(
     b.temporalViolations,
     a.temporalViolations,
-    temporalKey
+    contentKey
   );
   const temporalViolationsResolved = contentSetDiff(
     a.temporalViolations,
     b.temporalViolations,
-    temporalKey
+    contentKey
   );
 
   // reachabilityChanges: reachable(ws, id) = status ∈ {ESTABLISHED, CONTINGENT}.

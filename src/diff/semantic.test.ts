@@ -797,10 +797,11 @@ describe.each([
   it("...and the difference is real: the same later intervention yields different worlds", () => {
     const withConjunct = derive(canon, [addEdge(groupAttack), negateEvent(prerequisite)]);
     const withAlternative = derive(canon, [addEdge({ ...groupAttack, group: "alt" }), negateEvent(prerequisite)]);
-    // AND: the negated prerequisite still refutes the dependent (canon's own
-    // conjunct group survives; hmm — with the default group the added edge
-    // JOINS canon's group, so negating one member leaves... measured below).
-    // OR: the alternative group carries the dependent alone.
+    // Default group: the added edge JOINS canon's existing support group for the
+    // dependent, so negating the prerequisite refutes a conjunct of the only
+    // sufficient set. Explicit "alt": the edge forms a SECOND sufficient set, so
+    // the dependent keeps a surviving alternative. Different verdicts, therefore
+    // different worlds — the difference `group` makes is observable.
     expect(withConjunct.statuses[dependent]).not.toBe(withAlternative.statuses[dependent]);
     expect(withConjunct.stateHash).not.toBe(withAlternative.stateHash);
   });
@@ -951,5 +952,198 @@ describe("gate-1 fix B: value comparison is over the SEMANTIC value", () => {
     const viaDetour = derive(v, [setFact("char/vara", "motto", "oak"), setFact("char/vara", "motto", "ash")]);
     expect(direct.stateHash).toBe(viaDetour.stateHash);
     expect(diffEmpty(worldDiff(direct, viaDetour))).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* GATE-2 REMEDIATION — every value comparison on a semantic dimension */
+/*                                                                     */
+/* Gate 2 accepted all four gate-1 fixes and rejected on one surviving  */
+/* instance of the SAME CLASS: `world-state.ts` still compared fact     */
+/* objects with `!==` when computing ALTERED, and `workStatuses` IS a   */
+/* semanticState dimension — so a canon fact whose object is NaN read   */
+/* as altered-from-canon against ITSELF. Worse than the diff-level      */
+/* version, because INV cannot catch it: both sides read the same wrong */
+/* value, so the hash and the diff agree on a falsehood.               */
+/*                                                                     */
+/* The fix converts EVERY value comparison feeding a semantic dimension */
+/* in one pass, rather than the one the counterexample named:           */
+/*   - world-state.ts computeWorkStatuses (altered-from-canon)          */
+/*   - propagation.ts factNodeTruth (overridden-cell displacement)      */
+/*   - diff.ts factOverrides (already converted at gate 1)             */
+/* plus contentSetDiff's keys, which no longer hand-enumerate fields.   */
+/* ------------------------------------------------------------------ */
+
+describe("gate-2: value comparison is canonical on EVERY semantic dimension", () => {
+  /** A canon whose Work depends on a fact carrying the given object value. */
+  function workOnValue(object: string | number | boolean | null): Canon {
+    const entities: Entity[] = [
+      { id: "char/hero", kind: "Character", name: "Hero" },
+      { id: "ev/end", kind: "Event", name: "The Pivot" },
+    ];
+    const facts: Fact[] = [
+      { id: "fact/hero-power", subject: "char/hero", predicate: "power_level", object, validFrom: null, validTo: null, source: "canon" },
+    ];
+    const body = {
+      canonId: "canon/gate2-value",
+      version: "0.0.1",
+      entities,
+      facts,
+      edges: [] as CausalEdge[],
+      workBindings: [{ workId: "work/pivot", events: ["ev/end"], facts: ["fact/hero-power"] }],
+    };
+    return { ...body, hash: hashCanon(body) };
+  }
+
+  it.each([
+    { label: "NaN", object: Number.NaN },
+    { label: "Infinity", object: Number.POSITIVE_INFINITY },
+    { label: "-Infinity", object: Number.NEGATIVE_INFINITY },
+  ])(
+    "workStatuses: a canon fact whose object is $label is NOT altered-from-canon against itself",
+    ({ object }) => {
+      // ZERO interventions. Before the fix this returned ALTERED, because
+      // `canonObject !== f.object` is `NaN !== NaN` — an untouched world
+      // reporting that its own canon fact had been altered.
+      const w = derive(workOnValue(object), []);
+      expect(w.workStatuses["work/pivot"]).toBe("PRESERVED");
+      // and the control: a finite value behaves the same way
+      expect(derive(workOnValue(7), []).workStatuses["work/pivot"]).toBe("PRESERVED");
+    }
+  );
+
+  it("workStatuses: a GENUINE alteration on such a canon is still reported", () => {
+    // The second half of the defect: with `!==` the baseline was already
+    // ALTERED, so a real change produced NO workStatusChanges entry at all.
+    const canon = workOnValue(Number.NaN);
+    const baseline = derive(canon, []);
+    const changed = derive(canon, [setFact("char/hero", "power_level", 9)]);
+    expect(changed.workStatuses["work/pivot"]).toBe("ALTERED");
+    const d = worldDiff(baseline, changed);
+    expect(d.workStatusChanges).toEqual([{ workId: "work/pivot", from: "PRESERVED", to: "ALTERED" }]);
+    expect(diffEmpty(d)).toBe(baseline.stateHash === changed.stateHash);
+  });
+
+  it("workStatuses: -0 written over a canonical 0 is not an alteration (the encoding says they are one value)", () => {
+    const canon = workOnValue(0);
+    const baseline = derive(canon, []);
+    const negZero = derive(canon, [setFact("char/hero", "power_level", -0)]);
+    expect(negZero.workStatuses["work/pivot"]).toBe("PRESERVED");
+    expect(baseline.stateHash).toBe(negZero.stateHash);
+    expect(diffEmpty(worldDiff(baseline, negZero))).toBe(true);
+  });
+
+  it("propagation: overridden-cell displacement uses the canonical comparison too", () => {
+    // factNodeTruth decides whether a canon fact survives an override of its
+    // cell by comparing the written value to the fact's own object. That truth
+    // feeds `statuses`, another semanticState dimension.
+    //
+    // A fact only HAS a status when it is a graph node, so this fixture wires
+    // the fact as a REQUIRES source (the Ordos shape: an event gated on a state).
+    const entities: Entity[] = [
+      { id: "char/hero", kind: "Character", name: "Hero" },
+      { id: "ev/end", kind: "Event", name: "The Pivot" },
+    ];
+    const facts: Fact[] = [
+      { id: "fact/hero-power", subject: "char/hero", predicate: "power_level", object: 0, validFrom: null, validTo: null, source: "canon" },
+    ];
+    const edges: CausalEdge[] = [
+      { id: "edge/end-requires-power", kind: "REQUIRES", from: "fact/hero-power", to: "ev/end" },
+    ];
+    const body = {
+      canonId: "canon/gate2-node",
+      version: "0.0.1",
+      entities,
+      facts,
+      edges,
+      workBindings: [{ workId: "work/pivot", events: ["ev/end"] }],
+    };
+    const canon: Canon = { ...body, hash: hashCanon(body) };
+
+    const baseline = derive(canon, []);
+    expect(baseline.statuses["fact/hero-power"]).toBe("ESTABLISHED");
+
+    // Writing -0 over a canonical 0 is the SAME value by the encoding, so the
+    // canon fact is not displaced and its node keeps its status. With `!==`
+    // this would have been a displacement (before the -0/0 case was settled)
+    // and the dependent event would have lost its prerequisite.
+    const rewritten = derive(canon, [setFact("char/hero", "power_level", -0)]);
+    expect(rewritten.statuses["fact/hero-power"]).toBe("ESTABLISHED");
+    expect(rewritten.statuses["ev/end"]).toBe(baseline.statuses["ev/end"]);
+    expect(rewritten.stateHash).toBe(baseline.stateHash);
+
+    // A genuinely different value DOES displace it, and the dependent follows.
+    const displaced = derive(canon, [setFact("char/hero", "power_level", 5)]);
+    expect(displaced.statuses["fact/hero-power"]).toBe("UNSUPPORTED");
+    expect(displaced.statuses["ev/end"]).toBe("UNSUPPORTED");
+  });
+
+  it("contentSetDiff keys on the WHOLE canonical record, not a hand-enumerated field list", () => {
+    // The enumeration-wearing-invariant-clothing shape: `semanticState` spreads
+    // each record whole into the hash, so a diff key that lists fields would
+    // silently ignore a newly added one — an INV break waiting for the next
+    // record field. Witness: a violation differing ONLY in `observed` is a
+    // different record, and both sides of the delta fire.
+    const o = ordosCanon();
+    const two = derive(o, [
+      forceEvent(ORDOS_IDS.events.galenRecognised),
+      forceEvent(ORDOS_IDS.events.riteBindingGalen),
+    ]);
+    const one = derive(o, []);
+    const d = worldDiff(one, two);
+    expect(d.constraintViolationsIntroduced.length).toBeGreaterThan(0);
+    // every field of the record survives into the delta (nothing enumerated away)
+    const record = d.constraintViolationsIntroduced[0];
+    if (record === undefined) throw new Error("fixture: expected a violation");
+    for (const key of ["id", "constraintId", "typeId", "bound", "observed", "limit", "detail"]) {
+      expect(Object.prototype.hasOwnProperty.call(record, key)).toBe(true);
+    }
+  });
+});
+
+describe("gate-2: the group justification, stated correctly", () => {
+  // Gate 2 refuted the ABSOLUTE form of the argument for folding `group`
+  // ("two worlds sharing a stateHash must never respond differently to the
+  // same later intervention"). This test IS that refutation, kept executable
+  // so the report's §4 correction cannot drift back into an overclaim.
+  it.each([
+    { name: "verrin", canon: verrinCanon(), root: "ev/blight-begins" },
+    { name: "ordos", canon: ordosCanon(), root: ORDOS_IDS.events.oldWardenDies },
+  ])(
+    "$name: same world + LINEAGE difference legitimately diverges under the same later intervention",
+    ({ canon, root }) => {
+      const plain = derive(canon, []);
+      const forced = derive(canon, [forceEvent(root)]);
+      // the same WORLD: `forced` is lineage, deliberately excluded (§7, H4, D1)
+      expect(plain.stateHash).toBe(forced.stateHash);
+      expect(diffEmpty(worldDiff(plain, forced))).toBe(true);
+      expect(plain.identityHash).not.toBe(forced.identityHash);
+
+      // ...and yet the same later intervention yields different worlds
+      const plainThenNegate = derive(canon, [negateEvent(root)]);
+      const forcedThenNegate = derive(canon, [forceEvent(root), negateEvent(root)]);
+      expect(plainThenNegate.statuses[root]).toBe("EXCLUDED");
+      expect(forcedThenNegate.statuses[root]).toBe("CONTRADICTORY");
+      expect(plainThenNegate.stateHash).not.toBe(forcedThenNegate.stateHash);
+
+      // So "same hash + divergent futures" is PERMITTED for lineage differences.
+      // `group` is folded because it is world STRUCTURE, not because divergence
+      // is forbidden — the narrower and correct justification.
+    }
+  );
+
+  it.each([
+    { name: "verrin", canon: verrinCanon() },
+    { name: "ordos", canon: ordosCanon() },
+  ])("$name: by contrast, a group difference is STRUCTURE and must not share a stateHash", ({ canon }) => {
+    const requires = canon.edges.find((e) => e.kind === "REQUIRES");
+    if (requires === undefined) throw new Error("fixture: canon has no REQUIRES edge");
+    const asIs = derive(canon, []);
+    const regrouped = derive(canon, [
+      severEdge(requires.id),
+      addEdge({ id: requires.id, kind: requires.kind, from: requires.from, to: requires.to, group: "gate2-alt" }),
+    ]);
+    expect(asIs.stateHash).not.toBe(regrouped.stateHash);
+    expect(diffEmpty(worldDiff(asIs, regrouped))).toBe(false);
   });
 });
