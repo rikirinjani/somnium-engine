@@ -74,6 +74,8 @@ export type FactAssertionReason =
   | "subject-not-entity"
   /** an id-shaped object that resolves to nothing declared */
   | "object-unresolved-id"
+  /** a non-finite number (NaN / ±Infinity) is not a narrative value */
+  | "object-not-finite"
   /** `instance_of` from something that is not a declared Event */
   | "instance-of-subject-not-event"
   /** `instance_of` to something that is not a declared EventType */
@@ -145,6 +147,26 @@ export function factAssertionError(
       };
     }
     return null;
+  }
+
+  // A non-finite number is not a narrative value (P-007 gate 1, blocker 2).
+  //
+  // `NaN`, `Infinity` and `-Infinity` are legal inputs to the `number` half of
+  // the object type, and they broke world identity two ways at once:
+  // `JSON.stringify` collapses all three to `null`, so `stateHash` could not
+  // distinguish them from an actual `null`, while `NaN !== NaN` made the diff
+  // report a difference the hash could not see. `canonicalJson` is now
+  // injective over them, but the deeper answer is that they are not values a
+  // canon could ever assert either — so the differential rule ("an intervention
+  // may assert no more than canon may") refuses them here, at the one place all
+  // three call sites share, and the refusal becomes a first-class record rather
+  // than a silently mangled fact.
+  if (typeof object === "number" && !Number.isFinite(object)) {
+    return {
+      reason: "object-not-finite",
+      offender: String(object),
+      detail: `object ${String(object)} is not a finite number; a narrative fact cannot hold a non-finite value`,
+    };
   }
 
   if (typeof object === "string" && looksLikeId(object)) {

@@ -80,11 +80,23 @@ worldDiff(A, B) is empty  ⟺  stateHash(A) === stateHash(B)
 ```
 
 It holds *by construction* because both sides read the same projection. The one
-excepted direction is a 32-bit FNV-1a collision (~2⁻³² per pair); the diff
-compares content, so it never hides a difference the hash collides on.
+excepted direction is a 32-bit FNV-1a collision (~2⁻³² per pair) — and there the
+diff is the more reliable witness, because its fact, status, work and edge
+dimensions compare canonical content directly.
 
-`SemanticState` = statuses · canonical facts · canonical edges · work statuses ·
-canonical contradictions · temporal violations · constraint violations.
+**Corrected at gate 1.** The first draft claimed flatly that "the diff compares
+CONTENT, so it never hides a difference the hash collides on". That was false
+for the three *record* dimensions: `contentSetDiff` keyed set membership on
+`hashState(...)`, so a collision there made the diff **miss** a real difference
+rather than merely alias two values — the one failure mode those dimensions
+exist to prevent. The gate found a live collision in under 350k candidates (two
+contradiction records differing only in `detail`). The keys are now the
+canonical content **string** itself (`canonicalJson`), which costs nothing at
+these set sizes.
+
+`SemanticState` = statuses · canonical facts · canonical edges (id, kind, from,
+to, **group**) · work statuses · canonical contradictions · temporal violations ·
+constraint violations.
 
 **Dropped as lineage:** `judgments.forced` / `.negated`, `facts.source` /
 `.overridden`, `contradictions.source`, `rpId`, `interventions`, `edge.note`.
@@ -150,10 +162,41 @@ If `stateHash` excluded the causal law, these two worlds would be declared
 **the same world** and then respond **differently to the same intervention**.
 For a counterfactual engine that is not a cosmetic gap; it is a broken world
 identity. So: **a causal law is part of world state even when its consequence
-is currently dormant.** ALL edges belong, including kinds that contribute
-nothing to any judgment — an authored MOTIVATES or PRECEDES is part of the
-world's structure, and severing it is a change to the world even though no
-verdict moves.
+is currently dormant.**
+
+**Scope of the universal — corrected at gate 1.** The first draft of this
+section claimed "ALL edges belong, including kinds that contribute nothing to
+any judgment", justified only by the edge-*kind* sweep. The gate accepted the
+counterfactual argument and refuted the universal anyway, with a field-level
+counterexample this report had not considered: **`CausalEdge.group`** — which
+selects whether same-target REQUIRES edges are conjuncts of one sufficient set
+or *alternative* sufficient sets — was omitted from the canonical edge. Two
+worlds differing only in `group` shared a `stateHash` and an empty diff while
+responding differently to `negate ev/maren-return` (UNSUPPORTED vs
+ESTABLISHED). That is the exact failure §2 declares impermissible, hiding
+inside the very dimension this section was arguing for. The ncr-004 lesson,
+one level up: *a universal about a data type must enumerate that type's
+fields.*
+
+The corrected claim: **the effective support structure belongs to world
+identity** — every edge's `id`, `kind`, `from`, `to`, and its `group` exactly
+where the derivation reads it (REQUIRES, normalized to `"0"` when omitted;
+`null` on every other kind, where `group` is ignored and therefore
+unobservable — `canonicalizeEdge` in `src/derive/semantic.ts` is the one owner
+of that rule). Two consequences, both documented rather than smoothed:
+
+- **`group` is load-bearing and now tested as such.** Same edge, different
+  group ⇒ different `stateHash`, a diff that reports remove-old-law +
+  add-new-law, and divergent futures — parameterized over both seed canons
+  (`semantic.test.ts`, "gate-1 fix A").
+- **Edges between undeclared endpoints are over-discrimination, accepted.**
+  The gate measured a REQUIRES edge between two undeclared ids as inert across
+  17 constructed futures, so folding it distinguishes worlds whose futures
+  never diverge. That is the *safe* failure direction: over-discrimination
+  keeps INV sound (both sides move together), while under-discrimination —
+  the `group` bug — breaks world identity. Narrowing the rule would require
+  proving which edges can never matter, and this project's history is a
+  graveyard of such enumerations.
 
 **What is *not* semantic, tested:** `edge.note` (authorial flavor, same rule as
 `CardinalityConstraint.note`), key order (`canonicalJson` sorts), and a
@@ -386,9 +429,11 @@ evidence.
 ## 14. Verification
 
 ```
-tsc --noEmit                exit 0
-npm test                    566/566 passed, 24 files
+tsc --noEmit                exit 0  (now covers experiments/** too)
+npm test                    591/591 passed, 24 files
 npx tsx scripts/verify-facts.ts  ALL CHECKS PASSED (3/3)
+probes                      experiments/p007/probes.ts and edge-probes.ts both
+                            execute; edge-probes reproduces every §4 measurement
 determinism                 repeated derive: stateHash/identityHash/judgments/
                             facts/contradictions/temporalViolations identical
                             (capability 10, both canons); repeated worldDiff
@@ -396,8 +441,9 @@ determinism                 repeated derive: stateHash/identityHash/judgments/
 frozen tag                  somnium-p005-final = 5b41deda (untouched)
 ```
 
-Baseline was 507. New: 59 tests (44 in `semantic.test.ts` incl. the D2 evidence
-block, 12 in `adversarial.test.ts`, 3 added to `diff.test.ts`).
+Baseline was 507. New: 84 tests — 44 + 20 in `semantic.test.ts` (the D2 causal-law
+evidence block plus the gate-1 remediation block), 12 in `adversarial.test.ts`,
+7 in `diff.test.ts`, 1 in `fact-rules.test.ts`.
 
 **Existing tests updated — 6, each a shape or mechanism update with the reason
 recorded in the test body:** `diff.test.ts` (delta shape, FactDelta windows,
@@ -413,6 +459,42 @@ pair that genuinely converges.
 
 ---
 
+## 14b. Gate 1 rejection and remediation
+
+The first L2 gate **REJECTED** with four blocking items. Every one is fixed;
+each fix is pinned by parameterized tests over both seed canons.
+
+| # | Finding | Fix |
+|---|---------|-----|
+| 1 | `CanonicalEdge` omitted `CausalEdge.group`, the field selecting AND vs OR support composition. Two worlds shared a `stateHash` with an empty diff and diverged under the same intervention — on **both** canons. | `group` folded into `CanonicalEdge`/`EdgeChange`, normalized by the new `canonicalizeEdge` (REQUIRES ⇒ `group ?? "0"`; other kinds ⇒ `null`, since propagation ignores it there). §4's universal rescoped. |
+| 2 | INV failed and `worldDiff(W, W)` stopped being the identity for non-finite numeric fact objects: `JSON.stringify` maps `NaN`/`±Infinity` all to `null`, while the diff's `!==` said `NaN` differs from itself. | **Two layers.** Input narrowing: `factAssertionError` refuses non-finite objects (`object-not-finite`), so all three fact-write call sites reject them and the refusal is a first-class record. Encoding: `canonicalJson` emits distinct unquoted tokens (`@NaN`, `@Infinity`, `@-Infinity`), and the new `sameCanonicalValue` makes the diff's comparison agree with the hash (NaN=NaN, and −0=0 — where `Object.is` would have been wrong). |
+| 3 | Two documentation overclaims: "ALL edges belong" and "the diff compares CONTENT, so it never hides a difference the hash collides on". | §2 and §4 corrected above; `contentSetDiff` now keys on the canonical content **string**, not a 32-bit digest. |
+| 4 | `experiments/p007/probes.ts` crashed on the post-change `WorldDiff` shape, and `experiments/**` sat outside `tsconfig.include` so `tsc` could not catch it. | Probes updated to the delta shape with a header pointing at `predictions.md` §0 for the pre-change numbers and at commit `9f5245b` to reproduce them; `experiments/**` added to `tsconfig.include`. |
+
+**Why both layers of fix 2 are required, and why neither substitutes for the
+other.** Input narrowing prevents *illegal* states from entering — it is the
+primary defense, it lives at the convergence point all three fact-write paths
+share, and it turns a silently-mangled value into a recorded refusal. Injective
+encoding prevents *distinct legal* states from collapsing onto one identity — it
+is the property `stateHash` must have regardless of how a `WorldState` was
+built, including hand-constructed ones that never pass through `derive`. Removing
+the encoding fix because validation exists would leave the hash non-injective for
+anything that bypasses `derive`; removing the validation because the encoding is
+now injective would leave a value in the world that no canon could assert. The
+architecture is `input validation → legal structure → injective encoding →
+stateHash`, and each arrow is load-bearing.
+
+**Gate-1 findings NOT accepted as blocking, with reasons.** The gate also
+reported that a REQUIRES edge between two undeclared endpoints is inert across
+17 futures, making its inclusion over-discrimination. Accepted as a finding,
+declined as a change: over-discrimination keeps INV sound (both sides move
+together), whereas the under-discrimination it would trade for is exactly the
+`group` bug. Recorded in §4 and §15 rather than fixed. The gate's two
+non-blocking notes are also recorded: `statusChanges`'s `?? "UNKNOWN"` default
+means an appearing/disappearing status key is reported only incidentally (§15.7).
+
+---
+
 ## 15. Remaining risks
 
 1. **A rejected `addEdge` is silent.** A malformed edge intervention is dropped
@@ -420,19 +502,30 @@ pair that genuinely converges.
    write records one. The world is correctly unchanged, but the asymmetry means
    an incoherent edge intervention leaves no trace. P-003's "no silent repair"
    principle arguably applies. **P-008 candidate.**
-2. **Same-id, different-content edges collapse.** `edgeChanges` emits one entry
-   (`added: true`, branch content) when an id is reused with different content.
-   Documented in `diff.ts`; `addEdge` replaces by id, so the case is reachable.
-3. **32-bit hash space.** INV's ⟸ direction is modulo FNV-1a collisions
-   (~2⁻³² per pair). Inherited from P-001, unchanged, now explicitly scoped.
-4. **`work.facts`→ALTERED is canon-shape dependent.** Where the required fact
+2. **32-bit hash space.** INV's ⟸ direction is modulo FNV-1a collisions
+   (~2⁻³² per pair). Inherited from P-001, unchanged, now explicitly scoped —
+   and the diff's record dimensions no longer inherit it (gate 1, fix 3).
+3. **`work.facts`→ALTERED is canon-shape dependent.** Where the required fact
    is also a causal prerequisite, IMPOSSIBLE preempts ALTERED. Correct, but it
    means the ALTERED surface is thinner on Ordos than the rule suggests.
-5. **`temporalViolations` ordering** is by node-set join. Deterministic, but the
+4. **`temporalViolations` ordering** is by node-set join. Deterministic, but the
    detector's own ordering is the only guarantee — a future multi-cycle canon
    should pin it explicitly.
-6. **`diff.hash` is directed.** Anything caching diffs must not assume
+5. **`diff.hash` is directed.** Anything caching diffs must not assume
    `hash(A,B) == hash(B,A)`.
+6. **Edges between undeclared endpoints are over-discriminating** (gate 1,
+   declined). They can never affect a derivation, yet they move `stateHash`.
+   Safe direction, but it means "same world" is slightly stricter than
+   "indistinguishable under all futures".
+7. **Appearing/disappearing status keys are incidental** (gate 1, non-blocking).
+   `statusChanges` defaults a missing key to `UNKNOWN`, so a key that leaves the
+   world entirely produces no entry of its own; INV survives because another
+   dimension always moves, which is a margin rather than a guarantee.
+8. **`group` semantics beyond REQUIRES are unclaimed.** `canonicalizeEdge` folds
+   `group` only where propagation reads it. If a future edge kind starts reading
+   `group`, that normalization must be extended in the same commit — the rule
+   lives in one function specifically so this is a one-line change with one
+   place to look.
 
 ---
 

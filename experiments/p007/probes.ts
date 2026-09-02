@@ -1,10 +1,18 @@
 /**
  * Somnium Engine — P-007 pre-implementation probes.
  *
- * Ground-truth measurements of the CURRENT diff/hash behavior, taken BEFORE
- * any P-007 change. Every probe here maps to a prediction letter in
- * predictions.md. Nothing in this file is speculative: it prints what the
- * engine does today.
+ * Ground-truth measurements of the diff/hash behavior as it was BEFORE any
+ * P-007 change. Every probe here maps to a prediction letter in predictions.md.
+ * Nothing in this file is speculative: it prints what the engine does.
+ *
+ * NOTE (P-007 gate 1, blocker 4): the PRE-CHANGE measurements are recorded in
+ * experiments/p007/predictions.md §0 — that table is the historical evidence the
+ * predictions were written against. This file is kept EXECUTABLE against the
+ * post-change engine (field shapes updated: workStatusChanges delta, not the
+ * old workStatuses snapshot) so the probes stay runnable rather than rotting;
+ * running it today shows the post-change behavior, which the prediction suite
+ * asserts formally. To reproduce the original pre-change numbers, check out
+ * commit 9f5245b.
  *
  * Run: npx tsx experiments/p007/probes.ts
  */
@@ -48,7 +56,7 @@ function summarize(name: string, b: WorldState, w: WorldState): void {
     self.contradictionsResolved.length === 0 &&
     self.reachabilityChanges.length === 0;
   console.log(
-    `P1 self-diff: arraysEmpty=${arraysEmpty} workStatusesKeys=${Object.keys(self.workStatuses).length} hash=${self.hash}`
+    `P1 self-diff: arraysEmpty=${arraysEmpty} workStatusChanges=${self.workStatusChanges.length} hash=${self.hash}`
   );
 }
 
@@ -96,8 +104,9 @@ function summarize(name: string, b: WorldState, w: WorldState): void {
   console.log(
     `    statusChanges: ${diff.statusChanges.map((s) => `${s.entityId}:${s.from}->${s.to}`).join(" ")}`
   );
-  const wsDiff = Object.keys(base.workStatuses).filter((k) => base.workStatuses[k] !== severed.workStatuses[k]);
-  console.log(`    workStatus changes: ${wsDiff.map((k) => `${k}:${base.workStatuses[k]}->${severed.workStatuses[k]}`).join(" ") || "(none)"}`);
+  console.log(
+    `    workStatus changes: ${diff.workStatusChanges.map((w) => `${w.workId}:${w.from}->${w.to}`).join(" ") || "(none)"}`
+  );
 }
 
 // P7 — constraint violation invisible in WorldDiff (the P-006 residual)

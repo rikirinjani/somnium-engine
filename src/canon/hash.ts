@@ -14,8 +14,27 @@ function fnv1a32(input: string): number {
   return h >>> 0;
 }
 
-/** Deterministic serialization: object keys recursively sorted. */
+/**
+ * Deterministic serialization: object keys recursively sorted.
+ *
+ * INJECTIVITY (P-007 gate 1, blocker 2). `JSON.stringify` maps `NaN`,
+ * `Infinity` and `-Infinity` all to the literal `null`, so three distinct
+ * values and an actual `null` collided into one encoding. Anything built on
+ * this function then inherited the collision: `stateHash` could not tell
+ * `object: NaN` from `object: null`, while the diff's `!==` comparison said
+ * NaN differs from itself — so an empty diff and hash equality disagreed, and
+ * `worldDiff(W, W)` stopped being the identity.
+ *
+ * Non-finite numbers are therefore encoded as UNQUOTED tokens. A string always
+ * emerges JSON-quoted (`"@NaN"`), a finite number always as digits, null as
+ * `null` — so an unquoted `@NaN` cannot be produced by any other value, and no
+ * existing encoding changes (frozen canon hashes are unaffected).
+ */
 export function canonicalJson(value: unknown): string {
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    if (Number.isNaN(value)) return "@NaN";
+    return value > 0 ? "@Infinity" : "@-Infinity";
+  }
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
@@ -25,6 +44,34 @@ export function canonicalJson(value: unknown): string {
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj).sort();
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(",")}}`;
+}
+
+/**
+ * Value equality AS THE HASH SEES IT (P-007). Two values are the same value iff
+ * `canonicalJson` gives them the same encoding.
+ *
+ * Any comparison that feeds a diff dimension must use this rather than `!==`,
+ * or the diff and the hash can disagree — which is precisely the invariant
+ * `worldDiff` exists to uphold:
+ *
+ *   worldDiff(A, B) empty  ⟺  stateHash(A) === stateHash(B)
+ *
+ * The two places `===` gets this wrong:
+ *   - `NaN !== NaN` is true, but both encode as `@NaN` — so `===` reports a
+ *     difference the hash cannot see;
+ *   - `-0 === 0` is true and both encode as `0`, so here `===` is already
+ *     right and `Object.is` would be WRONG (it separates them).
+ */
+export function sameCanonicalValue(a: unknown, b: unknown): boolean {
+  if (typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b)) {
+    return true;
+  }
+  if (a === b) return true;
+  // Structural fallback for the non-scalar case; scalars are settled above.
+  if (typeof a === "object" && a !== null && typeof b === "object" && b !== null) {
+    return canonicalJson(a) === canonicalJson(b);
+  }
+  return false;
 }
 
 /** FNV-1a 32-bit hash, hex-encoded (8 chars). */

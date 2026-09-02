@@ -29,12 +29,13 @@
  * iteration order is observable. Typed views are projections over this same
  * WorldDiff (src/diff/projections.ts).
  */
-import { hashState } from "../canon/hash";
+import { canonicalJson, hashState, sameCanonicalValue } from "../canon/hash";
 import { reachable } from "../query/query";
 import type { WorldState } from "../derive/world-state";
 import { semanticState } from "../derive/semantic";
 import type {
   CanonicalContradiction,
+  CanonicalEdge,
   CanonicalFact,
 } from "../derive/semantic";
 import type { ConstraintViolationRecord } from "../derive/constraints";
@@ -69,22 +70,32 @@ function toContradictionDelta(c: CanonicalContradiction): ContradictionDelta {
   return { id: c.id, a: c.a, b: c.b, detail: c.detail, detectedAt: c.detectedAt };
 }
 
+/** Canonical edge -> diff entry, in the given direction. */
+function toEdgeChange(e: CanonicalEdge, added: boolean): EdgeChange {
+  return { edgeId: e.id, added, kind: e.kind, from: e.from, to: e.to, group: e.group };
+}
+
 /**
  * Content-set difference: records in `from` whose FULL canonical content is
  * absent from `to`. Not an id-difference — two records may share an id and
  * differ in content, and that difference is semantic (D5).
+ *
+ * The key is the CANONICAL CONTENT STRING, not a hash of it (P-007 gate 1). A
+ * 32-bit hash key can collide, and a collision here makes the diff MISS a real
+ * difference rather than merely alias two values — the one failure mode this
+ * dimension exists to prevent. The string costs nothing: these sets are tiny.
  */
 function contentSetDiff<T>(from: T[], to: T[], key: (record: T) => string): T[] {
   const toKeys = new Set(to.map(key));
   return from.filter((record) => !toKeys.has(key(record)));
 }
 
-/** Stable content key for hashing set membership of a record. */
+/** Exact content keys — the canonical encoding itself, never a digest of it. */
 const contradictionKey = (c: CanonicalContradiction): string =>
-  hashState({ id: c.id, a: c.a, b: c.b, detail: c.detail, detectedAt: c.detectedAt });
+  canonicalJson({ id: c.id, a: c.a, b: c.b, detail: c.detail, detectedAt: c.detectedAt });
 
 const constraintKey = (v: ConstraintViolationRecord): string =>
-  hashState({
+  canonicalJson({
     id: v.id,
     constraintId: v.constraintId,
     typeId: v.typeId,
@@ -95,7 +106,8 @@ const constraintKey = (v: ConstraintViolationRecord): string =>
   });
 
 const temporalKey = (t: TemporalViolation): string =>
-  hashState({ edgeIds: t.edgeIds, nodes: t.nodes, detail: t.detail });
+  canonicalJson({ edgeIds: t.edgeIds, nodes: t.nodes, detail: t.detail });
+
 
 export function worldDiff(baseline: WorldState, branch: WorldState): WorldDiff {
   const a = semanticState(baseline);
@@ -127,11 +139,16 @@ export function worldDiff(baseline: WorldState, branch: WorldState): WorldDiff {
   // factOverrides: same fact id in both worlds — one entry per differing
   // field (object, validFrom, validTo), so a window change is visible as
   // itself, not smuggled through "object".
+  //
+  // Comparison uses `sameCanonicalValue`, not `!==` (P-007 gate 1, blocker 2):
+  // `NaN !== NaN` is true while both encode identically for the hash, so `!==`
+  // reported a difference `stateHash` could not see — an INV break, and
+  // `worldDiff(W, W)` stopped being the identity.
   const factOverrides: FactOverride[] = [];
   for (const [factId, branchFact] of branchFacts) {
     const baseFact = baseFacts.get(factId);
     if (baseFact === undefined) continue;
-    if (baseFact.object !== branchFact.object) {
+    if (!sameCanonicalValue(baseFact.object, branchFact.object)) {
       factOverrides.push({ factId, field: "object", from: baseFact.object, to: branchFact.object });
     }
     if (baseFact.validFrom !== branchFact.validFrom) {
@@ -143,23 +160,28 @@ export function worldDiff(baseline: WorldState, branch: WorldState): WorldDiff {
   }
   factOverrides.sort((x, y) => x.factId.localeCompare(y.factId) || x.field.localeCompare(y.field));
 
-  // edgeChanges: the effective causal LAW, by id. Same id + different content
-  // collapses to ONE entry (added=true, branch content) — a documented
-  // limitation: an edge "change" is rare (addEdge replaces by id) and the
-  // branch's law is the world being diffed TO.
+  // edgeChanges: the effective causal LAW, by id.
+  //
+  // A REPLACEMENT (same id, different content — `addEdge` replaces by id) emits
+  // BOTH sides: removed-with-base-content and added-with-branch-content
+  // (P-007 gate 1). Collapsing it to a single `added` entry hid the old law,
+  // which matters most for exactly the field that makes an edge load-bearing:
+  // re-adding an edge with a different `group` is a change of causal structure
+  // and both structures have to be legible.
   const baseEdges = new Map(a.edges.map((e) => [e.id, e]));
   const branchEdges = new Map(b.edges.map((e) => [e.id, e]));
   const edgeChanges: EdgeChange[] = [];
   for (const [edgeId, edge] of branchEdges) {
     const base = baseEdges.get(edgeId);
-    if (base === undefined || base.kind !== edge.kind || base.from !== edge.from || base.to !== edge.to) {
-      edgeChanges.push({ edgeId, added: true, kind: edge.kind, from: edge.from, to: edge.to });
+    if (base === undefined) {
+      edgeChanges.push(toEdgeChange(edge, true));
+    } else if (canonicalJson(base) !== canonicalJson(edge)) {
+      edgeChanges.push(toEdgeChange(base, false));
+      edgeChanges.push(toEdgeChange(edge, true));
     }
   }
   for (const [edgeId, edge] of baseEdges) {
-    if (!branchEdges.has(edgeId)) {
-      edgeChanges.push({ edgeId, added: false, kind: edge.kind, from: edge.from, to: edge.to });
-    }
+    if (!branchEdges.has(edgeId)) edgeChanges.push(toEdgeChange(edge, false));
   }
   edgeChanges.sort((x, y) => x.edgeId.localeCompare(y.edgeId) || (x.added === y.added ? 0 : x.added ? 1 : -1));
 

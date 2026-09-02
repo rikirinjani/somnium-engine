@@ -154,16 +154,113 @@ describe("worldDiff", () => {
       facts: [],
       workStatuses: {},
       contradictions: [],
-      edges: [{ id: "edge/oath-requires-blight", kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath" }],
+      edges: [{ id: "edge/oath-requires-blight", kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath", group: "0" }],
     });
     const withoutEdge = makeState({ statuses: {}, facts: [], workStatuses: {}, contradictions: [] });
     const d = worldDiff(withoutEdge, withEdge);
     expect(d.edgeChanges).toEqual([
-      { edgeId: "edge/oath-requires-blight", added: true, kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath" },
+      { edgeId: "edge/oath-requires-blight", added: true, kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath", group: "0" },
     ]);
     const reversed = worldDiff(withEdge, withoutEdge);
     expect(reversed.edgeChanges).toEqual([
-      { edgeId: "edge/oath-requires-blight", added: false, kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath" },
+      { edgeId: "edge/oath-requires-blight", added: false, kind: "REQUIRES", from: "ev/blight-begins", to: "ev/kael-oath", group: "0" },
+    ]);
+  });
+
+  it("an edge REPLACED in place reports both the old law and the new one", () => {
+    // P-007 gate 1: collapsing a same-id replacement to a single `added` entry
+    // hid the previous law. The group field makes this concrete — a REQUIRES
+    // edge re-added under a different support group is a change of causal
+    // structure, and both structures must be legible.
+    const conjunct = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/treaty-requires-return", kind: "REQUIRES", from: "ev/maren-return", to: "ev/treaty-of-ash", group: "0" }],
+    });
+    const alternative = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/treaty-requires-return", kind: "REQUIRES", from: "ev/maren-return", to: "ev/treaty-of-ash", group: "alt" }],
+    });
+    const d = worldDiff(conjunct, alternative);
+    expect(d.edgeChanges).toEqual([
+      { edgeId: "edge/treaty-requires-return", added: false, kind: "REQUIRES", from: "ev/maren-return", to: "ev/treaty-of-ash", group: "0" },
+      { edgeId: "edge/treaty-requires-return", added: true, kind: "REQUIRES", from: "ev/maren-return", to: "ev/treaty-of-ash", group: "alt" },
+    ]);
+  });
+
+  it("a relation change under the same id is also remove-old + add-new", () => {
+    const requiresIt = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/e", kind: "REQUIRES", from: "ev/a", to: "ev/b", group: "0" }],
+    });
+    const precedesIt = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/e", kind: "PRECEDES", from: "ev/a", to: "ev/b", group: null }],
+    });
+    const d = worldDiff(requiresIt, precedesIt);
+    expect(d.edgeChanges).toEqual([
+      { edgeId: "edge/e", added: false, kind: "REQUIRES", from: "ev/a", to: "ev/b", group: "0" },
+      { edgeId: "edge/e", added: true, kind: "PRECEDES", from: "ev/a", to: "ev/b", group: null },
+    ]);
+  });
+
+  it("an endpoint change under the same id is also remove-old + add-new", () => {
+    const fromA = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/e", kind: "REQUIRES", from: "ev/a", to: "ev/b", group: "0" }],
+    });
+    const fromC = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ id: "edge/e", kind: "REQUIRES", from: "ev/c", to: "ev/b", group: "0" }],
+    });
+    const d = worldDiff(fromA, fromC);
+    expect(d.edgeChanges).toEqual([
+      { edgeId: "edge/e", added: false, kind: "REQUIRES", from: "ev/a", to: "ev/b", group: "0" },
+      { edgeId: "edge/e", added: true, kind: "REQUIRES", from: "ev/c", to: "ev/b", group: "0" },
+    ]);
+  });
+
+  it("edge ordering in the source worlds never leaks into the diff (sorted by edgeId, then removed-before-added)", () => {
+    const e1 = { id: "edge/a", kind: "REQUIRES" as const, from: "ev/x", to: "ev/y", group: "0" };
+    const e2 = { id: "edge/b", kind: "REQUIRES" as const, from: "ev/x", to: "ev/z", group: "0" };
+    const oneOrder = makeState({ statuses: {}, facts: [], workStatuses: {}, contradictions: [], edges: [e1, e2] });
+    const otherOrder = makeState({ statuses: {}, facts: [], workStatuses: {}, contradictions: [], edges: [e2, e1] });
+    // same edge SET, different array order => the canonical projection is
+    // order-independent, so the diff is empty in both directions
+    for (const d of [worldDiff(oneOrder, otherOrder), worldDiff(otherOrder, oneOrder)]) {
+      expect(d.edgeChanges).toEqual([]);
+      expect(d.hash).toBe(worldDiff(oneOrder, oneOrder).hash);
+    }
+
+    const replaced = makeState({
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      edges: [{ ...e2, group: "alt" }, e1],
+    });
+    const d = worldDiff(oneOrder, replaced);
+    // deterministic output order: by edgeId; within one id, removed before added
+    expect(d.edgeChanges.map((c) => [c.edgeId, c.added])).toEqual([
+      ["edge/b", false],
+      ["edge/b", true],
     ]);
   });
 

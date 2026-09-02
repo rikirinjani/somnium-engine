@@ -8,8 +8,14 @@
  *   > worldDiff(A, B) is empty  ⟺  stateHash(A) === stateHash(B)
  *
  * (Hash-collision direction excepted: FNV-1a is 32-bit, so distinct semantic
- * states may share a hash with probability ~2^-32 per pair. The diff compares
- * CONTENT, so it never hides a difference the hash collides on.)
+ * states may share a hash with probability ~2^-32 per pair. In that direction
+ * the diff is the MORE reliable witness — its fact, status, work and edge
+ * dimensions compare canonical content directly. The three RECORD dimensions
+ * (contradictions, constraint violations, temporal violations) compare the
+ * canonical content STRING, not a digest of it, precisely so a collision there
+ * cannot make the diff miss a real difference — an earlier draft keyed those
+ * sets on a 32-bit hash and the P-007 gate found a live collision in under 350k
+ * candidates.)
  *
  * WHAT IS SEMANTIC vs WHAT IS LINEAGE (the P-007 findings, measured in
  * experiments/p007/probes.ts):
@@ -58,12 +64,30 @@ export interface CanonicalContradiction {
   detectedAt: string;
 }
 
-/** An edge's world-semantic content: the causal law, without its note. */
+/**
+ * An edge's world-semantic content: the causal law, without its note.
+ *
+ * `group` IS semantic and must be here (P-007 gate 1, blocker 1). It selects
+ * whether same-target REQUIRES edges are conjuncts of one sufficient set or
+ * ALTERNATIVE sufficient sets (propagation.ts's `supportGroups`) — that is, it
+ * decides the very property that makes an edge load-bearing. Omitting it let
+ * two worlds share a `stateHash` and an empty diff while responding differently
+ * to the same later intervention, which is the one thing a world identity must
+ * never permit. Measured on both seed canons; see docs/P007-WORLDDIFF.md §4.
+ *
+ * NORMALIZED, so the fold matches what the derivation actually reads:
+ *   - REQUIRES: `group ?? "0"` — the same default `buildModel` applies;
+ *   - every other kind: `null` — `group` is ignored there (types.ts), so no
+ *     derivation can read it and folding it in would discriminate on a label
+ *     nothing can observe.
+ */
 export interface CanonicalEdge {
   id: string;
   kind: string;
   from: string;
   to: string;
+  /** support-set label; REQUIRES only, `"0"` when omitted, `null` elsewhere */
+  group: string | null;
 }
 
 /** The canonical semantic state of one derived world. */
@@ -78,6 +102,31 @@ export interface SemanticState {
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
+
+/**
+ * A resolved canon edge -> its world-semantic content. The ONE place the
+ * normalization rule lives, so `derive` and any future consumer cannot drift.
+ *
+ * `note` is dropped (authorial flavor, same rule as `CardinalityConstraint.note`).
+ * `group` is normalized to what the derivation actually reads: the default `"0"`
+ * on REQUIRES (matching `buildModel`'s `edge.group ?? "0"`), and `null` on every
+ * other kind, where `group` is ignored and therefore unobservable.
+ */
+export function canonicalizeEdge(edge: {
+  id: string;
+  kind: string;
+  from: string;
+  to: string;
+  group?: string;
+}): CanonicalEdge {
+  return {
+    id: edge.id,
+    kind: edge.kind,
+    from: edge.from,
+    to: edge.to,
+    group: edge.kind === "REQUIRES" ? edge.group ?? "0" : null,
+  };
+}
 
 /**
  * Project a WorldState onto its canonical semantic content.
@@ -100,7 +149,7 @@ export function semanticState(world: WorldState): SemanticState {
     .sort(byId);
 
   const edges: CanonicalEdge[] = world.edges
-    .map((e) => ({ id: e.id, kind: e.kind, from: e.from, to: e.to }))
+    .map((e) => ({ id: e.id, kind: e.kind, from: e.from, to: e.to, group: e.group }))
     .sort(byId);
 
   const contradictions: CanonicalContradiction[] = world.contradictions

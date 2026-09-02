@@ -171,6 +171,23 @@ describe("factAssertionError: the rule itself", () => {
       }
     });
 
+    it("refuses non-finite numbers: they are not narrative values (P-007 gate 1)", () => {
+      // NaN/±Infinity broke world identity twice over — JSON.stringify
+      // collapses all three to `null` while `NaN !== NaN` made the diff report
+      // a difference the hash could not see. The differential answer: canon
+      // could never legitimately assert one either, so the ONE predicate all
+      // three call sites share refuses it, and the refusal is a first-class
+      // record rather than a silently mangled fact.
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        const error = factAssertionError("char/vara", "atk_num", bad, vocabulary);
+        expect(error?.reason).toBe("object-not-finite");
+        expect(error?.detail).toContain("not a finite number");
+      }
+      // finite numbers of both signs remain legal
+      expect(factAssertionError("char/vara", "atk_num", 0, vocabulary)).toBeNull();
+      expect(factAssertionError("char/vara", "atk_num", -17.5, vocabulary)).toBeNull();
+    });
+
     it("has a KNOWN false positive: a literal string containing a slash", () => {
       // Accepted cost of a convention-based check on an untyped predicate space.
       // It is precisely why the predicates the core NAMES get a typed rule

@@ -81,6 +81,14 @@ export interface EdgeChange {
   kind: string;
   from: string;
   to: string;
+  /**
+   * The support-set label as the derivation reads it: `"0"` by default on
+   * REQUIRES, `null` on every other kind (P-007 gate 1). This field is the one
+   * that decides whether same-target REQUIRES edges are conjuncts or
+   * alternatives, so an edge delta that omitted it could not express a change
+   * of causal structure.
+   */
+  group: string | null;
 }
 
 export interface ReachabilityChange {

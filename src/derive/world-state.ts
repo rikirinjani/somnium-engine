@@ -58,7 +58,7 @@ import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
 import { evaluateConstraints } from "./constraints";
 import type { ConstraintViolationRecord } from "./constraints";
-import { semanticState } from "./semantic";
+import { semanticState, canonicalizeEdge } from "./semantic";
 import type { CanonicalEdge } from "./semantic";
 
 export interface WorldState {
@@ -425,7 +425,9 @@ export function derive(
     constraintViolations: [],
     // P-007: the effective causal LAW — the resolved edge set this world was
     // derived under (severEdge/addEdge applied in order), canonicalized.
-    edges: model.edges.map((e) => ({ id: e.id, kind: e.kind, from: e.from, to: e.to })),
+    // `canonicalizeEdge` owns the normalization (group defaulted on REQUIRES,
+    // null elsewhere) so the hash folds exactly what the derivation reads.
+    edges: model.edges.map(canonicalizeEdge),
     stateHash: "",
     identityHash: "",
   };

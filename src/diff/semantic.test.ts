@@ -37,7 +37,8 @@ import {
 import type { Intervention } from "../timeline/types";
 import { INSTANCE_OF } from "../canon/types";
 import type { Canon, CausalEdge, Entity, Fact } from "../canon/types";
-import { hashCanon } from "../canon/hash";
+import { buildFactVocabulary, factAssertionError } from "../canon/fact-rules";
+import { canonicalJson, hashCanon, hashState, sameCanonicalValue } from "../canon/hash";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -482,7 +483,14 @@ describe.each([
     expect(A.stateHash).not.toBe(B.stateHash);
     const d = worldDiff(A, B);
     expect(d.edgeChanges).toEqual([
-      { edgeId: dormantEdge.id, added: true, kind: dormantEdge.kind, from: dormantEdge.from, to: dormantEdge.to },
+      {
+        edgeId: dormantEdge.id,
+        added: true,
+        kind: dormantEdge.kind,
+        from: dormantEdge.from,
+        to: dormantEdge.to,
+        group: "0", // REQUIRES default, normalized by canonicalizeEdge
+      },
     ]);
     // and NOTHING else — a pure causal-law change, fully explained
     expect(d.statusChanges).toEqual([]);
@@ -737,5 +745,211 @@ describe("D9: the invariant's scope is same-canon", () => {
     expect(verrinBase.stateHash).not.toBe(ordosBase.stateHash);
     // No universal is claimed about the ⟺ here; both directions merely hold
     // on this witness. The INV suite above is scoped per canon.
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* GATE-1 REMEDIATION — `group` in world identity, two-layer value     */
+/* defense, edge-replacement representation                            */
+/*                                                                     */
+/* The first L2 gate REJECTED P-007 with two live counterexamples:     */
+/* (1) CanonicalEdge omitted `group` — the field that selects AND vs   */
+/* OR support composition, i.e. exactly the property that makes an     */
+/* edge load-bearing — so two worlds could share a stateHash and an    */
+/* empty diff while responding differently to the same intervention;   */
+/* (2) canonicalJson mapped NaN/±Infinity all to `null` while the      */
+/* diff's `!==` said NaN differs from itself, so an empty diff and     */
+/* hash equality could disagree. These tests pin both fixes and the    */
+/* semantics around them.                                              */
+/* ------------------------------------------------------------------ */
+
+describe.each([
+  {
+    name: "verrin",
+    canon: verrinCanon(),
+    // the gate's exact attack: a REQUIRES edge whose group flips the
+    // treaty's support from conjunct-with-existing to alternative
+    groupAttack: { id: "edge/gate-treaty-requires-return", kind: "REQUIRES", from: "ev/maren-return", to: "ev/treaty-of-ash" } as CausalEdge,
+    prerequisite: "ev/maren-return",
+    dependent: "ev/treaty-of-ash",
+  },
+  {
+    name: "ordos",
+    canon: ordosCanon(),
+    groupAttack: { id: "edge/gate-survey-requires-rite", kind: "REQUIRES", from: ORDOS_IDS.events.riteBindingVaela, to: ORDOS_IDS.events.sealSurvey } as CausalEdge,
+    prerequisite: ORDOS_IDS.events.riteBindingVaela,
+    dependent: ORDOS_IDS.events.sealSurvey,
+  },
+])("gate-1 fix A: `group` participates in world identity [$name]", ({ canon, groupAttack, prerequisite, dependent }) => {
+  it("GATE ATTACK 1 reproduced: same edge, different group — stateHash MUST differ (it did not before the fix)", () => {
+    const conjunct = derive(canon, [addEdge(groupAttack)]); // group omitted => default "0" => AND with canon's own conjuncts
+    const alternative = derive(canon, [addEdge({ ...groupAttack, group: "alt" })]); // new group => OR
+    expect(conjunct.stateHash).not.toBe(alternative.stateHash);
+    const d = worldDiff(conjunct, alternative);
+    expect(diffEmpty(d)).toBe(false);
+    // the diff explains the change as remove-old-law + add-new-law, both legible
+    expect(d.edgeChanges).toEqual([
+      { edgeId: groupAttack.id, added: false, kind: "REQUIRES", from: groupAttack.from, to: groupAttack.to, group: "0" },
+      { edgeId: groupAttack.id, added: true, kind: "REQUIRES", from: groupAttack.from, to: groupAttack.to, group: "alt" },
+    ]);
+  });
+
+  it("...and the difference is real: the same later intervention yields different worlds", () => {
+    const withConjunct = derive(canon, [addEdge(groupAttack), negateEvent(prerequisite)]);
+    const withAlternative = derive(canon, [addEdge({ ...groupAttack, group: "alt" }), negateEvent(prerequisite)]);
+    // AND: the negated prerequisite still refutes the dependent (canon's own
+    // conjunct group survives; hmm — with the default group the added edge
+    // JOINS canon's group, so negating one member leaves... measured below).
+    // OR: the alternative group carries the dependent alone.
+    expect(withConjunct.statuses[dependent]).not.toBe(withAlternative.statuses[dependent]);
+    expect(withConjunct.stateHash).not.toBe(withAlternative.stateHash);
+  });
+
+  it("equivalent representations canonicalize identically: omitted group === explicit default \"0\"", () => {
+    // types.ts: "Omitted => the default group \"0\"". The canonical form folds
+    // BOTH to \"0\", so the two constructions are the same world — construction
+    // history must not distinguish them.
+    const omitted = derive(canon, [addEdge(groupAttack)]);
+    const explicit = derive(canon, [addEdge({ ...groupAttack, group: "0" })]);
+    expect(omitted.stateHash).toBe(explicit.stateHash);
+    expect(diffEmpty(worldDiff(omitted, explicit))).toBe(true);
+  });
+
+  it("group on a NON-REQUIRES edge is ignored: propagation never reads it there, so it cannot distinguish worlds", () => {
+    // The normalization rule (src/derive/semantic.ts canonicalizeEdge): group
+    // is folded ONLY on REQUIRES, null elsewhere — folding it everywhere would
+    // discriminate on a label nothing can observe.
+    const bare = derive(canon, [addEdge({ ...groupAttack, kind: "PRECEDES" as const })]);
+    const labelled = derive(canon, [addEdge({ ...groupAttack, kind: "PRECEDES" as const, group: "zzz" })]);
+    expect(bare.stateHash).toBe(labelled.stateHash);
+    expect(diffEmpty(worldDiff(bare, labelled))).toBe(true);
+  });
+
+  it("construction ORDER of edge writes does not distinguish worlds (only the final law does)", () => {
+    const other = canon.edges[0];
+    if (other === undefined) throw new Error("fixture: canon has no edges");
+    const oneOrder = derive(canon, [severEdge(other.id), addEdge(groupAttack)]);
+    const otherOrder = derive(canon, [addEdge(groupAttack), severEdge(other.id)]);
+    expect(oneOrder.stateHash).toBe(otherOrder.stateHash);
+    expect(diffEmpty(worldDiff(oneOrder, otherOrder))).toBe(true);
+  });
+});
+
+describe("gate-1 fix B: non-finite fact values are refused at the ONE convergence point", () => {
+  it.each([
+    { name: "verrin", canon: verrinCanon(), subject: "char/vara" },
+    { name: "ordos", canon: ordosCanon(), subject: ORDOS_IDS.objects.seal },
+  ])(
+    "$name: NaN / Infinity / -Infinity are rejected BEFORE becoming world state, with a first-class record",
+    ({ canon, subject }) => {
+      const baseline = derive(canon, []);
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        const w = derive(canon, [setFact(subject, "atk_num", bad)]);
+        // REFUSED: no fact was written (the fact list is unchanged)
+        expect(w.facts.some((f) => f.subject === subject && f.predicate === "atk_num")).toBe(false);
+        // REPORTED: one contradiction record naming the exact rule
+        expect(w.contradictions.some((c) => c.id.endsWith("fact-write-illegal:object-not-finite"))).toBe(true);
+        // the world is otherwise identical, and INV holds on the pair: the
+        // refusal record is semantic state, so the hashes differ AND the diff
+        // is non-empty — both sides of the equivalence agree.
+        const d = worldDiff(baseline, w);
+        expect(d.contradictionsIntroduced.length).toBe(1);
+        expect(baseline.stateHash).not.toBe(w.stateHash);
+        expect(diffEmpty(d)).toBe(baseline.stateHash === w.stateHash);
+      }
+    }
+  );
+
+  it("the three fact-write call sites share ONE predicate — canon may not assert it either", () => {
+    // The differential rule: an intervention may assert no more than canon
+    // may. Non-finite is refused in factAssertionError itself, so all three
+    // call sites (validateCanon, buildModel, applyFactInterventions) inherit
+    // the refusal — there is no bypass path that mints a non-finite fact.
+    const v = verrinCanon();
+    const vocab = buildFactVocabulary(v);
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(factAssertionError("char/vara", "atk_num", bad, vocab)?.reason).toBe("object-not-finite");
+    }
+    // finite numbers remain legal
+    expect(factAssertionError("char/vara", "atk_num", 42, vocab)).toBeNull();
+    expect(factAssertionError("char/vara", "atk_num", 0, vocab)).toBeNull();
+  });
+});
+
+describe("gate-1 fix B, layer 2: the encoding is injective even without validation", () => {
+  // Input narrowing is the PRIMARY defense; this is the secondary one. A
+  // hand-built WorldState bypasses derive() entirely, so the hash and the
+  // comparison must agree on their own.
+  it("NaN, Infinity, -Infinity and null are four DISTINCT canonical encodings", () => {
+    const encodings = [canonicalJson(Number.NaN), canonicalJson(Number.POSITIVE_INFINITY), canonicalJson(Number.NEGATIVE_INFINITY), canonicalJson(null)];
+    expect(new Set(encodings).size).toBe(4);
+    expect(encodings).toEqual(["@NaN", "@Infinity", "@-Infinity", "null"]);
+    expect(hashState({ o: Number.NaN })).not.toBe(hashState({ o: null }));
+    expect(hashState({ o: Number.NaN })).not.toBe(hashState({ o: Number.POSITIVE_INFINITY }));
+  });
+
+  it("sameCanonicalValue agrees with the hash: NaN equals NaN, and -0 equals 0", () => {
+    // NaN !== NaN broke worldDiff(W, W); Object.is would break -0/0 the other
+    // way (the hash gives both "0"). The comparison must match the ENCODING.
+    expect(sameCanonicalValue(Number.NaN, Number.NaN)).toBe(true);
+    expect(sameCanonicalValue(-0, 0)).toBe(true);
+    expect(sameCanonicalValue(Number.NaN, null)).toBe(false);
+    expect(sameCanonicalValue(0, null)).toBe(false);
+    expect(hashState({ o: -0 })).toBe(hashState({ o: 0 }));
+  });
+
+  it("a hand-built world containing NaN still has an identity self-diff", () => {
+    // The unreachable-in-practice case, pinned anyway: even if a non-finite
+    // object reached a WorldState, the diff would not manufacture a phantom
+    // override against itself.
+    const w: WorldState = {
+      canonId: "canon/hand-built",
+      interventions: [],
+      rpId: null,
+      judgments: {},
+      statuses: {},
+      facts: [{ id: "f", subject: "s", predicate: "p", object: Number.NaN, source: "derived", overridden: true, validFrom: null, validTo: null }],
+      workStatuses: {},
+      contradictions: [],
+      temporalViolations: [],
+      constraintViolations: [],
+      edges: [],
+      stateHash: "00000000",
+      identityHash: "00000000",
+    };
+    const d = worldDiff(w, w);
+    expect(d.factOverrides).toEqual([]);
+    expect(diffEmpty(d)).toBe(true);
+  });
+});
+
+describe("gate-1 fix B: value comparison is over the SEMANTIC value", () => {
+  it.each([
+    { name: "verrin", canon: verrinCanon(), subject: "char/vara" },
+    { name: "ordos", canon: ordosCanon(), subject: ORDOS_IDS.objects.seal },
+  ])("$name: -0 and 0 are the same narrative value — no override, same stateHash", ({ canon, subject }) => {
+    const zero = derive(canon, [setFact(subject, "atk_num", 0)]);
+    const negZero = derive(canon, [setFact(subject, "atk_num", -0)]);
+    expect(zero.stateHash).toBe(negZero.stateHash);
+    const d = worldDiff(zero, negZero);
+    expect(d.factOverrides).toEqual([]);
+    expect(diffEmpty(d)).toBe(true);
+  });
+
+  it("different values of the same serialized LENGTH do not collapse (verrin)", () => {
+    const v = verrinCanon();
+    const a = derive(v, [setFact("char/vara", "motto", "ash")]);
+    const b = derive(v, [setFact("char/vara", "motto", "oak")]);
+    expect(a.stateHash).not.toBe(b.stateHash);
+    const d = worldDiff(a, b);
+    expect(d.factOverrides).toEqual([{ factId: "derived:char/vara.motto", field: "object", from: "ash", to: "oak" }]);
+  });
+
+  it("same value reached through different write histories is one value (verrin)", () => {
+    const v = verrinCanon();
+    const direct = derive(v, [setFact("char/vara", "motto", "ash")]);
+    const viaDetour = derive(v, [setFact("char/vara", "motto", "oak"), setFact("char/vara", "motto", "ash")]);
+    expect(direct.stateHash).toBe(viaDetour.stateHash);
+    expect(diffEmpty(worldDiff(direct, viaDetour))).toBe(true);
   });
 });
