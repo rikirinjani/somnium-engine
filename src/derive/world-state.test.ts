@@ -179,7 +179,11 @@ describe("derive: interventions apply in order", () => {
     const ws = derive(makeCanon(), [retractFact("fact/hero-away"), setFact("char/hero", "located_in", "loc/home")]);
     expect(locatedIn(ws)).toBe("loc/home");
     const derived = ws.facts.find((f) => f.predicate === "located_in");
-    expect(derived?.id).toBe("derived:char/hero.located_in");
+    // P-007 gate 3: the minted id joins subject and predicate with NUL, not ".",
+    // because the fact list is id-keyed downstream and a "." join is not
+    // injective — `(char/ash, "the.elder.mood")` and `(char/ash.the.elder,
+    // "mood")` minted ONE id for two distinct cells. Same key `buildModel` uses.
+    expect(derived?.id).toBe("derived:char/hero\u0000located_in");
     expect(derived?.source).toBe("derived");
   });
 
@@ -187,7 +191,7 @@ describe("derive: interventions apply in order", () => {
     const ws = derive(makeCanon(), [setFact("ev/root1", "mood", "calm")]);
     const derived = ws.facts.find((f) => f.predicate === "mood");
     expect(derived).toEqual({
-      id: "derived:ev/root1.mood",
+      id: "derived:ev/root1\u0000mood", // NUL-separated, injective (P-007 gate 3)
       subject: "ev/root1",
       predicate: "mood",
       object: "calm",

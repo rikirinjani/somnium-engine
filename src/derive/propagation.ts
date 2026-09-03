@@ -139,8 +139,18 @@ export interface DerivationModel {
   edges: CausalEdge[];
 }
 
-/** Cell key for a fact's (subject, predicate) — the unit a setFact writes to. */
-function cellKey(subject: string, predicate: string): string {
+/**
+ * Cell key for a fact's (subject, predicate) — the unit a setFact writes to.
+ *
+ * The `\u0000` separator makes this INJECTIVE: no (subject, predicate) pair can
+ * produce the same key as a different pair, because NUL cannot appear in an id
+ * or a predicate. Exported (P-007 gate 3) because `overrideFact` in
+ * world-state.ts mints the synthetic fact id for the same cell and must use the
+ * same key — it previously joined with `.`, so `(char/ash, "the.elder.mood")`
+ * and `(char/ash.the.elder, "mood")` minted ONE id for two distinct cells, and
+ * the fact list is id-keyed downstream.
+ */
+export function cellKey(subject: string, predicate: string): string {
   return `${subject}\u0000${predicate}`;
 }
 
@@ -162,8 +172,15 @@ function resolveEdges(canon: Canon, interventions: Intervention[]): CausalEdge[]
           typeof edge.from === "string" &&
           typeof edge.to === "string"
         ) {
-          edges = edges.filter((e) => e.id !== edge.id);
-          edges.push(edge);
+          // P-007 gate 3: `params` is `Record<string, unknown>`, so a non-string
+          // `group` can reach here from an intervention literal. `supportGroups`
+          // then calls `group.localeCompare` and THROWS. Guard it at the same
+          // boundary as the other four fields: keep a string, otherwise omit the
+          // key so the edge falls back to the default group.
+          const guarded: CausalEdge = { ...edge };
+          if (typeof guarded.group !== "string") delete guarded.group;
+          edges = edges.filter((e) => e.id !== guarded.id);
+          edges.push(guarded);
         }
       }
     }

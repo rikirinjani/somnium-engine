@@ -16,6 +16,8 @@
  */
 import type { Canon, CausalEdge } from "../canon/types";
 import type { WorldState } from "../derive/world-state";
+import { cellKey } from "../derive/propagation";
+import { sameCanonicalValue } from "../canon/hash";
 import { worldDiff } from "../diff/diff";
 import type { Intervention } from "../timeline/types";
 import type { DepthMetrics, DivergenceScore } from "./types";
@@ -172,10 +174,18 @@ export function computeDivergence(
   // and count keys whose object VALUE differs, using a sentinel for absent.
   // A single subject+predicate with multiple effective facts collapses to one
   // entry per world — acceptable for v1.
+  //
+  // P-007 gate 3, same class as the semantic-dimension comparisons: the key uses
+  // the shared `cellKey` (NUL-separated, injective) rather than a `|` join, and
+  // the value comparison is `sameCanonicalValue` rather than `!==`. With `!==`,
+  // `computeDivergence(W, W, [])` scored 1 on a world holding a NaN fact object —
+  // a world diverging from itself. `DivergenceScore` is not a `semanticState`
+  // dimension, so this was never an INV break, but it is the same defect and is
+  // fixed in the same pass rather than left for a later round.
   const absent = Symbol("absent");
   const stateByKey = (ws: WorldState): Map<string, string | number | boolean | null | symbol> => {
     const m = new Map<string, string | number | boolean | null | symbol>();
-    for (const f of ws.facts) m.set(`${f.subject}|${f.predicate}`, f.object);
+    for (const f of ws.facts) m.set(cellKey(f.subject, f.predicate), f.object);
     return m;
   };
   const baseState = stateByKey(baseline);
@@ -185,7 +195,7 @@ export function computeDivergence(
   for (const key of stateKeys) {
     const from = baseState.get(key) ?? absent;
     const to = branchState.get(key) ?? absent;
-    if (from !== to) changedStateCount += 1;
+    if (!sameCanonicalValue(from, to)) changedStateCount += 1;
   }
 
   // Works whose classification differs between the two worlds, by key.

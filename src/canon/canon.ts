@@ -41,6 +41,7 @@
 import { hashCanon } from "./hash";
 import { buildFactVocabulary, factAssertionError } from "./fact-rules";
 import type { Canon, CausalEdge, EdgeKind, Entity, EntityKind, Fact, WorkBinding } from "./types";
+import { DERIVED_ID_PREFIX } from "./types";
 
 const ENTITY_KINDS: ReadonlySet<string> = new Set([
   "Character",
@@ -124,6 +125,17 @@ export function inspectCanon(canon: Canon): CanonInspection {
   /* --- id uniqueness across every id-bearing node ---------------------- */
   const declaredAs = new Map<string, string>();
   const register = (id: string, where: string): void => {
+    // P-007 gate 3: `derived:` is the engine's SYNTHETIC namespace. `overrideFact`
+    // mints ids there for cells canon never declared a fact for, so a canon that
+    // declares into it can collide with a minted id — and the effective fact list
+    // is id-keyed downstream (worldDiff's Map, computeWorkStatuses' canon lookup).
+    // A collision made an unrelated Work read ALTERED. Reserving the namespace
+    // closes that route at the document boundary rather than hoping ids differ.
+    if (id.startsWith(DERIVED_ID_PREFIX)) {
+      errors.push(
+        `id "${id}" (${where}) uses the reserved "${DERIVED_ID_PREFIX}" prefix — that namespace belongs to engine-minted facts`
+      );
+    }
     const prior = declaredAs.get(id);
     if (prior !== undefined) {
       errors.push(`duplicate id "${id}" (declared as ${prior} and as ${where})`);
@@ -311,6 +323,14 @@ function parseEdge(value: unknown, index: number): CausalEdge {
   const from = requireString(r.from, `edges[${index}].from`);
   const to = requireString(r.to, `edges[${index}].to`);
   const edge: CausalEdge = { id, kind: kindRaw as EdgeKind, from, to };
+  // P-007 gate 3: `group` is WORLD STRUCTURE (it selects conjunction vs
+  // disjunction of REQUIRES support, `propagation.ts` supportGroups), so
+  // dropping it here silently loaded a disjunctive canon as a conjunctive one —
+  // a semantic change made by the loader. Same treatment as `note`: absent key
+  // stays absent, so no existing canon hash moves.
+  if (r.group !== undefined) {
+    edge.group = requireString(r.group, `edges[${index}].group`);
+  }
   if (r.note !== undefined) {
     edge.note = requireString(r.note, `edges[${index}].note`);
   }

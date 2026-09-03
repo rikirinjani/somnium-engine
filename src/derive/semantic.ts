@@ -44,6 +44,7 @@ import type { EventStatus, WorkStatus } from "./lattice";
 import type { TemporalViolation } from "./propagation";
 import type { ConstraintViolationRecord } from "./constraints";
 import type { WorldState } from "./world-state";
+import { canonicalJson } from "../canon/hash";
 
 /** A fact's world-semantic content: identity + claim + narrative-time window. */
 export interface CanonicalFact {
@@ -137,38 +138,92 @@ export function canonicalizeEdge(edge: {
 }
 
 /**
+ * Deduplicate by a key, deterministically and independently of input order.
+ *
+ * P-007 gate 3 — THE CARDINALITY CHOKEPOINT. `stateHash` folds these arrays;
+ * `worldDiff` compares them as id-keyed Maps (facts, edges) and content-keyed
+ * membership Sets (the three record dimensions). An array carries MULTIPLICITY
+ * that neither of those views can observe, so before this function the hash saw
+ * two entries where the diff saw one — and the invariant
+ *
+ *   worldDiff(A, B) empty  <=>  stateHash(A) === stateHash(B)
+ *
+ * broke, with a real value change becoming invisible. The rule that closes the
+ * class, rather than any one instance of it: `stateHash` may fold ONLY what
+ * `worldDiff` can compare.
+ *
+ * A duplicate id is a malformed world (canon rejects duplicate declarations, and
+ * `overrideFact` now mints injectively). This collapses it IDENTICALLY on both
+ * sides instead of pretending it cannot happen — sorting by (key, content) and
+ * keeping the first makes the survivor a function of the SET of entries, never
+ * of the order they arrived in.
+ */
+function dedupeBy<T>(records: T[], key: (record: T) => string): T[] {
+  const sorted = [...records].sort(
+    (a, b) => key(a).localeCompare(key(b)) || canonicalJson(a).localeCompare(canonicalJson(b))
+  );
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const record of sorted) {
+    const k = key(record);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(record);
+  }
+  return out;
+}
+
+/**
  * Project a WorldState onto its canonical semantic content.
  *
- * Pure and deterministic: every array is sorted by id (temporal violations by
- * their node set, which is how the detector already orders them), so two
- * semantically identical worlds project onto byte-identical values regardless
- * of construction order.
+ * Pure and deterministic: every collection is deduplicated and sorted, so two
+ * semantically identical worlds project onto byte-identical values regardless of
+ * construction order — and, per `dedupeBy`, onto collections `worldDiff` can
+ * compare element-for-element.
+ *
+ * LINEAGE IS SUBTRACTED, NOT SEMANTICS ENUMERATED. Each canonical record is the
+ * whole record MINUS a named lineage set, so a field added to `FactView` or
+ * `ContradictionRecord` is folded by default and only lineage is omitted. The
+ * earlier form listed the semantic fields, which is an enumeration wearing
+ * invariant clothing: the next field added would have been silently dropped from
+ * world identity. The lineage sets are:
+ *   - facts: `source` (canon vs derived), `overridden` (was it written)
+ *   - contradictions: `source` (which intervention caused the record)
+ * Both answer "how did this come to be", which is `identityHash`'s question.
  */
 export function semanticState(world: WorldState): SemanticState {
-  const facts: CanonicalFact[] = world.facts
-    .map((f) => ({
-      id: f.id,
-      subject: f.subject,
-      predicate: f.predicate,
-      object: f.object,
-      validFrom: f.validFrom ?? null,
-      validTo: f.validTo ?? null,
-    }))
-    .sort(byId);
-
-  const edges: CanonicalEdge[] = world.edges
-    .map((e) => ({ id: e.id, kind: e.kind, from: e.from, to: e.to, group: e.group }))
-    .sort(byId);
-
-  const contradictions: CanonicalContradiction[] = world.contradictions
-    .map((c) => ({ id: c.id, a: c.a, b: c.b, detail: c.detail, detectedAt: c.detectedAt }))
-    .sort(byId);
-
-  const temporalViolations: TemporalViolation[] = [...world.temporalViolations].sort((a, b) =>
-    a.nodes.join(",").localeCompare(b.nodes.join(","))
+  const facts: CanonicalFact[] = dedupeBy(
+    world.facts.map((f) => {
+      const { source: _source, overridden: _overridden, ...semantic } = f;
+      return { ...semantic, validFrom: f.validFrom ?? null, validTo: f.validTo ?? null };
+    }),
+    (f) => f.id
   );
 
-  const constraintViolations: ConstraintViolationRecord[] = [...world.constraintViolations].sort(byId);
+  const edges: CanonicalEdge[] = dedupeBy(
+    world.edges.map((e) => ({ ...e })),
+    (e) => e.id
+  );
+
+  const contradictions: CanonicalContradiction[] = dedupeBy(
+    world.contradictions.map((c) => {
+      const { source: _source, ...semantic } = c;
+      return semantic;
+    }),
+    (c) => c.id
+  );
+
+  // The three RECORD dimensions are compared by full canonical content in the
+  // diff (`contentSetDiff`), so content — not id — is the dedup key here.
+  const temporalViolations: TemporalViolation[] = dedupeBy(
+    [...world.temporalViolations],
+    canonicalJson
+  ).sort((a, b) => a.nodes.join(",").localeCompare(b.nodes.join(",")));
+
+  const constraintViolations: ConstraintViolationRecord[] = dedupeBy(
+    [...world.constraintViolations],
+    canonicalJson
+  ).sort(byId);
 
   return {
     statuses: world.statuses,

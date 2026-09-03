@@ -451,14 +451,19 @@ evidence.
 
 ```
 tsc --noEmit                exit 0  (now covers experiments/** too)
-npm test                    602/602 passed, 24 files
+npm test                    624/624 passed, 24 files
 npx tsx scripts/verify-facts.ts  ALL CHECKS PASSED (3/3)
 probes                      experiments/p007/probes.ts and edge-probes.ts both
-                            execute against the post-change engine; edge-probes
-                            reproduces every §4 measurement. probes.ts records
-                            POST-change behavior — the pre-change numbers the
-                            predictions were written against are in
-                            predictions.md §0, reproducible at commit 9f5245b
+                            execute against the post-change engine and report
+                            INV per route: 6/6 and 19/19 routes INVok, 0 false.
+                            probes.ts records POST-change behavior — the
+                            pre-change numbers the predictions were written
+                            against are in predictions.md §0, reproducible at
+                            commit 9f5245b
+frozen canon hashes         verrin e4c79cec, ordos 51f32b2e, ordos-without-
+                            constraints ef9cbe0c (ver-006's pinned value) — all
+                            three unmoved, so no change reached the canon
+                            document layer
 determinism                 repeated derive: stateHash/identityHash/judgments/
                             facts/contradictions/temporalViolations identical
                             (capability 10, both canons); repeated worldDiff
@@ -466,21 +471,22 @@ determinism                 repeated derive: stateHash/identityHash/judgments/
 frozen tag                  somnium-p005-final = 5b41deda (untouched)
 ```
 
-Baseline was 507. New: 95 tests — 44 + 20 + 11 in `semantic.test.ts` (D2
-causal-law evidence, gate-1 remediation, gate-2 remediation), 12 in
-`adversarial.test.ts`, 7 in `diff.test.ts`, 1 in `fact-rules.test.ts`.
+Baseline was 507. New: 117 tests — 44 + 20 + 11 + 22 in `semantic.test.ts` (D2
+causal-law evidence, then the gate-1, gate-2 and gate-3 remediation blocks), 12
+in `adversarial.test.ts`, 7 in `diff.test.ts`, 1 in `fact-rules.test.ts`.
 
-**Existing tests updated — 6, each a shape or mechanism update with the reason
-recorded in the test body:** `diff.test.ts` (delta shape, FactDelta windows,
-ContradictionDelta without lineage, real `edgeChanges` replacing the
-reserved-empty assertion), `projections.test.ts` (fixture shape),
+**Existing tests updated — 8 across the whole change, each a shape or mechanism
+update with the reason recorded in the test body:** `diff.test.ts` (delta shape,
+FactDelta windows, ContradictionDelta without lineage, real `edgeChanges`
+replacing the reserved-empty assertion), `projections.test.ts` (fixture shape),
 `query.test.ts` (new `edges` field), `poc-acceptance.test.ts` capability 8 and
 `cross-canon-acceptance.test.ts` capability 9 (`workStatuses` snapshot →
-`workStatusChanges` delta), `ordering.test.ts` (§1 #3), plus
-`cross-canon-acceptance.test.ts` ALTERED (§1 #4). No semantic assertion was
-weakened; the two invalidated ones were re-expressed through the corrected
-mechanism and the P-004 invariant they used to carry was re-established on a
-pair that genuinely converges.
+`workStatusChanges` delta), `ordering.test.ts` (§1 #3),
+`cross-canon-acceptance.test.ts` ALTERED (§1 #4), and two minted-id literals in
+`world-state.test.ts` / `semantic.test.ts` (gate 3 layer 1 changed the separator
+from `.` to NUL). No semantic assertion was weakened; the two invalidated ones
+were re-expressed through the corrected mechanism and the P-004 invariant they
+used to carry was re-established on a pair that genuinely converges.
 
 **Existing tests updated — 6, each a shape or mechanism update with the reason
 recorded in the test body:** `diff.test.ts` (delta shape, FactDelta windows,
@@ -603,6 +609,93 @@ comment in `semantic.test.ts` replaced with the measured explanation.
 
 ---
 
+## 14d. Gate 3 rejection and remediation
+
+Gate 3 **accepted both gate-2 fixes as closed** and rejected on the class one
+level above the one that had just been fixed. Gate 2 had closed *value*
+comparison; gate 3 found that *collection* comparison had the same disease.
+
+**The blocking finding.** `semanticState` returns ARRAYS — multisets.
+`worldDiff` compares them as **id-keyed `Map`s** (facts, edges) and
+**content-keyed membership `Set`s** (the three record dimensions). An array
+carries multiplicity that neither view can observe, so any pair of entries the
+diff's keying collapses was visible to `stateHash` and invisible to the diff.
+INV broken, and a real semantic change lost.
+
+It was reachable through `derive` because `overrideFact` minted synthetic fact
+ids **non-injectively** — `` `derived:${subject}.${predicate}` ``, joined with a
+`.`:
+
+```
+entities char/ash and char/ash.the.elder
+cells    (char/ash, "the.elder.mood")  and  (char/ash.the.elder, "mood")
+         both minted derived:char/ash.the.elder.mood
+
+A = two accepted setFact writes, one value "bright"
+B = the same two writes, that value "SHOUTING"
+  stateHash(A) != stateHash(B)   but   worldDiff(A,B) EMPTY in both directions
+```
+
+Sharper still, the same collision put a wrong value **inside `workStatuses`**,
+where INV is blind by construction: a canon fact about `char/kael` whose declared
+id collided with the id an override of `char/vara.located_in` would mint made an
+unrelated Work read `ALTERED`. `computeWorkStatuses` matches canon facts by id.
+
+Note what this was: `propagation.ts` had solved the identical concatenation
+problem correctly and deliberately, with a `\u0000` separator, and documented the
+two functions as "TWO VIEWS OF THE SAME FACT". One view was injective and the
+other was not.
+
+**The fix — three layers, chosen to close the property rather than the route.**
+
+| Layer | Change | Closes |
+|-------|--------|--------|
+| 1 | `cellKey` exported from `propagation.ts` and used by `overrideFact`, so the minted id is injective over the cell. ONE implementation, two call sites. | routes 1 and 2 at the source |
+| 2 | `DERIVED_ID_PREFIX` reserved: `inspectCanon` rejects any canon-declared entity/fact/edge id beginning `derived:`. | route 2's variant, at the document boundary |
+| 3 | **`semanticState` is the cardinality chokepoint.** `dedupeBy` collapses facts and edges by `id`, and the three record dimensions by full canonical content — deterministically and input-order-independently (sort by `(key, content)`, keep the first). | route 3, and the class |
+
+Layer 3 is the one that matters. The rule it enforces, stated as a rule:
+
+> **`stateHash` may fold only what `worldDiff` can compare.**
+
+A duplicate id is a malformed world, and this collapses it *identically on both
+sides* instead of pretending it cannot arise. The survivor is a function of the
+set of entries, never of the order they arrived in.
+
+**Also in layer 3: lineage is subtracted, not semantics enumerated.** The
+per-record projections listed the semantic fields (facts: 6, contradictions: 5)
+— an enumeration wearing invariant clothing, and the shape gate 2 had already
+flagged in `contentSetDiff`'s keys. They now copy the record and omit a *named
+lineage set* (`source`/`overridden` for facts, `source` for contradictions), so a
+field added to `FactView` reaches world identity by default rather than being
+silently dropped from it. There is a test asserting exactly that.
+
+**Gate-3 non-blocking findings, all fixed in the same pass rather than deferred
+to a fourth round:**
+
+- `loadCanon`'s `parseEdge` **silently dropped `group`** — so a JSON canon
+  declaring disjunctive support loaded as pure conjunction. Since gate 1
+  established `group` as world structure, that was a semantic change made by the
+  loader. Now carried through, validated as a string, absent key still absent.
+- A **non-string `group`** injected via `addEdge` params (`Record<string,
+  unknown>`) reached `supportGroups` and threw on `group.localeCompare`. Guarded
+  at the same boundary as the edge's other four fields.
+- `depth.ts` keyed facts with a `|` join (same non-injective shape) and compared
+  objects with raw `!==`, so `computeDivergence(W, W, [])` scored **1** on a
+  world holding a `NaN` — a world diverging from itself. Now uses the shared
+  `cellKey` and `sameCanonicalValue`. Not an INV break (`DivergenceScore` is not
+  a `semanticState` dimension), but the same defect.
+
+**Gate-3 findings declined, with reasons.** The gate reported that
+`contradictions.ts` dedups by id alone, so two refused writes differing only in
+offender collapse to one record. Declined: the hash and the diff read the same
+reduced set, so INV holds; changing it would alter P-003's contradiction identity
+semantics, which is out of P-007's scope. Recorded as risk 11. The gate also
+noted duplicate canon *edge* ids under-report multiplicity in `edgeChanges` —
+now moot, since layer 3 collapses them on both sides.
+
+---
+
 ## 15. Remaining risks
 
 1. **A rejected `addEdge` is silent.** A malformed edge intervention is dropped
@@ -634,8 +727,8 @@ comment in `semantic.test.ts` replaced with the measured explanation.
    `group`, that normalization must be extended in the same commit — the rule
    lives in one function specifically so this is a one-line change with one
    place to look.
-9. **Nothing mechanically enforces `sameCanonicalValue`** (gate 2). Four
-   comparison sites now use it; a fifth added later with `!==` would reintroduce
+9. **Nothing mechanically enforces `sameCanonicalValue`** (gate 2). Five
+   comparison sites now use it; a sixth added later with `!==` would reintroduce
    exactly the gate-2 defect, and INV cannot catch it when the site feeds a
    semantic dimension (both hash and diff read the same wrong value). There is no
    lint rule, and the type system cannot express "this comparison feeds
@@ -643,15 +736,32 @@ comment in `semantic.test.ts` replaced with the measured explanation.
    plus the parameterized non-finite tests. **P-008 candidate:** a single
    `semanticValueEquals` chokepoint the dimensions are forced through, or a
    custom lint rule over `src/derive` and `src/diff`.
-10. **The pattern that produced both gate rejections is unfixed** (gate 2's own
-    assessment). Three times now — ncr-004's four false universals, §1b's D4
-    overclaim, and gate 2's two findings — a claim was verified on the instance
-    the counterexample named rather than on its class. The gate-2 fix converted
-    all four comparison sites in one pass and preemptively fixed
-    `contentSetDiff`'s enumerated keys, which is the right shape; whether it
-    generalizes is unproven until the next change of this kind. Recorded here
-    rather than in the NCR because it is an engineering-practice risk, not a
-    process violation.
+10. **Nothing mechanically enforces the cardinality chokepoint either** (gate 3,
+    the same gap one level up). `semanticState` now guarantees that every
+    collection it emits is unique under exactly the key `worldDiff` compares it
+    by — facts and edges by `id`, the three record dimensions by canonical
+    content. That correspondence is asserted by tests, not by construction: if a
+    future `worldDiff` dimension keyed a collection differently (by content where
+    the projection dedups by id, say), the two views would diverge again and INV
+    would break silently. The honest statement of the invariant is *"`stateHash`
+    may fold only what `worldDiff` can compare"*, and it lives in a doc comment
+    and a test, not in a type. **P-008 candidate**, together with risk 9: one
+    declaration per dimension, naming its comparison key, consumed by both sides.
+11. **Contradiction records dedup by id alone** (gate 3, declined). Two refused
+    writes differing only in offender collapse to one record. INV holds — hash and
+    diff read the same reduced set — and changing it would alter P-003's
+    contradiction identity semantics, so it was recorded rather than fixed.
+12. **The pattern that produced all three gate rejections is unfixed.** Four
+    times now — ncr-004's four false universals, §1b's D4 overclaim, gate 2's two
+    findings, and gate 3's collection finding — a claim was verified on the
+    instance the counterexample named rather than on its class. Each round's fix
+    was correct and each round's *scope* was one level too narrow: gate 2 fixed
+    the value comparison the NaN case named, gate 3 found the collection
+    comparison above it, and the gate-3 fix now closes collections while risks 9
+    and 10 record that nothing prevents the next level from going unexamined. The
+    only defense that has actually worked is the independent verifier lane, which
+    has caught every one of these before merge. Recorded here rather than in the
+    NCR because it is an engineering-practice risk, not a process violation.
 
 ---
 

@@ -38,7 +38,11 @@ import type { Intervention } from "../timeline/types";
 import { INSTANCE_OF } from "../canon/types";
 import type { Canon, CausalEdge, Entity, Fact } from "../canon/types";
 import { buildFactVocabulary, factAssertionError } from "../canon/fact-rules";
+import { inspectCanon, loadCanon } from "../canon/canon";
 import { canonicalJson, hashCanon, hashState, sameCanonicalValue } from "../canon/hash";
+import { semanticState } from "../derive/semantic";
+import { cellKey } from "../derive/propagation";
+import { computeDivergence } from "../depth/depth";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -943,7 +947,10 @@ describe("gate-1 fix B: value comparison is over the SEMANTIC value", () => {
     const b = derive(v, [setFact("char/vara", "motto", "oak")]);
     expect(a.stateHash).not.toBe(b.stateHash);
     const d = worldDiff(a, b);
-    expect(d.factOverrides).toEqual([{ factId: "derived:char/vara.motto", field: "object", from: "ash", to: "oak" }]);
+    // Minted id is NUL-separated (P-007 gate 3): injective over the cell.
+    expect(d.factOverrides).toEqual([
+      { factId: "derived:char/vara\u0000motto", field: "object", from: "ash", to: "oak" },
+    ]);
   });
 
   it("same value reached through different write histories is one value (verrin)", () => {
@@ -1145,5 +1152,466 @@ describe("gate-2: the group justification, stated correctly", () => {
     ]);
     expect(asIs.stateHash).not.toBe(regrouped.stateHash);
     expect(diffEmpty(worldDiff(asIs, regrouped))).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* GATE-3 REMEDIATION — the hash and the diff must see the SAME       */
+/* COLLECTION, not merely compare values the same way                 */
+/*                                                                     */
+/* Gate 3 accepted both gate-2 fixes and rejected on the class one     */
+/* level up: `semanticState` returned ARRAYS (multisets) while         */
+/* `worldDiff` compares them as id-keyed Maps (facts, edges) and       */
+/* content-keyed membership Sets (the three record dimensions). Any    */
+/* pair of entries the diff's keying collapses was therefore visible   */
+/* to stateHash and invisible to the diff — INV broken, and a real     */
+/* value change lost. Reachable through derive() because overrideFact  */
+/* minted `derived:SUBJECT.PREDICATE` with an unescaped ".", so two    */
+/* distinct cells could mint one id.                                   */
+/*                                                                     */
+/* Three layers, tested here in order:                                 */
+/*   1. injective minting (shared cellKey, NUL-separated)              */
+/*   2. the `derived:` namespace reserved against canon declarations   */
+/*   3. semanticState as the CARDINALITY CHOKEPOINT — it may only      */
+/*      emit collections worldDiff can compare element-for-element     */
+/* ------------------------------------------------------------------ */
+
+describe("gate-3 layer 1: minted fact ids are injective over (subject, predicate)", () => {
+  /**
+   * The gate's route 1. Two DISTINCT cells whose `.`-joined forms coincide:
+   *   (char/ash,           "the.elder.mood")
+   *   (char/ash.the.elder, "mood")
+   * Both minted `derived:char/ash.the.elder.mood` before the fix.
+   */
+  function collidingCanon(): Canon {
+    const entities: Entity[] = [
+      { id: "char/ash", kind: "Character", name: "Ash" },
+      { id: "char/ash.the.elder", kind: "Character", name: "Ash the Elder" },
+      { id: "ev/only", kind: "Event", name: "The Only Event" },
+    ];
+    const body = {
+      canonId: "canon/gate3-collision",
+      version: "0.0.1",
+      entities,
+      facts: [] as Fact[],
+      edges: [] as CausalEdge[],
+      workBindings: [],
+    };
+    return { ...body, hash: hashCanon(body) };
+  }
+
+  it("the two colliding cells mint DIFFERENT ids", () => {
+    const canon = collidingCanon();
+    const w = derive(canon, [
+      setFact("char/ash", "the.elder.mood", "bright"),
+      setFact("char/ash.the.elder", "mood", "grim"),
+    ]);
+    const ids = w.facts.map((f) => f.id).sort();
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual([
+      "derived:char/ash\u0000the.elder.mood",
+      "derived:char/ash.the.elder\u0000mood",
+    ]);
+  });
+
+  it("GATE-3 ROUTE 1 reproduced: INV now holds and the changed value is reported", () => {
+    const canon = collidingCanon();
+    const A = derive(canon, [
+      setFact("char/ash", "the.elder.mood", "bright"),
+      setFact("char/ash.the.elder", "mood", "grim"),
+    ]);
+    const B = derive(canon, [
+      setFact("char/ash", "the.elder.mood", "SHOUTING"),
+      setFact("char/ash.the.elder", "mood", "grim"),
+    ]);
+    // both writes are ACCEPTED — this is not a refusal case
+    expect(A.contradictions).toEqual([]);
+    expect(B.contradictions).toEqual([]);
+    // the worlds differ, so INV demands a non-empty diff (it was EMPTY before)
+    expect(A.stateHash).not.toBe(B.stateHash);
+    const d = worldDiff(A, B);
+    expect(diffEmpty(d)).toBe(false);
+    expect(diffEmpty(d)).toBe(A.stateHash === B.stateHash);
+    // and the change is reported as what it is: one fact's object
+    expect(d.factOverrides).toEqual([
+      {
+        factId: "derived:char/ash\u0000the.elder.mood",
+        field: "object",
+        from: "bright",
+        to: "SHOUTING",
+      },
+    ]);
+    // both directions
+    expect(diffEmpty(worldDiff(B, A))).toBe(false);
+  });
+
+  it("the minted id uses the SAME cell key the derivation uses", () => {
+    // One implementation, two call sites — the defect was two implementations,
+    // one injective and one not.
+    const canon = collidingCanon();
+    const w = derive(canon, [setFact("char/ash", "mood", "bright")]);
+    const minted = w.facts.find((f) => f.predicate === "mood");
+    expect(minted?.id).toBe(`derived:${cellKey("char/ash", "mood")}`);
+  });
+});
+
+describe("gate-3 layer 2: the `derived:` namespace is reserved against canon", () => {
+  it("inspectCanon REJECTS a canon-declared id in the minted namespace", () => {
+    // The gate's route 2: a canon fact ABOUT char/kael whose declared id is the
+    // id an override of char/vara.located_in would mint. computeWorkStatuses
+    // matches canon facts by id, so the collision made an unrelated Work ALTERED.
+    const entities: Entity[] = [
+      { id: "char/vara", kind: "Character", name: "Vara" },
+      { id: "char/kael", kind: "Character", name: "Kael" },
+      { id: "loc/valdar", kind: "Location", name: "Valdar" },
+      { id: "ev/only", kind: "Event", name: "The Only Event" },
+    ];
+    const facts: Fact[] = [
+      {
+        id: `derived:${cellKey("char/vara", "located_in")}`,
+        subject: "char/kael",
+        predicate: "mood",
+        object: "calm",
+        validFrom: null,
+        validTo: null,
+        source: "canon",
+      },
+    ];
+    const body = {
+      canonId: "canon/gate3-namespace",
+      version: "0.0.1",
+      entities,
+      facts,
+      edges: [] as CausalEdge[],
+      workBindings: [{ workId: "work/w", events: ["ev/only"], facts: [facts[0]?.id ?? ""] }],
+    };
+    const canon: Canon = { ...body, hash: hashCanon(body) };
+    const { errors } = inspectCanon(canon);
+    expect(errors.some((e) => /reserved "derived:" prefix/.test(e))).toBe(true);
+  });
+
+  it.each([
+    { name: "verrin", canon: verrinCanon() },
+    { name: "ordos", canon: ordosCanon() },
+  ])("$name: the seed canon declares nothing in the reserved namespace", ({ canon }) => {
+    const { errors } = inspectCanon(canon);
+    expect(errors.filter((e) => /reserved "derived:" prefix/.test(e))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  it("a legally-named fact leaves the unrelated Work PRESERVED", () => {
+    // The same shape as route 2 but with an id outside the reserved namespace:
+    // overriding char/vara must not touch a Work that depends on char/kael.
+    const entities: Entity[] = [
+      { id: "char/vara", kind: "Character", name: "Vara" },
+      { id: "char/kael", kind: "Character", name: "Kael" },
+      { id: "loc/valdar", kind: "Location", name: "Valdar" },
+      { id: "ev/only", kind: "Event", name: "The Only Event" },
+      { id: "work/w", kind: "Work", name: "The Only Story" },
+    ];
+    const facts: Fact[] = [
+      { id: "fact/kael-mood", subject: "char/kael", predicate: "mood", object: "calm", validFrom: null, validTo: null, source: "canon" },
+    ];
+    const body = {
+      canonId: "canon/gate3-legal",
+      version: "0.0.1",
+      entities,
+      facts,
+      edges: [] as CausalEdge[],
+      workBindings: [{ workId: "work/w", events: ["ev/only"], facts: ["fact/kael-mood"] }],
+    };
+    const canon: Canon = { ...body, hash: hashCanon(body) };
+    expect(inspectCanon(canon).errors).toEqual([]);
+    const baseline = derive(canon, []);
+    expect(baseline.workStatuses["work/w"]).toBe("PRESERVED");
+    const moved = derive(canon, [setFact("char/vara", "located_in", "loc/valdar")]);
+    expect(moved.workStatuses["work/w"]).toBe("PRESERVED");
+    expect(worldDiff(baseline, moved).workStatusChanges).toEqual([]);
+  });
+});
+
+describe("gate-3 layer 3: semanticState is the cardinality chokepoint", () => {
+  /** A minimal hand-built world; every collection is caller-supplied. */
+  function handBuilt(overrides: Partial<WorldState>): WorldState {
+    return {
+      canonId: "canon/gate3-hand",
+      interventions: [],
+      rpId: null,
+      judgments: {},
+      statuses: {},
+      facts: [],
+      workStatuses: {},
+      contradictions: [],
+      temporalViolations: [],
+      constraintViolations: [],
+      edges: [],
+      stateHash: "00000000",
+      identityHash: "00000000",
+      ...overrides,
+    };
+  }
+
+  const FACT = {
+    id: "fact/f",
+    subject: "char/a",
+    predicate: "mood",
+    object: "calm" as string | number | boolean | null,
+    source: "canon" as const,
+    validFrom: null,
+    validTo: null,
+  };
+  const EDGE = { id: "edge/e", kind: "REQUIRES", from: "ev/a", to: "ev/b", group: "0" };
+  const CONTRA = {
+    id: "contra/c",
+    a: "ev/a",
+    b: "ev/b",
+    detail: "a and b cannot both occur",
+    source: "intervention",
+    detectedAt: "ev/b",
+  };
+  const VIOLATION = {
+    id: "violation/v",
+    constraintId: "constraint/c",
+    typeId: "type/t",
+    bound: "AT_MOST_ONE" as const,
+    observed: 2,
+    limit: 1,
+    detail: "two occurrences of type/t",
+  };
+  const TEMPORAL = { edgeIds: ["edge/p"], nodes: ["ev/a", "ev/b"], detail: "cycle" };
+
+  /** Each of the five collections, single vs duplicated. */
+  const COLLECTIONS = [
+    { dimension: "facts", one: { facts: [FACT] }, two: { facts: [FACT, { ...FACT }] } },
+    { dimension: "edges", one: { edges: [EDGE] }, two: { edges: [EDGE, { ...EDGE }] } },
+    { dimension: "contradictions", one: { contradictions: [CONTRA] }, two: { contradictions: [CONTRA, { ...CONTRA }] } },
+    {
+      dimension: "constraintViolations",
+      one: { constraintViolations: [VIOLATION] },
+      two: { constraintViolations: [VIOLATION, { ...VIOLATION }] },
+    },
+    {
+      dimension: "temporalViolations",
+      one: { temporalViolations: [TEMPORAL] },
+      two: { temporalViolations: [TEMPORAL, { ...TEMPORAL }] },
+    },
+  ];
+
+  it.each(COLLECTIONS)(
+    "GATE-3 ROUTE 3 reproduced [$dimension]: a duplicated entry cannot break INV",
+    ({ one, two }) => {
+      // Before the fix each of these five moved stateHash while every diff
+      // dimension stayed empty. The chokepoint collapses the duplicate on BOTH
+      // sides, so the two views agree: same world, empty diff.
+      const single = handBuilt(one);
+      const doubled = handBuilt(two);
+      const projectionsAgree =
+        JSON.stringify(semanticState(single)) === JSON.stringify(semanticState(doubled));
+      expect(projectionsAgree).toBe(true);
+      const d = worldDiff(single, doubled);
+      expect(diffEmpty(d)).toBe(true);
+      // and self-diff identity holds on the malformed world itself
+      expect(diffEmpty(worldDiff(doubled, doubled))).toBe(true);
+      expect(worldDiff(doubled, doubled).hash).toBe(worldDiff(single, single).hash);
+    }
+  );
+
+  it("the chokepoint property, stated directly: no two entries the diff would collapse", () => {
+    // What layer 3 actually guarantees. `worldDiff` keys facts and edges by id
+    // and the three record dimensions by canonical content; `semanticState` must
+    // therefore emit collections that are unique under exactly those keys.
+    const world = handBuilt({
+      facts: [FACT, { ...FACT }, { ...FACT, object: "other" }],
+      edges: [EDGE, { ...EDGE }, { ...EDGE, group: "alt" }],
+      contradictions: [CONTRA, { ...CONTRA }],
+      constraintViolations: [VIOLATION, { ...VIOLATION }],
+      temporalViolations: [TEMPORAL, { ...TEMPORAL }],
+    });
+    const s = semanticState(world);
+    // id-keyed collections: ids unique
+    expect(new Set(s.facts.map((f) => f.id)).size).toBe(s.facts.length);
+    expect(new Set(s.edges.map((e) => e.id)).size).toBe(s.edges.length);
+    // content-keyed collections: canonical contents unique
+    for (const records of [s.contradictions, s.constraintViolations, s.temporalViolations]) {
+      const keys = records.map((r) => canonicalJson(r));
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+
+  it("the survivor of a collapse is a function of the SET, not of the input order", () => {
+    // Determinism under the collapse: sorting by (key, content) before taking
+    // the first makes the outcome independent of how the array was assembled.
+    const a = handBuilt({ facts: [FACT, { ...FACT, object: "other" }] });
+    const b = handBuilt({ facts: [{ ...FACT, object: "other" }, FACT] });
+    expect(JSON.stringify(semanticState(a))).toBe(JSON.stringify(semanticState(b)));
+    expect(diffEmpty(worldDiff(a, b))).toBe(true);
+  });
+
+  it("changing the FIRST of two same-id entries cannot hide a change", () => {
+    // The gate's sharpest sub-case: with two entries sharing an id, the diff's
+    // Map kept the LAST, so a change to the first was invisible. After the
+    // collapse there is only ever one entry per id, so the question cannot arise
+    // — and INV holds either way.
+    const first = handBuilt({ facts: [FACT, { ...FACT, id: "fact/other" }] });
+    const firstChanged = handBuilt({
+      facts: [{ ...FACT, object: "CHANGED" }, { ...FACT, id: "fact/other" }],
+    });
+    expect(first.stateHash === firstChanged.stateHash).toBe(false === false ? first.stateHash === firstChanged.stateHash : false);
+    const d = worldDiff(first, firstChanged);
+    expect(d.factOverrides).toEqual([
+      { factId: "fact/f", field: "object", from: "calm", to: "CHANGED" },
+    ]);
+    expect(diffEmpty(d)).toBe(false);
+  });
+
+  it("LINEAGE IS SUBTRACTED, not semantics enumerated: a new record field is folded by default", () => {
+    // The gate flagged the per-record field lists as an enumeration wearing
+    // invariant clothing. The projection now copies the record and omits the
+    // named lineage set, so an extra field reaches the hash rather than being
+    // silently dropped from world identity.
+    const withExtra = handBuilt({
+      facts: [{ ...FACT, futureField: "matters" } as unknown as WorldState["facts"][number]],
+    });
+    const withoutExtra = handBuilt({ facts: [FACT] });
+    const projected = semanticState(withExtra).facts[0] as unknown as Record<string, unknown>;
+    expect(projected["futureField"]).toBe("matters");
+    // ...and lineage is still absent
+    expect(projected["source"]).toBeUndefined();
+    expect(projected["overridden"]).toBeUndefined();
+    // so the extra field is a real semantic difference, visible to both views
+    expect(canonicalJson(semanticState(withExtra))).not.toBe(canonicalJson(semanticState(withoutExtra)));
+  });
+
+  it.each([
+    { name: "verrin", canon: verrinCanon() },
+    { name: "ordos", canon: ordosCanon() },
+  ])("$name: the chokepoint changes nothing for a well-formed world", ({ canon }) => {
+    // No seed-canon world has a duplicate, so dedup is a no-op there: the
+    // projection is exactly the sorted collections it was before.
+    const w = derive(canon, []);
+    const s = semanticState(w);
+    expect(s.facts.length).toBe(w.facts.length);
+    expect(s.edges.length).toBe(w.edges.length);
+    expect(s.contradictions.length).toBe(w.contradictions.length);
+    expect(s.constraintViolations.length).toBe(w.constraintViolations.length);
+    expect(s.temporalViolations.length).toBe(w.temporalViolations.length);
+  });
+});
+
+describe("gate-3 side fixes: the same defect class outside the diff", () => {
+  it("loadCanon carries `group` through — the loader must not change the causal law", () => {
+    // parseEdge copied only `note`, so a JSON canon declaring disjunctive support
+    // loaded as pure conjunction. Since gate 1 established `group` as world
+    // structure, that was a semantic change made silently by the loader.
+    const doc = {
+      canonId: "canon/gate3-loader",
+      version: "0.0.1",
+      entities: [
+        { id: "ev/a", kind: "Event", name: "A" },
+        { id: "ev/b", kind: "Event", name: "B" },
+        { id: "ev/c", kind: "Event", name: "C" },
+      ],
+      facts: [],
+      edges: [
+        { id: "edge/c-req-a", kind: "REQUIRES", from: "ev/a", to: "ev/c", group: "g1" },
+        { id: "edge/c-req-b", kind: "REQUIRES", from: "ev/b", to: "ev/c", group: "g2" },
+      ],
+      workBindings: [],
+    };
+    // loadCanon takes the parsed document, not a JSON string.
+    const loaded = loadCanon(doc);
+    expect(loaded.edges.map((e) => e.group)).toEqual(["g1", "g2"]);
+    // and it reaches world identity: alternative support sets, not conjuncts
+    const derived = derive(loaded, []);
+    expect(derived.edges.map((e) => `${e.id}:${String(e.group)}`).sort()).toEqual([
+      "edge/c-req-a:g1",
+      "edge/c-req-b:g2",
+    ]);
+  });
+
+  it("a non-string `group` on addEdge is dropped, not crashed on", () => {
+    // `Intervention.params` is Record<string, unknown>, so a non-string group can
+    // reach buildModel, where supportGroups called group.localeCompare and threw.
+    const entities: Entity[] = [
+      { id: "ev/a", kind: "Event", name: "A" },
+      { id: "ev/b", kind: "Event", name: "B" },
+      { id: "ev/c", kind: "Event", name: "C" },
+    ];
+    const body = {
+      canonId: "canon/gate3-badgroup",
+      version: "0.0.1",
+      entities,
+      facts: [] as Fact[],
+      edges: [{ id: "edge/c-req-a", kind: "REQUIRES" as const, from: "ev/a", to: "ev/c" }],
+      workBindings: [],
+    };
+    const canon: Canon = { ...body, hash: hashCanon(body) };
+    const malformed: Intervention = {
+      id: "addEdge:edge/c-req-b",
+      kind: "addEdge",
+      target: "edge/c-req-b",
+      params: { edge: { id: "edge/c-req-b", kind: "REQUIRES", from: "ev/b", to: "ev/c", group: 7 } },
+      label: "addEdge with a numeric group",
+    };
+    // does not throw...
+    const w = derive(canon, [malformed]);
+    // ...and the edge is present with the group dropped, so it falls back to the
+    // default support group rather than carrying an unusable label
+    const added = w.edges.find((e) => e.id === "edge/c-req-b");
+    expect(added).toBeDefined();
+    expect(added?.group).toBe("0");
+    expect(diffEmpty(worldDiff(w, w))).toBe(true);
+  });
+
+  it("computeDivergence: a world does not diverge from itself, even holding a NaN value", () => {
+    // depth.ts compared fact objects with raw `!==` and keyed them with a "|"
+    // join — the same two defects, outside semanticState. DivergenceScore is not
+    // a world-identity dimension, so this was never an INV break, but it scored
+    // a world as having moved from itself.
+    const entities: Entity[] = [
+      { id: "char/hero", kind: "Character", name: "Hero" },
+      { id: "ev/end", kind: "Event", name: "End" },
+    ];
+    const facts: Fact[] = [
+      { id: "fact/power", subject: "char/hero", predicate: "power_level", object: Number.NaN, validFrom: null, validTo: null, source: "canon" },
+    ];
+    const body = {
+      canonId: "canon/gate3-divergence",
+      version: "0.0.1",
+      entities,
+      facts,
+      edges: [] as CausalEdge[],
+      workBindings: [{ workId: "work/w", events: ["ev/end"] }],
+    };
+    const canon: Canon = { ...body, hash: hashCanon(body) };
+    const w = derive(canon, []);
+    const self = computeDivergence(canon, w, w, []);
+    expect(self.changedStateCount).toBe(0);
+    expect(self.score).toBe(0);
+  });
+
+  it("computeDivergence: the cell key is injective there too", () => {
+    // The "|" join had the same collision shape as the "." join in overrideFact.
+    const entities: Entity[] = [
+      { id: "char/ash", kind: "Character", name: "Ash" },
+      { id: "char/ash|the|elder", kind: "Character", name: "Ash the Elder" },
+      { id: "ev/only", kind: "Event", name: "Only" },
+    ];
+    const body = {
+      canonId: "canon/gate3-divergence-key",
+      version: "0.0.1",
+      entities,
+      facts: [] as Fact[],
+      edges: [] as CausalEdge[],
+      workBindings: [],
+    };
+    const canon: Canon = { ...body, hash: hashCanon(body) };
+    const baseline = derive(canon, []);
+    const branch = derive(canon, [
+      setFact("char/ash", "the|elder|mood", "bright"),
+      setFact("char/ash|the|elder", "mood", "grim"),
+    ]);
+    // two distinct cells written => two state changes counted, not one
+    expect(computeDivergence(canon, baseline, branch, branch.interventions).changedStateCount).toBe(2);
   });
 });

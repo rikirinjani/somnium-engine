@@ -53,7 +53,7 @@ import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
 import type { Judgment } from "./judgment";
 import { occurs, projectStatus } from "./judgment";
-import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
+import { buildModel, propagateJudgments, temporalViolations, cellKey } from "./propagation";
 import type { TemporalViolation } from "./propagation";
 import { detectContradictions } from "./contradictions";
 import { evaluateConstraints } from "./constraints";
@@ -188,7 +188,15 @@ function overrideFact(
     .sort((a, b) => (a.validFrom ?? "").localeCompare(b.validFrom ?? ""));
   const replaced = matching[matching.length - 1];
   const derived: FactView = {
-    id: replaced?.id ?? `derived:${subject}.${predicate}`,
+    // P-007 gate 3: the synthetic id must be INJECTIVE over (subject,
+    // predicate), because the effective fact list is id-keyed downstream —
+    // `worldDiff` builds a Map from it and `computeWorkStatuses` matches canon
+    // facts by id. Joining with `.` was not: `(char/ash, "the.elder.mood")` and
+    // `(char/ash.the.elder, "mood")` minted ONE id for two distinct cells, so
+    // the hash saw two facts while the diff saw one and a real value change
+    // became invisible. `cellKey` is the SAME key `buildModel` uses for the same
+    // reason — one implementation, in propagation.ts.
+    id: replaced?.id ?? `derived:${cellKey(subject, predicate)}`,
     subject,
     predicate,
     object: (object ?? null) as string | number | boolean | null,

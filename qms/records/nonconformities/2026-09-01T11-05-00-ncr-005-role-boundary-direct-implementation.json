@@ -3,7 +3,9 @@
   "title": "Role-boundary deviation: orchestrator implemented P-007 directly",
   "category": "records/nonconformities",
   "date": "2026-09-01T11:05:00Z",
+  "updated": "2026-09-03T14:20:00Z",
   "severity": "major",
+  "status": "open",
   "description": "Rule 3 (role boundaries) assigns implementation code to the fixer lane; the coordinator/orchestrator does not write code. P-007's implementation lane was dispatched five times (fix-1..fix-5, ses_fa41bea87ffeMfKnpcO8M0V0r2, ses_fa4166da9ffeLae477DYLwgA1V, ses_fa40de25affee2e0be89IfeuI5, ses_fa407a7b4ffeI7nurPgZatKow2, ses_fa403f81cffe2DInXaS0Fjg9Bd) and every dispatch failed at spawn with 'Insufficient balance' (opencode.ai workspace billing). None of the five sessions executed a single tool call; the worktree was verified clean after each failure. The user was offered the two options (fix billing / approve direct implementation) and responded 'continue' three times, which was taken as approval to proceed in-session.",
   "root_cause": "External billing failure made the fixer lane unavailable. The choice was between blocking an approved, fully-specified task indefinitely and crossing the role boundary under documented deviation.",
   "what_was_done": "The orchestrator implemented P-007 directly in the p007 worktree, following the same bounded spec that was prepared for the fixer dispatch (experiments/p007/predictions.md + the dispatch brief). The L2 verifier gate remains an independent subagent (verifier lane) and is still required before close-out - the deviation does not extend to verification.",
@@ -12,7 +14,29 @@
     "The L2 verifier gate (independent verifier subagent) is mandatory before the change is accepted; if verifier dispatch also fails on billing, the task BLOCKS rather than self-verifying.",
     "This NCR is filed before implementation begins, not retroactively."
   ],
-  "corrective_action": "When billing is restored, future implementation work returns to the fixer lane. If the verifier gate cannot run due to the same billing failure, P-007 remains unmerged/unaccepted until it can.",
+  "occurrences": [
+    {
+      "round": "implementation (commit 2311653)",
+      "date": "2026-09-01",
+      "failed_dispatches": 5,
+      "session_ids": ["ses_fa41bea87ffeMfKnpcO8M0V0r2", "ses_fa4166da9ffeLae477DYLwgA1V", "ses_fa40de25affee2e0be89IfeuI5", "ses_fa407a7b4ffeI7nurPgZatKow2", "ses_fa403f81cffe2DInXaS0Fjg9Bd"],
+      "gate_outcome": "L2 gate 1 REJECTED (4 blocking items) - the independent lane caught defects the 566-test suite did not"
+    },
+    {
+      "round": "gate-3 structural remediation (commit after 8a7afac)",
+      "date": "2026-09-03",
+      "failed_dispatches": 2,
+      "session_ids": ["ses_f98614565ffe2M2NbEQ3Vt05k4", "ses_f98600a7bffe8j3t1g12Gcb772"],
+      "note": "Same failure mode, same spawn-time error, neither session executed a tool call. The bounded spec had already been written for the fixer lane and was followed verbatim by the orchestrator. Scope of the remediation was chosen by the user (structural: make semanticState the cardinality chokepoint) before implementation began.",
+      "gate_outcome": "pending (gate 4)"
+    }
+  ],
+  "verifier_lane_record": {
+    "assessment": "The compensating control is functioning and is the reason defects are being caught before merge. Three consecutive independent gates, three rejections, every finding invisible to the implementer's own green suite: gate 1 found CausalEdge.group excluded from world identity and non-finite fact objects breaking INV; gate 2 found the same !== defect surviving in computeWorkStatuses where INV is blind by construction; gate 3 found the hash folding multisets while the diff compares sets, reachable through two ordinary accepted setFact writes. The deviation never extended to verification, and the orchestrator never self-approved.",
+    "gate_verdicts": ["gate 1: REJECT", "gate 2: REJECT", "gate 3: REJECT"]
+  },
+  "corrective_action": "When billing is restored, future implementation work returns to the fixer lane. If the verifier gate cannot run due to the same billing failure, P-007 remains unmerged/unaccepted until it can. Additional corrective action added after gate 2, at the verifier's recommendation: a universal about a data type must enumerate that type's fields, and a fix for a comparison defect must convert every comparison of that class in one pass rather than the site the counterexample named. Gate 3 showed that this was applied to the value axis but not to the collection axis one level up; the gate-3 remediation therefore fixes the PROPERTY (the hash's view and the diff's view must be the same collection) rather than the instance.",
+  "residual_risk": "Recorded in docs/P007-WORLDDIFF.md risks 9 and 10: nothing mechanically enforces the canonical-comparison discipline at a future comparison site, and the patch-the-instance pattern has now recurred three times. Neither is fixed by construction; both are documented rather than closed.",
   "linked_task": "P-007 WorldDiff semantic integrity (req-007)",
   "trace_id": "somnium-p007-direct-implementation"
 }

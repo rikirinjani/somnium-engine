@@ -48,6 +48,18 @@ export type EntityKind =
  */
 export const INSTANCE_OF = "instance_of";
 
+/**
+ * The namespace reserved for engine-minted fact ids (P-007 gate 3).
+ *
+ * `overrideFact` mints an id here when an intervention writes a
+ * (subject, predicate) cell canon declared no fact for. The effective fact list
+ * is id-keyed downstream — `worldDiff` builds a Map from it, and
+ * `computeWorkStatuses` matches canon facts by id — so a canon-declared id in
+ * this namespace can collide with a minted one, which made an unrelated Work
+ * read ALTERED. `inspectCanon` therefore rejects canon ids with this prefix.
+ */
+export const DERIVED_ID_PREFIX = "derived:";
+
 export interface Entity {
   id: string; // stable id, e.g. "char/vara"
   kind: EntityKind;
