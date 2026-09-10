@@ -1,0 +1,215 @@
+{
+  "env": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 4,
+    "cpuModel": "AMD Ryzen 3 4300U with Radeon Graphics         ",
+    "totalMemBytes": 7916294144,
+    "freeMemBytes": 1528143872,
+    "nodeVersion": "v22.23.2",
+    "tsVersion": "5.9.3",
+    "commit": "443d3d9aba8565900ba156e5cef5bd1ff4b9ee70",
+    "timestamp": "2026-09-10T15:48:01.491Z"
+  },
+  "rows": [
+    {
+      "canon": "verrin",
+      "regime": "equal",
+      "reprBytesA": 35693,
+      "reprBytesB": 35693,
+      "deltaSize": 0,
+      "diffMs": 1.0179500000085682,
+      "reps": 50
+    },
+    {
+      "canon": "verrin",
+      "regime": "small",
+      "reprBytesA": 18375,
+      "reprBytesB": 18375,
+      "deltaSize": 0,
+      "diffMs": 0.3214999999909196,
+      "reps": 35
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 6805,
+      "deltaSize": 1,
+      "diffMs": 0.5319999999774154,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 7044,
+      "deltaSize": 2,
+      "diffMs": 0.3241000000271015,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 6715,
+      "deltaSize": 4,
+      "diffMs": 0.3922000000020489,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 7351,
+      "deltaSize": 7,
+      "diffMs": 0.2599000000045635,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 9838,
+      "deltaSize": 34,
+      "diffMs": 0.5503000000026077,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 14247,
+      "deltaSize": 57,
+      "diffMs": 0.724900000001071,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 18375,
+      "deltaSize": 82,
+      "diffMs": 0.6155000000144355,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 27474,
+      "deltaSize": 134,
+      "diffMs": 1.0841999999829568,
+      "reps": 5
+    },
+    {
+      "canon": "verrin",
+      "regime": "large",
+      "reprBytesA": 6581,
+      "reprBytesB": 35693,
+      "deltaSize": 176,
+      "diffMs": 0.912400000001071,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "equal",
+      "reprBytesA": 32386,
+      "reprBytesB": 32386,
+      "deltaSize": 0,
+      "diffMs": 0.8550500000128523,
+      "reps": 50
+    },
+    {
+      "canon": "ordos",
+      "regime": "small",
+      "reprBytesA": 21452,
+      "reprBytesB": 21398,
+      "deltaSize": 2,
+      "diffMs": 0.29399999999441206,
+      "reps": 35
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 7108,
+      "deltaSize": 1,
+      "diffMs": 0.22750000000814907,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 7909,
+      "deltaSize": 2,
+      "diffMs": 0.24640000000363216,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 7556,
+      "deltaSize": 4,
+      "diffMs": 0.25260000000707805,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 10713,
+      "deltaSize": 23,
+      "diffMs": 0.3184999999939464,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 10447,
+      "deltaSize": 35,
+      "diffMs": 0.6719999999913853,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 16052,
+      "deltaSize": 55,
+      "diffMs": 0.5451000000175554,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 21398,
+      "deltaSize": 81,
+      "diffMs": 0.7353000000002794,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 27539,
+      "deltaSize": 122,
+      "diffMs": 0.8061000000161584,
+      "reps": 5
+    },
+    {
+      "canon": "ordos",
+      "regime": "large",
+      "reprBytesA": 6882,
+      "reprBytesB": 32386,
+      "deltaSize": 157,
+      "diffMs": 0.8858999999938533,
+      "reps": 5
+    }
+  ],
+  "status": "ok"
+}
