@@ -45,6 +45,7 @@
  * The `interventions` field on the WorldState keeps the full ordered chain.
  */
 import type { Canon, Fact, WorkBinding } from "../canon/types";
+import { DERIVED_ID_PREFIX } from "../canon/types";
 import type { FactVocabulary } from "../canon/fact-rules";
 import { factAssertionError } from "../canon/fact-rules";
 import { canonicalJson, hashState, sameCanonicalValue } from "../canon/hash";
@@ -196,7 +197,7 @@ function overrideFact(
     // the hash saw two facts while the diff saw one and a real value change
     // became invisible. `cellKey` is the SAME key `buildModel` uses for the same
     // reason — one implementation, in propagation.ts.
-    id: replaced?.id ?? `derived:${cellKey(subject, predicate)}`,
+    id: replaced?.id ?? `${DERIVED_ID_PREFIX}${cellKey(subject, predicate)}`,
     subject,
     predicate,
     object: (object ?? null) as string | number | boolean | null,
@@ -403,11 +404,59 @@ function canonicalInterventions(interventions: Intervention[]): {
  * sequential cell assignments, so both of those classes are order-sensitive.
  * `identityHash` encodes exactly that split via `canonicalInterventions`.
  */
+/**
+ * Derivation's canon id-space assumptions, asserted at the point of reliance
+ * (P-007 gate 4 blocker 4 / review ▲3).
+ *
+ * `inspectCanon` is the authoring-time tool and stays complete; what was
+ * missing is that ORDINARY DERIVATION silently forgot to check anything —
+ * every seed canon and test fixture is a hand-built literal that never passes
+ * through the loader. This asserts exactly the two invariants the derivation's
+ * id-keyed consumers rely on, and nothing else:
+ *   1. canon-declared ids (entities, facts, edges) are unique among themselves;
+ *   2. none is in the engine's reserved synthetic namespace (`derived:` — the
+ *      prefix `overrideFact` mints into; a canon fact there can collide with a
+ *      minted id and make an unrelated Work read ALTERED).
+ *
+ * MEMOIZATION (review ▲3): keyed by the canonical encoding OF THE VALIDATED
+ * CONTENT ITSELF — the id arrays — never the declared `canon.hash` field,
+ * which a hand-built literal may set to anything. A cache keyed on untrusted
+ * input is a liability; this key is computed from exactly what the checks read,
+ * so two canons share a verdict only when their id spaces are identical.
+ */
+const assertedCanonIdSpaces = new Set<string>();
+function assertCanonIdSpace(canon: Canon): void {
+  const idSpace = canonicalJson([
+    canon.entities.map((e) => e.id),
+    canon.facts.map((f) => f.id),
+    canon.edges.map((e) => e.id),
+  ]);
+  if (assertedCanonIdSpaces.has(idSpace)) return;
+  const seen = new Set<string>();
+  const declare = (id: string, where: string): void => {
+    if (id.startsWith(DERIVED_ID_PREFIX)) {
+      throw new Error(
+        `canon declares id "${id}" (${where}) in the reserved "${DERIVED_ID_PREFIX}" namespace — ` +
+          `that prefix belongs to engine-minted facts and a collision corrupts world identity`
+      );
+    }
+    if (seen.has(id)) {
+      throw new Error(`canon declares duplicate id "${id}" (${where}) — the effective fact list is id-keyed downstream`);
+    }
+    seen.add(id);
+  };
+  for (const e of canon.entities) declare(e.id, "entity");
+  for (const f of canon.facts) declare(f.id, "fact");
+  for (const ed of canon.edges) declare(ed.id, "edge");
+  assertedCanonIdSpaces.add(idSpace);
+}
+
 export function derive(
   canon: Canon,
   interventions: Intervention[],
   rp?: RewindPoint
 ): WorldState {
+  assertCanonIdSpace(canon);
   const model = buildModel(canon, interventions);
   const { judgments, conflicts } = propagateJudgments(model);
 

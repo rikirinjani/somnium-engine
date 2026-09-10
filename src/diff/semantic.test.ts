@@ -40,7 +40,7 @@ import type { Canon, CausalEdge, Entity, Fact } from "../canon/types";
 import { buildFactVocabulary, factAssertionError } from "../canon/fact-rules";
 import { inspectCanon, loadCanon } from "../canon/canon";
 import { canonicalJson, hashCanon, hashState, sameCanonicalValue } from "../canon/hash";
-import { semanticState } from "../derive/semantic";
+import { semanticState, dimensionEntries } from "../derive/semantic";
 import { cellKey } from "../derive/propagation";
 import { computeDivergence } from "../depth/depth";
 
@@ -947,9 +947,9 @@ describe("gate-1 fix B: value comparison is over the SEMANTIC value", () => {
     const b = derive(v, [setFact("char/vara", "motto", "oak")]);
     expect(a.stateHash).not.toBe(b.stateHash);
     const d = worldDiff(a, b);
-    // Minted id is NUL-separated (P-007 gate 3): injective over the cell.
+    // Minted id uses canonicalJson cellKey (P-007 gate 3): injective over the cell.
     expect(d.factOverrides).toEqual([
-      { factId: "derived:char/vara\u0000motto", field: "object", from: "ash", to: "oak" },
+      { factId: 'derived:["char/vara","motto"]', field: "object", from: "ash", to: "oak" },
     ]);
   });
 
@@ -1209,8 +1209,8 @@ describe("gate-3 layer 1: minted fact ids are injective over (subject, predicate
     const ids = w.facts.map((f) => f.id).sort();
     expect(new Set(ids).size).toBe(2);
     expect(ids).toEqual([
-      "derived:char/ash\u0000the.elder.mood",
-      "derived:char/ash.the.elder\u0000mood",
+      'derived:["char/ash","the.elder.mood"]',
+      'derived:["char/ash.the.elder","mood"]',
     ]);
   });
 
@@ -1235,7 +1235,7 @@ describe("gate-3 layer 1: minted fact ids are injective over (subject, predicate
     // and the change is reported as what it is: one fact's object
     expect(d.factOverrides).toEqual([
       {
-        factId: "derived:char/ash\u0000the.elder.mood",
+        factId: 'derived:["char/ash","the.elder.mood"]',
         field: "object",
         from: "bright",
         to: "SHOUTING",
@@ -1416,33 +1416,21 @@ describe("gate-3 layer 3: semanticState is the cardinality chokepoint", () => {
     }
   );
 
-  it("the chokepoint property, stated directly: no two entries the diff would collapse", () => {
-    // What layer 3 actually guarantees. `worldDiff` keys facts and edges by id
-    // and the three record dimensions by canonical content; `semanticState` must
-    // therefore emit collections that are unique under exactly those keys.
+  it("the chokepoint property, stated directly: key collision with different content is a hard error", () => {
+    // Under correction ▲1, two facts sharing an id with different content is a
+    // key defect in the semantic declaration table, exposed by a legal world.
+    // The engine MUST refuse to derive a wrong identity.
     const world = handBuilt({
-      facts: [FACT, { ...FACT }, { ...FACT, object: "other" }],
-      edges: [EDGE, { ...EDGE }, { ...EDGE, group: "alt" }],
-      contradictions: [CONTRA, { ...CONTRA }],
-      constraintViolations: [VIOLATION, { ...VIOLATION }],
-      temporalViolations: [TEMPORAL, { ...TEMPORAL }],
+      facts: [FACT, { ...FACT, object: "other" }], // same id, different object
     });
-    const s = semanticState(world);
-    // id-keyed collections: ids unique
-    expect(new Set(s.facts.map((f) => f.id)).size).toBe(s.facts.length);
-    expect(new Set(s.edges.map((e) => e.id)).size).toBe(s.edges.length);
-    // content-keyed collections: canonical contents unique
-    for (const records of [s.contradictions, s.constraintViolations, s.temporalViolations]) {
-      const keys = records.map((r) => canonicalJson(r));
-      expect(new Set(keys).size).toBe(keys.length);
-    }
+    expect(() => semanticState(world)).toThrow(/key defect/);
   });
 
   it("the survivor of a collapse is a function of the SET, not of the input order", () => {
-    // Determinism under the collapse: sorting by (key, content) before taking
-    // the first makes the outcome independent of how the array was assembled.
-    const a = handBuilt({ facts: [FACT, { ...FACT, object: "other" }] });
-    const b = handBuilt({ facts: [{ ...FACT, object: "other" }, FACT] });
+    // Determinism: identical duplicates (same content) collapse idempotently
+    // regardless of input order — this is the safe case under ▲1.
+    const a = handBuilt({ facts: [FACT, { ...FACT }] });
+    const b = handBuilt({ facts: [{ ...FACT }, FACT] });
     expect(JSON.stringify(semanticState(a))).toBe(JSON.stringify(semanticState(b)));
     expect(diffEmpty(worldDiff(a, b))).toBe(true);
   });
@@ -1473,7 +1461,8 @@ describe("gate-3 layer 3: semanticState is the cardinality chokepoint", () => {
       facts: [{ ...FACT, futureField: "matters" } as unknown as WorldState["facts"][number]],
     });
     const withoutExtra = handBuilt({ facts: [FACT] });
-    const projected = semanticState(withExtra).facts[0] as unknown as Record<string, unknown>;
+    const s = semanticState(withExtra);
+    const projected = dimensionEntries(s, "facts")[0] as unknown as Record<string, unknown>;
     expect(projected["futureField"]).toBe("matters");
     // ...and lineage is still absent
     expect(projected["source"]).toBeUndefined();
@@ -1490,11 +1479,11 @@ describe("gate-3 layer 3: semanticState is the cardinality chokepoint", () => {
     // projection is exactly the sorted collections it was before.
     const w = derive(canon, []);
     const s = semanticState(w);
-    expect(s.facts.length).toBe(w.facts.length);
-    expect(s.edges.length).toBe(w.edges.length);
-    expect(s.contradictions.length).toBe(w.contradictions.length);
-    expect(s.constraintViolations.length).toBe(w.constraintViolations.length);
-    expect(s.temporalViolations.length).toBe(w.temporalViolations.length);
+    expect(dimensionEntries(s, "facts").length).toBe(w.facts.length);
+    expect(dimensionEntries(s, "edges").length).toBe(w.edges.length);
+    expect(dimensionEntries(s, "contradictions").length).toBe(w.contradictions.length);
+    expect(dimensionEntries(s, "constraintViolations").length).toBe(w.constraintViolations.length);
+    expect(dimensionEntries(s, "temporalViolations").length).toBe(w.temporalViolations.length);
   });
 });
 

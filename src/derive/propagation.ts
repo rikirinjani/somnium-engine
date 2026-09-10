@@ -56,7 +56,7 @@
 import type { Canon, CausalEdge, Fact } from "../canon/types";
 import type { FactAssertionError, FactVocabulary } from "../canon/fact-rules";
 import { buildFactVocabulary, factAssertionError } from "../canon/fact-rules";
-import { sameCanonicalValue } from "../canon/hash";
+import { canonicalJson, sameCanonicalValue } from "../canon/hash";
 import type { Intervention } from "../timeline/types";
 import type { Judgment, SupportKind, TruthValue } from "./judgment";
 import { conjoin, disjoin, joinTruth, occurs, truthRank } from "./judgment";
@@ -142,16 +142,17 @@ export interface DerivationModel {
 /**
  * Cell key for a fact's (subject, predicate) — the unit a setFact writes to.
  *
- * The `\u0000` separator makes this INJECTIVE: no (subject, predicate) pair can
- * produce the same key as a different pair, because NUL cannot appear in an id
- * or a predicate. Exported (P-007 gate 3) because `overrideFact` in
- * world-state.ts mints the synthetic fact id for the same cell and must use the
- * same key — it previously joined with `.`, so `(char/ash, "the.elder.mood")`
- * and `(char/ash.the.elder, "mood")` minted ONE id for two distinct cells, and
- * the fact list is id-keyed downstream.
+ * INJECTIVE BY ENCODING, not by character assumption (P-007 gate 4, blocker 3):
+ * `canonicalJson([subject, predicate])` is injective over arbitrary strings —
+ * JSON escaping handles NUL, quotes, backslashes, anything — so no undocumented
+ * "this character cannot appear in an id" premise remains. The previous NUL
+ * separator was injective only while nothing put a NUL in an id, which nothing
+ * enforced. `overrideFact` mints the synthetic fact id from this same key, and
+ * `buildModel`'s `overriddenCells` map is keyed by it: one implementation, and
+ * the fact list's id-keyed consumers downstream cannot see two cells collide.
  */
 export function cellKey(subject: string, predicate: string): string {
-  return `${subject}\u0000${predicate}`;
+  return canonicalJson([subject, predicate]);
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);

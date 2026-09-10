@@ -1,50 +1,43 @@
 /**
- * Somnium Engine — the canonical semantic projection of a world (P-007).
+ * Somnium Engine — the authoritative semantic representation (P-007 convergence).
+ * DESIGN: docs/P007-CONVERGENCE.md. Single source of truth for what a derived
+ * world MEANS; both `stateHash` and `worldDiff` derive from this and nothing else.
  *
- * ONE projection, TWO consumers: `stateHash` hashes it, `worldDiff` compares
- * it. That is what makes the P-007 invariant hold by construction:
+ *   EffectiveSemanticState (this table IS the representation)
+ *        ├── stateHash       hashes it
+ *        └── semanticDelta   compares two of them (repr-only signature, ▲2)
  *
- *   > For two worlds from the SAME canon:
- *   > worldDiff(A, B) is empty  ⟺  stateHash(A) === stateHash(B)
+ * Four L2 gates each found one level of divergence between the hash's view and
+ * the diff's view (field content → value comparison → collection cardinality →
+ * field enumeration). Root cause: two independently hand-written
+ * implementations of one comparison. Here there is ONE representation and ONE
+ * generic comparison; the per-dimension knowledge that remains is exactly this
+ * table: each dimension's (key, record) pairs.
  *
- * (Hash-collision direction excepted: FNV-1a is 32-bit, so distinct semantic
- * states may share a hash with probability ~2^-32 per pair. In that direction
- * the diff is the MORE reliable witness — its fact, status, work and edge
- * dimensions compare canonical content directly. The three RECORD dimensions
- * (contradictions, constraint violations, temporal violations) compare the
- * canonical content STRING, not a digest of it, precisely so a collision there
- * cannot make the diff miss a real difference — an earlier draft keyed those
- * sets on a 32-bit hash and the P-007 gate found a live collision in under 350k
- * candidates.)
+ * STRUCTURAL RULES (each makes a gate finding inexpressible):
+ *   1. Every dimension is a keyed map built by THIS module — multiplicity is
+ *      not expressible (gate 3's class).
+ *   2. A key collision with DIFFERENT content is a HARD ERROR (review ▲1): a
+ *      legal world must never fail to derive, so a collision can only be a key
+ *      defect in this table. Identical duplicates collapse idempotently.
+ *      Ordos TODAY makes two held_by facts co-effective in one cell under
+ *      negate(ev/old-warden-dies) — too-coarse keys are exposed by legal worlds.
+ *   3. Keys can never break hash/diff AGREEMENT (both read this same map); a
+ *      wrong key breaks FAITHFULNESS, and rule 2 detects that at construction.
+ *   4. "No information" has one encoding: UNKNOWN entries are ABSENT from the
+ *      statuses/workStatuses dimensions. Query surface unchanged (`statusOf`
+ *      still answers UNKNOWN for absent keys).
+ *   5. Lineage is SUBTRACTED, never enumerated: a field added to `FactView` or
+ *      `ContradictionRecord` reaches world identity by default.
  *
- * WHAT IS SEMANTIC vs WHAT IS LINEAGE (the P-007 findings, measured in
- * experiments/p007/probes.ts):
- *
- *   SEMANTIC (folded here): statuses (the world-semantic projection of
- *   judgments), effective fact CONTENT (id, subject, predicate, object,
- *   validity windows), the effective edge set (the causal LAW of this world),
- *   work classifications, contradiction CONTENT, temporal violations,
- *   constraint violations.
- *
- *   LINEAGE (deliberately dropped): `judgments.forced`/`negated` marks (how the
- *   verdict was produced), `facts.source`/`overridden` (how the fact value was
- *   written), `contradictions.source` (which intervention caused the record).
- *   These belong to `identityHash` via `canonicalInterventions` — "was this
- *   world reached the same WAY?" — and must never leak into "is this the same
- *   WORLD?".
- *
- *   Also dropped: `judgments` themselves. The judgment model is the engine's
- *   EPISTEMIC evaluation (truth × support × forced × negated); `statuses` is
- *   its world-semantic projection. The one distinction statuses lose —
- *   UNFOUNDED vs NONE support, both projecting to UNKNOWN/UNSUPPORTED — is
- *   engine epistemics by the §5 analysis of docs/P007-WORLDDIFF.md, and stays
- *   available on `WorldState.judgments` for consumers that want it.
+ * Determinism: plain nested objects; `canonicalJson` sorts every key
+ * recursively, so representation equality is exactly canonical-JSON equality
+ * for any construction order.
  */
-import type { EventStatus, WorkStatus } from "./lattice";
+import { canonicalJson } from "../canon/hash";
 import type { TemporalViolation } from "./propagation";
 import type { ConstraintViolationRecord } from "./constraints";
 import type { WorldState } from "./world-state";
-import { canonicalJson } from "../canon/hash";
 
 /** A fact's world-semantic content: identity + claim + narrative-time window. */
 export interface CanonicalFact {
@@ -65,31 +58,7 @@ export interface CanonicalContradiction {
   detectedAt: string;
 }
 
-/**
- * An edge's world-semantic content: the causal law, without its note.
- *
- * `group` IS semantic and must be here (P-007 gate 1, blocker 1). It selects
- * whether same-target REQUIRES edges are conjuncts of one sufficient set or
- * ALTERNATIVE sufficient sets (propagation.ts's `supportGroups`) — that is, it
- * decides the very property that makes an edge load-bearing. Omitting it let
- * two worlds share a `stateHash` and an empty diff while their EFFECTIVE
- * SUPPORT STRUCTURE differed. Measured on both seed canons; docs/P007-WORLDDIFF.md §4.
- *
- * The justification is that `group` is effective-world structure, NOT that
- * same-hash worlds can never diverge under a later intervention. Gate 2 refuted
- * that stronger form: `derive(c, [])` and `derive(c, [forceEvent(root)])` are
- * the same world by design (`forced` is lineage — §7/H4), yet appending
- * `negateEvent(root)` yields EXCLUDED vs CONTRADICTORY. Divergence under a
- * later intervention is therefore permitted when the difference is LINEAGE; it
- * is not permitted when the difference is world structure, which is what
- * `group` is.
- *
- * NORMALIZED, so the fold matches what the derivation actually reads:
- *   - REQUIRES: `group ?? "0"` — the same default `buildModel` applies;
- *   - every other kind: `null` — `group` is ignored there (types.ts), so no
- *     derivation can read it and folding it in would discriminate on a label
- *     nothing can observe.
- */
+/** An edge's world-semantic content: the causal law, without its note. */
 export interface CanonicalEdge {
   id: string;
   kind: string;
@@ -99,28 +68,118 @@ export interface CanonicalEdge {
   group: string | null;
 }
 
-/** The canonical semantic state of one derived world. */
-export interface SemanticState {
-  statuses: Record<string, EventStatus>;
-  facts: CanonicalFact[];
-  edges: CanonicalEdge[];
-  workStatuses: Record<string, WorkStatus>;
-  contradictions: CanonicalContradiction[];
-  temporalViolations: TemporalViolation[];
-  constraintViolations: ConstraintViolationRecord[];
+/**
+ * One dimension's declaration: how the world's (key, record) pairs are
+ * produced. THE ONLY per-dimension knowledge in the engine — adding a semantic
+ * dimension means adding a row, and stateHash and worldDiff both see it with no
+ * further per-dimension code anywhere.
+ */
+interface DimensionDecl {
+  name: string;
+  entries: (world: WorldState) => readonly (readonly [string, unknown])[];
 }
 
-const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
+/**
+ * THE DECLARATION TABLE. Lineage sets are subtracted here, per dimension:
+ *   facts: `source` (canon vs derived), `overridden` (was it written)
+ *   contradictions: `source` (which intervention caused the record)
+ * Both answer "how did this come to be" — `identityHash`'s question, not the
+ * world's. Contradictions/constraints/temporal are CONTENT-keyed (P-003/D5):
+ * the record is the fact; same id + different content = two entries.
+ */
+const DIMENSIONS: readonly DimensionDecl[] = [
+  {
+    name: "statuses",
+    entries: (w) =>
+      Object.entries(w.statuses)
+        .filter(([, status]) => status !== "UNKNOWN") // "no information" is absent
+        .map(([id, status]) => [id, status] as const),
+  },
+  {
+    name: "facts",
+    entries: (w) =>
+      w.facts.map((f) => {
+        const { source: _s, overridden: _o, ...semantic } = f;
+        return [f.id, { ...semantic, validFrom: f.validFrom ?? null, validTo: f.validTo ?? null }] as const;
+      }),
+  },
+  {
+    name: "edges",
+    entries: (w) => w.edges.map((e) => [e.id, { ...e }] as const),
+  },
+  {
+    name: "workStatuses",
+    entries: (w) =>
+      Object.entries(w.workStatuses)
+        .filter(([, status]) => status !== "UNKNOWN")
+        .map(([id, status]) => [id, status] as const),
+  },
+  {
+    name: "contradictions",
+    entries: (w) =>
+      w.contradictions.map((c) => {
+        const { source: _s, ...semantic } = c;
+        return [canonicalJson(semantic), semantic] as const;
+      }),
+  },
+  {
+    name: "temporalViolations",
+    entries: (w) => w.temporalViolations.map((t) => [canonicalJson(t), t] as const),
+  },
+  {
+    name: "constraintViolations",
+    entries: (w) => w.constraintViolations.map((v) => [canonicalJson(v), v] as const),
+  },
+];
+
+/** The names, in table order — the canonical dimension enumeration. */
+export const DIMENSION_NAMES: readonly string[] = DIMENSIONS.map((d) => d.name);
 
 /**
- * A resolved canon edge -> its world-semantic content. The ONE place the
- * normalization rule lives, so `derive` and any future consumer cannot drift.
- *
- * `note` is dropped (authorial flavor, same rule as `CardinalityConstraint.note`).
- * `group` is normalized to what the derivation actually reads: the default `"0"`
- * on REQUIRES (matching `buildModel`'s `edge.group ?? "0"`), and `null` on every
- * other kind, where `group` is ignored and therefore unobservable.
+ * The authoritative representation: dimension name -> (key -> record).
+ * Plain nested object so `canonicalJson` gives one deterministic encoding.
  */
+export type EffectiveSemanticState = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
+/**
+ * Build the representation. THROWS on a key collision with differing content
+ * (review ▲1) — that is a key defect in the table exposed by a legal world,
+ * and deriving a wrong identity is the one outcome that must never happen
+ * silently.
+ */
+export function effectiveSemanticState(world: WorldState): EffectiveSemanticState {
+  const repr: Record<string, Record<string, unknown>> = {};
+  for (const dim of DIMENSIONS) {
+    const entries: Record<string, unknown> = {};
+    for (const [k, record] of dim.entries(world)) {
+      const prior = entries[k];
+      if (prior !== undefined && canonicalJson(prior) !== canonicalJson(record)) {
+        throw new Error(
+          `semantic dimension "${dim.name}" has two different records for key "${k}" — ` +
+            `a key defect in the semantic declaration table, exposed by a legal world; ` +
+            `refusing to derive a wrong identity`
+        );
+      }
+      entries[k] = record;
+    }
+    repr[dim.name] = entries;
+  }
+  return repr;
+}
+
+/** Typed accessor: one dimension's records, sorted by key (deterministic). */
+export function dimensionEntries<T>(repr: EffectiveSemanticState, name: string): T[] {
+  const entries = repr[name];
+  if (entries === undefined) throw new Error(`unknown semantic dimension "${name}"`);
+  return Object.keys(entries)
+    .sort()
+    .map((k) => entries[k] as T);
+}
+
+/** Legacy alias — both consumers and existing tests use this name. */
+export const semanticState = effectiveSemanticState;
+
+/** A resolved canon edge -> its world-semantic content (the one normalization owner). */
 export function canonicalizeEdge(edge: {
   id: string;
   kind: string;
@@ -134,104 +193,5 @@ export function canonicalizeEdge(edge: {
     from: edge.from,
     to: edge.to,
     group: edge.kind === "REQUIRES" ? edge.group ?? "0" : null,
-  };
-}
-
-/**
- * Deduplicate by a key, deterministically and independently of input order.
- *
- * P-007 gate 3 — THE CARDINALITY CHOKEPOINT. `stateHash` folds these arrays;
- * `worldDiff` compares them as id-keyed Maps (facts, edges) and content-keyed
- * membership Sets (the three record dimensions). An array carries MULTIPLICITY
- * that neither of those views can observe, so before this function the hash saw
- * two entries where the diff saw one — and the invariant
- *
- *   worldDiff(A, B) empty  <=>  stateHash(A) === stateHash(B)
- *
- * broke, with a real value change becoming invisible. The rule that closes the
- * class, rather than any one instance of it: `stateHash` may fold ONLY what
- * `worldDiff` can compare.
- *
- * A duplicate id is a malformed world (canon rejects duplicate declarations, and
- * `overrideFact` now mints injectively). This collapses it IDENTICALLY on both
- * sides instead of pretending it cannot happen — sorting by (key, content) and
- * keeping the first makes the survivor a function of the SET of entries, never
- * of the order they arrived in.
- */
-function dedupeBy<T>(records: T[], key: (record: T) => string): T[] {
-  const sorted = [...records].sort(
-    (a, b) => key(a).localeCompare(key(b)) || canonicalJson(a).localeCompare(canonicalJson(b))
-  );
-  const seen = new Set<string>();
-  const out: T[] = [];
-  for (const record of sorted) {
-    const k = key(record);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(record);
-  }
-  return out;
-}
-
-/**
- * Project a WorldState onto its canonical semantic content.
- *
- * Pure and deterministic: every collection is deduplicated and sorted, so two
- * semantically identical worlds project onto byte-identical values regardless of
- * construction order — and, per `dedupeBy`, onto collections `worldDiff` can
- * compare element-for-element.
- *
- * LINEAGE IS SUBTRACTED, NOT SEMANTICS ENUMERATED. Each canonical record is the
- * whole record MINUS a named lineage set, so a field added to `FactView` or
- * `ContradictionRecord` is folded by default and only lineage is omitted. The
- * earlier form listed the semantic fields, which is an enumeration wearing
- * invariant clothing: the next field added would have been silently dropped from
- * world identity. The lineage sets are:
- *   - facts: `source` (canon vs derived), `overridden` (was it written)
- *   - contradictions: `source` (which intervention caused the record)
- * Both answer "how did this come to be", which is `identityHash`'s question.
- */
-export function semanticState(world: WorldState): SemanticState {
-  const facts: CanonicalFact[] = dedupeBy(
-    world.facts.map((f) => {
-      const { source: _source, overridden: _overridden, ...semantic } = f;
-      return { ...semantic, validFrom: f.validFrom ?? null, validTo: f.validTo ?? null };
-    }),
-    (f) => f.id
-  );
-
-  const edges: CanonicalEdge[] = dedupeBy(
-    world.edges.map((e) => ({ ...e })),
-    (e) => e.id
-  );
-
-  const contradictions: CanonicalContradiction[] = dedupeBy(
-    world.contradictions.map((c) => {
-      const { source: _source, ...semantic } = c;
-      return semantic;
-    }),
-    (c) => c.id
-  );
-
-  // The three RECORD dimensions are compared by full canonical content in the
-  // diff (`contentSetDiff`), so content — not id — is the dedup key here.
-  const temporalViolations: TemporalViolation[] = dedupeBy(
-    [...world.temporalViolations],
-    canonicalJson
-  ).sort((a, b) => a.nodes.join(",").localeCompare(b.nodes.join(",")));
-
-  const constraintViolations: ConstraintViolationRecord[] = dedupeBy(
-    [...world.constraintViolations],
-    canonicalJson
-  ).sort(byId);
-
-  return {
-    statuses: world.statuses,
-    facts,
-    edges,
-    workStatuses: world.workStatuses,
-    contradictions,
-    temporalViolations,
-    constraintViolations,
   };
 }
