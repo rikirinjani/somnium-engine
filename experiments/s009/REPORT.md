@@ -298,4 +298,4 @@ experiments/s009/REPORT.md
 | | |
 |---|---|
 | Ancestor | `443d3d9` |
-| S009 experiment commit | *(see final report / `git log` on `s009`)* |
+| S009 experiment commit | `340ba91` |

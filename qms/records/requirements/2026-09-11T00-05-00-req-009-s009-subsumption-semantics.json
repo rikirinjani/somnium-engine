@@ -1,0 +1,39 @@
+{
+  "requirement_id": "req-009",
+  "title": "S009 — Subsumption semantics / reduced-history sufficiency",
+  "category": "requirements/experiment",
+  "source": "S009 experiment specification (2026-09-11)",
+  "trace_id": "s009-subsumption-semantics",
+  "date": "2026-09-11T00:05:00Z",
+  "status": "complete",
+  "ancestor_commit": "443d3d9",
+  "branch": "s009",
+  "experiment_commit": "340ba91",
+  "description": "S008 treated reduceChain() primarily as a performance mechanism. S009 asks the deeper architectural question: is the reduced intervention chain a legitimate semantic abstraction / sufficient history representation, rather than merely an optimization artifact? Equivalence criterion: identical effectiveSemanticState, identical stateHash, empty directed WorldDiff (identityHash excluded as lineage).",
+  "constraints": [
+    "Branch from 443d3d9 only; do NOT branch from S007 or S008.",
+    "All experiment code under experiments/s009/. Do not modify src/.",
+    "Do not modify P-007, S007 or S008. Do not merge anything.",
+    "If a genuine counterexample is found: STOP optimization work, minimize it, determine the semantic cause, report BLOCKED rather than patching around it.",
+    "Do not claim mathematical minimality from empirical testing."
+  ],
+  "required_checks": [
+    "Formalize each reduction rule with its semantic identity, justification and assumptions.",
+    "Counterexample search targeting every rule, including same-target syntactic variants.",
+    "Reduction closure / idempotence: reduceChain(reduceChain(H)) == reduceChain(H), structurally.",
+    "Semantic sufficiency across effectiveSemanticState + stateHash + empty WorldDiff.",
+    "Commutation / order findings.",
+    "Constraints (AT_MOST_ONE/AT_LEAST_ONE) and causal semantics.",
+    "Invalid / unknown / contradiction state preservation.",
+    "Branch isolation and determinism.",
+    "Minimality analysis with definitions stated first.",
+    "Vocabulary coverage matrix over every intervention operation."
+  ],
+  "result_summary": "BLOCKED. A genuine minimal counterexample (3 interventions) shows the S008 R1 rule (legal write = keep last per cell) is not semantics-preserving when a cell holds MULTIPLE simultaneously-effective facts (overlapping validity windows). overrideFact reuses the LAST matching fact's id; a retract between two writes changes which id the later write reuses, so dropping the earlier write changes the surviving fact's identity. The canon passes inspectCanon with zero errors. On the seed canons the reduction is sound (attacks 26/26 verrin, 24/24 ordos; idempotence 1021/1021; sufficiency 1021/1021; determinism stable; branch isolation passes). Commutation shows equivalent histories reduce to different chains, so the reduction is sufficient but NOT canonical. A multi-fact guard repairs the counterexample but is reported, not silently adopted.",
+  "references": [
+    "experiments/s009/REPORT.md",
+    "experiments/s009/results/results.json",
+    "experiments/s009/synthetic.ts",
+    "S008 report (reduction origin) and S007 report (bounded state)"
+  ]
+}
