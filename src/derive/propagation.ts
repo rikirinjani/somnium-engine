@@ -811,6 +811,30 @@ export function propagationObserve(
   return { truth, provenance };
 }
 
+/**
+ * S022 — observe the Phase-B boundary without altering it.
+ *
+ * `candidates` = the NEITHER set entering `unfoundedSet` (the scan domain).
+ * `unfounded`  = the survivors (the authoritative unfounded set).
+ * `removed`    = candidates the shrink loop discharged (external support found).
+ */
+export interface PhaseBObservation {
+  candidates: string[];
+  unfounded: string[];
+  removed: string[];
+}
+
+export function observeUnfoundedSet(
+  model: DerivationModel,
+  truth?: Map<string, TruthValue>
+): PhaseBObservation {
+  const t = truth ?? propagationTruth(model);
+  const candidates = model.nodeIds.filter((n) => (t.get(n) ?? "NEITHER") === "NEITHER");
+  const survivors = unfoundedSet(model, t);
+  const removed = candidates.filter((n) => !survivors.has(n));
+  return { candidates, unfounded: [...survivors].sort(), removed: removed.sort() };
+}
+
 export function propagationTruth(
   model: DerivationModel,
   seed?: ReadonlyMap<string, TruthValue>
