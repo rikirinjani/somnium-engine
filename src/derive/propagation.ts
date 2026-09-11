@@ -837,6 +837,18 @@ export function observeUnfoundedSet(
   return { candidates, unfounded: [...survivors].sort(), removed: removed.sort() };
 }
 
+/**
+ * S025 — experimental seeded Phase A (same authoritative rules, given start).
+ * The incremental engine resets the affected dependency closure to NEITHER and
+ * then calls this; it never reimplements the semantic rules.
+ */
+export function phaseATruth(
+  model: DerivationModel,
+  seed?: ReadonlyMap<string, TruthValue>
+): Map<string, TruthValue> {
+  return positiveFixpoint(model, undefined, seed);
+}
+
 export function propagationTruth(
   model: DerivationModel,
   seed?: ReadonlyMap<string, TruthValue>
