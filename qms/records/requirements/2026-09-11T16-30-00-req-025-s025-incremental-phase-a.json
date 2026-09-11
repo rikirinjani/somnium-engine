@@ -1,0 +1,29 @@
+{
+  "requirement_id": "req-025",
+  "title": "S025 — Incremental Phase-A fixpoint equivalence",
+  "category": "requirements/experiment",
+  "source": "S025 experiment specification (2026-09-11)",
+  "trace_id": "s025-incremental-phase-a",
+  "date": "2026-09-11T16:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "19f6c98",
+  "branch": "s025",
+  "experiment_commit": "d1d6f66",
+  "description": "Attempt an actual incremental Phase-A execution: reset the affected dependency closure to NEITHER, then call the authoritative seeded Phase A, and compare against the from-scratch reference at every prefix.",
+  "result_summary": "BLOCKED. The shadow incremental Phase A (reset the affected dependency closure to NEITHER, then call the authoritative seeded positiveFixpoint via the new phaseATruth) is NOT equivalent to the from-scratch reference: 800 prefixes tested, 152 divergent (19.0%). First divergence: ordos seed=0 prefix=5 iv=negateEvent:ev/vaela-invested, with 3 nodes changed OUTSIDE an 11-node reset closure. ROOT CAUSE (dependency-index / support-loss): the from-scratch Phase A is a sticky LEAST fixpoint over the whole node set, so a support change can re-decide nodes not reverse-reachable from the directly-changed nodes (the S015/S017 result at the Phase-A level); nodes left with a stale prior value are never re-evaluated because the seeded sticky rule skips decided nodes. WHY BLOCKED: the candidate is sound iff the reset set is a superset of the re-decided set; widening to a guaranteed superset means resetting everything = from-scratch propagation. S021's aggregate is exact and is NOT the failure. No second FOUR evaluator, no reimplemented support rule; the only novelty was reset scope. No further rules were added (failure discipline).",
+  "answers": {
+    "exact_with_closure_reset": "NO - 152/800 diverge",
+    "root_cause": "reset scope: the dependency closure under-approximates the re-decided set",
+    "aggregate_state_sufficient": "YES (S021 exact) - not the failure",
+    "dependency_index_sufficient_as_reset_scope": "NO",
+    "new_semantic_machinery_required": "no - but the only sound reset is the whole model = from-scratch",
+    "incremental_phase_a_exact": "not with the maintained aggregate/dependency state"
+  },
+  "next_architectural_question": "Either prove a sound reset superset bound (if one exists), or accept from-scratch Phase A and pursue the S008/S012 retention boundary instead.",
+  "limitations": [
+    "800 prefixes (20 histories x H=20 x 2 canons); the first divergence is at prefix 5, adequate to refute the candidate but not a large-scale study.",
+    "Only the reset-closure design was tested; other incremental designs (e.g. a non-sticky chaotic iteration with a proven least-fixpoint start) were not attempted.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s025/REPORT.md", "experiments/s025/probe.ts", "S024 report / req-024", "S015 report / req-015", "S021 report / req-021"]
+}
