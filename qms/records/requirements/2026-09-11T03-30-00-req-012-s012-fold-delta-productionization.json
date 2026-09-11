@@ -1,0 +1,37 @@
+{
+  "requirement_id": "req-012",
+  "title": "S012 — Fold-state delta productionization / forcedBy identity",
+  "category": "requirements/experiment",
+  "source": "S012 experiment specification (2026-09-11)",
+  "trace_id": "s012-fold-delta-productionization",
+  "date": "2026-09-11T03:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "d92a15e",
+  "branch": "s012",
+  "experiment_commit": "dabc4a1",
+  "description": "S011 PASS left two engineering questions: (1) the fold-state observation had excessive overhead (2.2x at H=10 -> 57.7x at H=3000); (2) forcedBy identity semantics were undefined before exposing a production-facing delta API. S012 resolves both.",
+  "forcedby_contract": {
+    "represents": "the SET of targets a forceEvent has been applied to",
+    "presence": "semantic — drives truth and force-vs-* contradictions",
+    "value": "the content-derived intervention id `forceEvent:<target>` — a bijection of the key; used only as ConflictNote.source (provenance), which the semantic projection subtracts",
+    "identity_domain": "none distinct; no new identity domain invented",
+    "evidence": "a hand-built id `forceEvent:custom-xyz` yields the SAME stateHash (f0185e63); every forcedBy value equals `forceEvent:<key>` on verrin and ordos; repeated FORCE yields an empty delta"
+  },
+  "result_summary": "PASS. (1) forcedBy identity resolved as above. (2) Delta overhead reduced by replacing S011's per-intervention canonicalJson(current) whole-list serialization with factListsEqual — a field-by-field structural comparison of the fold's own output (no serialization, no semantic rule). Overhead is now 0.15-0.29x (H=10), 0.74x (H=1000), 0.93x (H=3000), 1.02x (H=10000) — about 63x better than S011 at H=3000 and stable per intervention. Correctness unchanged: S009/S010 witnesses caught with no special cases; 520/520 differential retention on verrin, ordos and the multi-fact overlap canon; 0 inverse-attack hits; category classification identical to S011 (A=19990 B=621 C=2692 D=14329); determinism and branch isolation pass. Default behavior preserved: 624/624 tests, verify-facts 3/3, frozen hashes e4c79cec/51f32b2e unchanged, stateHash for FORCE->NEGATE = 1a8fe542.",
+  "api_boundary": "Experimental API, not production. The retention rule built on the delta remains an experiment (category C over-retention is unresolved). Keep buildModel as the production surface. If a forcedBy accessor is exposed, expose presence only (a Set view), never the id.",
+  "limitations": [
+    "Over-retention (category C, 2692 steps) unresolved; no minimality claim.",
+    "Empirical only (520/520, 0 inverse hits) — no formal proof.",
+    "H > 10000 not measured; bounded by the pre-existing fold's O(H x facts) scan in overrideFact, not by the delta.",
+    "relocate coverage thin (1 case).",
+    "Small-H overhead ratios below 1.0 are measurement noise."
+  ],
+  "references": [
+    "experiments/s012/REPORT.md",
+    "experiments/s012/results/results.json",
+    "experiments/s012/probe-forcedby.ts",
+    "experiments/s012/probe-perf.ts",
+    "src/derive/world-state.ts (factListsEqual)",
+    "S011 report / req-011"
+  ]
+}
