@@ -223,6 +223,36 @@ function overrideFact(
  * function at every call site makes the views incapable of disagreeing, and
  * makes the claim differential: an intervention may assert no more than canon may.
  */
+/**
+ * S012 — cheap structural equality of two effective-fact lists.
+ *
+ * S011 observed fact-list change with `canonicalJson(current)`, which serializes
+ * the WHOLE list on every intervention and dominated the instrumentation cost
+ * (~57x at H=3000). This compares the fold's own output field-by-field with no
+ * serialization and no semantic rule: it is an observation of the fold, not a
+ * second implementation of it.
+ */
+function factViewEqual(a: FactView, b: FactView): boolean {
+  return (
+    a.id === b.id &&
+    a.subject === b.subject &&
+    a.predicate === b.predicate &&
+    sameCanonicalValue(a.object, b.object) &&
+    a.source === b.source &&
+    a.validFrom === b.validFrom &&
+    a.validTo === b.validTo &&
+    a.overridden === b.overridden
+  );
+}
+
+function factListsEqual(a: FactView[], b: FactView[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!factViewEqual(a[i]!, b[i]!)) return false;
+  }
+  return true;
+}
+
 function applyFactInterventions(
   facts: FactView[],
   interventions: Intervention[],
@@ -232,7 +262,7 @@ function applyFactInterventions(
   let current = facts;
   for (let i = 0; i < interventions.length; i++) {
     const iv = interventions[i]!;
-    const before = changedOut === undefined ? "" : canonicalJson(current);
+    const before = changedOut === undefined ? undefined : current.slice();
     if (iv.kind === "setFact" || iv.kind === "relocate") {
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
@@ -245,8 +275,8 @@ function applyFactInterventions(
     } else if (iv.kind === "retractFact") {
       current = current.filter((f) => f.id !== iv.target);
     }
-    // S011: observe whether THIS step changed the effective fact list.
-    if (changedOut !== undefined) changedOut[i] = canonicalJson(current) !== before;
+    // S012: structural comparison of the fold's own output (no serialization).
+    if (changedOut !== undefined) changedOut[i] = !factListsEqual(before!, current);
   }
   return current;
 }
