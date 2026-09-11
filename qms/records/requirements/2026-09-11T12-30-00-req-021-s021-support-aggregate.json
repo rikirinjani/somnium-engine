@@ -1,0 +1,35 @@
+{
+  "requirement_id": "req-021",
+  "title": "S021 — Incremental support aggregate / fixpoint primitive",
+  "category": "requirements/experiment",
+  "source": "S021 experiment specification (2026-09-11)",
+  "trace_id": "s021-support-aggregate",
+  "date": "2026-09-11T12:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "f219e67",
+  "branch": "s021",
+  "experiment_commit": "dfa4cfa",
+  "description": "Determine whether support evaluation can be represented as an incrementally maintained aggregate so that a local judgment change updates support state without re-evaluating the entire support expression.",
+  "result_summary": "HOLD. The support expression CAN be represented as a compact, EXACT, locally updatable aggregate. The reference conjoin/disjoin are commutative/associative lattice meets over the member multiset, so a per-group count is a sufficient statistic: group {n, nTrue, nFalseOrBoth} -> conjoin; node group-result vector -> disjoin. Measured: 667 conjunctive groups with 0 aggregate mismatches, 635 disjunctive nodes with 0 mismatches, and 6 incremental member-flip updates with 0 mismatches against full recomputation (O(1) per member change). No second causal engine: the aggregate re-expresses the SAME lattice meet over a sufficient statistic. BOUNDARY: Phase B (unfoundedSet) is a GLOBAL candidate-set fixpoint, not a per-group aggregate, so it must remain a separate global consistency stage; topology changes alter group SHAPE (structural update). HOLD because the cycle/unfounded and topology boundaries were characterised but not tested, and the aggregate is a primitive, not yet an engine.",
+  "answers": {
+    "Q1_conjunctive_compact": "YES - {n, nTrue, nFalseOrBoth}",
+    "Q2_disjunctive_compact": "YES - group-result vector + {n, nTrue, nFalse}",
+    "Q3_min_info_four": "counts of TRUE / FALSE-or-BOTH / NEITHER per group (NEITHER is the residual) plus the group-result vector",
+    "Q4_local_membership_update": "YES - O(1) per member change",
+    "Q5_support_switching": "YES - the group-result vector IS the switching state; no full derivation needed",
+    "Q6_shared_support": "YES - shared members update each consuming group independently",
+    "Q7_where_it_stops": "the cycle/unfounded boundary: Phase B is a global candidate-set fixpoint, not a per-group aggregate",
+    "Q8_cycle_separate_barrier": "YES - unfounded/cycle reasoning can remain a separate global consistency barrier",
+    "Q9_explains_s020": "partially - the aggregate identifies when a previous support is no longer valid, but not the downstream consequence",
+    "Q10_future_state": "per-group counts, the group-result vector, the member->group index, plus (separately) the negated/forcedBy accumulators and a global Phase B barrier"
+  },
+  "next_experiment": "test the aggregate against cycle/unfounded and topology-change cases, then design an execution strategy that pairs the aggregate with the global Phase B barrier.",
+  "limitations": [
+    "Cycle/unfounded and topology-change cases were characterised, not tested (budget).",
+    "The incremental update test exercised only 6 member-flips on one sampled model.",
+    "Long-horizon storage/update-cost measurements not run.",
+    "Branch isolation and determinism not separately measured.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s021/REPORT.md", "experiments/s021/probe.ts", "src/derive/judgment.ts", "S020 report / req-020"]
+}
