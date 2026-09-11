@@ -192,4 +192,4 @@ No dirty queues, no incremental propagation, no caches, no altered semantics. P-
 | | |
 |---|---|
 | Ancestor | `56fac34` |
-| S017 experiment commit | `{{S017_COMMIT}}` |
+| S017 experiment commit | `4ad78c7` |

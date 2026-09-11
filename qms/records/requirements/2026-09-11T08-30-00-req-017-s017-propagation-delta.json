@@ -1,0 +1,34 @@
+{
+  "requirement_id": "req-017",
+  "title": "S017 — Propagation delta observability / predictive invalidation frontier",
+  "category": "requirements/experiment",
+  "source": "S017 experiment specification (2026-09-11)",
+  "trace_id": "s017-propagation-delta",
+  "date": "2026-09-11T08:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "56fac34",
+  "branch": "s017",
+  "experiment_commit": "4ad78c7",
+  "description": "Determine whether the authoritative propagateJudgments contains enough information to derive a sound predictive invalidation frontier from a prior judgment state, before running propagation.",
+  "result_summary": "HOLD. The cross-prefix judgment delta (Jh vs Jh-1 by node id, canonical multi-dimensional) is well-defined, deterministic and small: 0.00-0.71 nodes per intervention - the semantic change is genuinely local, unlike S016's global evaluation footprint. But the best frontier constructible from dependency closure + cycle membership is NOT a sound over-approximation: false negatives 0.03-0.35 per intervention (up to 0.30 unexplained for severEdge). Three distinct concepts confirmed: semantic delta (small), evaluation footprint (global), predictive frontier (between, unsound). No incremental propagation, dirty queues, caches or semantic changes were introduced; no src/ change was needed.",
+  "answers": {
+    "Q1_delta": "nodes whose canonical judgment differs from the previous prefix; 0.00-0.71 per intervention",
+    "Q2_conforms": "mostly, but an unexplained residue remains (up to 0.30 for edge interventions)",
+    "Q3_s015_false_negatives": "the reference resets Phase A to NEITHER (S016), so its evaluation footprint is global while the semantic delta is local; S015 closure approximated the delta and missed global-reset / node-set changes",
+    "Q4_cycle_changes": "yes - cycle classification captures 0.01-0.32 nodes per intervention",
+    "Q5_frontier_constructible": "yes - from previous model + judgment map + intervention + reverse closure + cycle membership",
+    "Q6_sound": "NO - false negatives on both canons for event/edge operations",
+    "Q7_expansion_causes": "node-set changes from edge mutations; cycle/unfounded reclassification; the Phase A global reset",
+    "Q8_escalation_model": "partially - DIRECT -> TRANSITIVE -> CYCLE explains most; a residue is UNEXPLAINED",
+    "Q9_long_horizon": "not measured (budget)",
+    "Q10_engine_needs": "previous judgment map; previous node set; cycle membership; reverse-dependency index; a node-set-change signal distinct from dependency propagation"
+  },
+  "next_experiment": "frontier soundness with node-set-aware invalidation - include edge-endpoint changes and authoritative cycle membership; test whether the frontier reaches zero false negatives on the seed canons and synthetic topologies.",
+  "limitations": [
+    "Only the two seed canons + 200-step random histories; no synthetic topologies.",
+    "The probe's directDelta includes edge ids but not endpoints, which likely accounts for the severEdge/addEdge false negatives - a harness gap, not patched.",
+    "No long-horizon or branch runs (budget).",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s017/REPORT.md", "experiments/s017/probe.ts", "S016 report / req-016", "S015 report / req-015"]
+}
