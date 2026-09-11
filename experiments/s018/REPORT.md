@@ -195,4 +195,4 @@ No incremental propagation, no queues, no caches, no semantic change. P-007 and 
 | | |
 |---|---|
 | Ancestor | `4ad78c7` |
-| S018 experiment commit | `{{S018_COMMIT}}` |
+| S018 experiment commit | `c652204` |
