@@ -811,6 +811,32 @@ export function propagationObserve(
   return { truth, provenance };
 }
 
+/**
+ * S023 — observe the Phase-B boundary without altering it.
+ *   candidates = the NEITHER set entering `unfoundedSet`
+ *   unfounded  = the survivors (authoritative)
+ *   removed    = candidates discharged by the shrink loop
+ */
+export interface PhaseBObservation {
+  candidates: string[];
+  unfounded: string[];
+  removed: string[];
+}
+
+export function observeUnfoundedSet(
+  model: DerivationModel,
+  truth?: Map<string, TruthValue>
+): PhaseBObservation {
+  // Candidates are the NEITHER set BEFORE Phase B rejects anything. If the caller
+  // passes a post-Phase-B truth map the NEITHER set is already empty, so compute
+  // the Phase-A truth directly unless an explicit pre-Phase-B map is supplied.
+  const t = truth ?? positiveFixpoint(model);
+  const candidates = model.nodeIds.filter((n) => (t.get(n) ?? "NEITHER") === "NEITHER");
+  const survivors = unfoundedSet(model, t);
+  const removed = candidates.filter((n) => !survivors.has(n));
+  return { candidates, unfounded: [...survivors].sort(), removed: removed.sort() };
+}
+
 export function propagationTruth(
   model: DerivationModel,
   seed?: ReadonlyMap<string, TruthValue>
