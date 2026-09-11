@@ -849,6 +849,21 @@ export function phaseATruth(
   return positiveFixpoint(model, undefined, seed);
 }
 
+/**
+ * S030 — the authoritative per-node decision rule, exposed so an event-driven
+ * worklist can recompute a single node's judgment. This is EXACTLY the rule
+ * `positiveFixpoint` applies; it is a refactor, not a second evaluator.
+ */
+export function nodeSupport(model: DerivationModel, node: string, truth: Map<string, TruthValue>): TruthValue {
+  if (model.negated.has(node)) return "FALSE";
+  const fact = model.facts.get(node);
+  const support = fact !== undefined ? factNodeTruth(fact, model, truth) : hardSupport(node, model, truth);
+  if (model.forcedBy.has(node)) {
+    return model.declared.has(node) || model.facts.has(node) ? "TRUE" : "FALSE";
+  }
+  return support;
+}
+
 export function propagationTruth(
   model: DerivationModel,
   seed?: ReadonlyMap<string, TruthValue>
