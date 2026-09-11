@@ -164,4 +164,4 @@ No incremental Phase B, no production merge. P-007 and frozen S021–S029 untouc
 | | |
 |---|---|
 | Ancestor | `fe2f645` |
-| S030 experiment commit | `{{S030_COMMIT}}` |
+| S030 experiment commit | `8a39cc4` |
