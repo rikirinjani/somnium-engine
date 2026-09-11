@@ -201,4 +201,4 @@ No incremental propagation, no dirty queue, no invalidation implementation, no s
 | | |
 |---|---|
 | Ancestor | `fb2ec51` |
-| S020 experiment commit | `{{S020_COMMIT}}` |
+| S020 experiment commit | `f219e67` |
