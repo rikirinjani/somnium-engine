@@ -500,7 +500,46 @@ function hardSupport(node: string, model: DerivationModel, truth: Map<string, Tr
  * sticky, so `truthRank` is non-decreasing by construction; the assertion below
  * exists to catch an engine bug, not an expected transition.
  */
-function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
+/**
+ * S016 — per-stage re-evaluation footprint of the authoritative propagation.
+ *
+ *   considered ⊇ recomputed ⊇ changed
+ *
+ * `considered` = nodes inspected by the stage's scan (global stages touch all).
+ * `recomputed` = nodes for which the stage actually re-evaluated a judgment.
+ * `changed`    = nodes whose resulting value differs from the stage's prior value.
+ *
+ * The footprint OBSERVES the existing algorithm; it does not alter evaluation.
+ */
+export interface StageFootprint {
+  considered: number;
+  recomputed: number;
+  changed: number;
+  iterations: number;
+  globalScan: boolean;
+  changedNodes: string[];
+}
+
+function newFootprint(globalScan: boolean): StageFootprint {
+  return { considered: 0, recomputed: 0, changed: 0, iterations: 0, globalScan, changedNodes: [] };
+}
+
+/**
+ * S016 — run the authoritative propagation and additionally report its
+ * per-stage re-evaluation footprint. Semantics are unchanged: this is the same
+ * `propagateJudgments` with an observation sink attached.
+ */
+export function propagateJudgmentsWithFootprint(model: DerivationModel): {
+  judgments: Map<string, Judgment>;
+  conflicts: ConflictNote[];
+  footprint: PropagationFootprint;
+} {
+  const footprint: PropagationFootprint = { phaseA: newFootprint(true), phaseB: newFootprint(true), unfounded: [] };
+  const result = propagateJudgments(model, footprint);
+  return { ...result, footprint };
+}
+
+function positiveFixpoint(model: DerivationModel, fp?: StageFootprint): Map<string, TruthValue> {
   const truth = new Map<string, TruthValue>();
   for (const node of model.nodeIds) truth.set(node, "NEITHER");
 
@@ -517,8 +556,10 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
     }
     changed = false;
     for (const node of model.nodeIds) {
+      if (fp !== undefined) fp.considered++;
       const current = truth.get(node) ?? "NEITHER";
       if (current !== "NEITHER") continue; // sticky: already decided
+      if (fp !== undefined) fp.recomputed++;
 
       let next: TruthValue;
       if (model.negated.has(node)) {
@@ -556,11 +597,16 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
           );
         }
         truth.set(node, next);
+        if (fp !== undefined) {
+          fp.changed++;
+          fp.changedNodes.push(node);
+        }
         changed = true;
       }
     }
     pass += 1;
   }
+  if (fp !== undefined) fp.iterations = pass;
   return truth;
 }
 
@@ -584,17 +630,25 @@ function positiveFixpoint(model: DerivationModel): Map<string, TruthValue> {
  *     dependent stays NEITHER -> UNKNOWN. Absence of knowledge never becomes
  *     falsehood.
  */
-function unfoundedSet(model: DerivationModel, truth: Map<string, TruthValue>): Set<string> {
+function unfoundedSet(model: DerivationModel, truth: Map<string, TruthValue>, fp?: StageFootprint): Set<string> {
   let candidates = new Set(model.nodeIds.filter((n) => (truth.get(n) ?? "NEITHER") === "NEITHER"));
+  if (fp !== undefined) fp.considered = candidates.size;
 
   let shrunk = true;
+  let iters = 0;
   while (shrunk) {
     shrunk = false;
+    iters++;
     for (const node of [...candidates].sort()) {
+      if (fp !== undefined) fp.recomputed++;
       const groups = model.supportGroups.get(node);
       if (groups === undefined || groups.length === 0) {
         // No support rules at all: genuinely under-specified, not unfounded.
         candidates.delete(node);
+        if (fp !== undefined) {
+          fp.changed++;
+          fp.changedNodes.push(node);
+        }
         shrunk = true;
         continue;
       }
@@ -605,10 +659,15 @@ function unfoundedSet(model: DerivationModel, truth: Map<string, TruthValue>): S
         // Some group's shortfall is external (an unknown, not a cycle):
         // under-specification, so leave it NEITHER.
         candidates.delete(node);
+        if (fp !== undefined) {
+          fp.changed++;
+          fp.changedNodes.push(node);
+        }
         shrunk = true;
       }
     }
   }
+  if (fp !== undefined) fp.iterations = iters;
   return candidates;
 }
 
@@ -707,12 +766,19 @@ export interface ConflictNote {
  * Run the full pipeline. Returns judgments plus the conflicts that produced
  * every BOTH, so contradiction records keep their provenance.
  */
-export function propagateJudgments(model: DerivationModel): {
+export interface PropagationFootprint {
+  phaseA: StageFootprint;
+  phaseB: StageFootprint;
+  unfounded: string[];
+}
+
+export function propagateJudgments(model: DerivationModel, footprint?: PropagationFootprint): {
   judgments: Map<string, Judgment>;
   conflicts: ConflictNote[];
 } {
-  const truth = positiveFixpoint(model);
-  const unfounded = unfoundedSet(model, truth);
+  const truth = positiveFixpoint(model, footprint?.phaseA);
+  const unfounded = unfoundedSet(model, truth, footprint?.phaseB);
+  if (footprint !== undefined) footprint.unfounded = [...unfounded].sort();
   for (const node of unfounded) truth.set(node, "FALSE");
 
   const conflicts: ConflictNote[] = [];
