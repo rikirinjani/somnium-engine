@@ -539,9 +539,13 @@ export function propagateJudgmentsWithFootprint(model: DerivationModel): {
   return { ...result, footprint };
 }
 
-function positiveFixpoint(model: DerivationModel, fp?: StageFootprint): Map<string, TruthValue> {
+function positiveFixpoint(
+  model: DerivationModel,
+  fp?: StageFootprint,
+  seed?: ReadonlyMap<string, TruthValue>
+): Map<string, TruthValue> {
   const truth = new Map<string, TruthValue>();
-  for (const node of model.nodeIds) truth.set(node, "NEITHER");
+  for (const node of model.nodeIds) truth.set(node, seed?.get(node) ?? "NEITHER");
 
   const maxPasses = 3 * model.nodeIds.length + 4;
   let pass = 0;
@@ -772,11 +776,30 @@ export interface PropagationFootprint {
   unfounded: string[];
 }
 
-export function propagateJudgments(model: DerivationModel, footprint?: PropagationFootprint): {
+/**
+ * S019 — expose the authoritative truth map for a model, optionally SEEDED from
+ * a prior truth map. Uses the same `positiveFixpoint`/`unfoundedSet` rules; the
+ * only experimental difference is the initial judgment state.
+ */
+export function propagationTruth(
+  model: DerivationModel,
+  seed?: ReadonlyMap<string, TruthValue>
+): Map<string, TruthValue> {
+  const truth = positiveFixpoint(model, undefined, seed);
+  const unfounded = unfoundedSet(model, truth, undefined);
+  for (const node of unfounded) truth.set(node, "FALSE");
+  return truth;
+}
+
+export function propagateJudgments(
+  model: DerivationModel,
+  footprint?: PropagationFootprint,
+  seed?: ReadonlyMap<string, TruthValue>
+): {
   judgments: Map<string, Judgment>;
   conflicts: ConflictNote[];
 } {
-  const truth = positiveFixpoint(model, footprint?.phaseA);
+  const truth = positiveFixpoint(model, footprint?.phaseA, seed);
   const unfounded = unfoundedSet(model, truth, footprint?.phaseB);
   if (footprint !== undefined) footprint.unfounded = [...unfounded].sort();
   for (const node of unfounded) truth.set(node, "FALSE");
