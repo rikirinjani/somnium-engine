@@ -54,8 +54,8 @@ import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
 import type { Judgment } from "./judgment";
 import { occurs, projectStatus } from "./judgment";
-import { buildModel, propagateJudgments, temporalViolations, cellKey } from "./propagation";
-import type { TemporalViolation } from "./propagation";
+import { buildModel, buildModelWithDeltas, propagateJudgments, temporalViolations, cellKey } from "./propagation";
+import type { TemporalViolation, FoldStepDelta } from "./propagation";
 import { detectContradictions } from "./contradictions";
 import { evaluateConstraints } from "./constraints";
 import type { ConstraintViolationRecord } from "./constraints";
@@ -226,20 +226,27 @@ function overrideFact(
 function applyFactInterventions(
   facts: FactView[],
   interventions: Intervention[],
-  vocabulary: FactVocabulary
+  vocabulary: FactVocabulary,
+  changedOut?: boolean[]
 ): FactView[] {
   let current = facts;
-  for (const iv of interventions) {
+  for (let i = 0; i < interventions.length; i++) {
+    const iv = interventions[i]!;
+    const before = changedOut === undefined ? "" : canonicalJson(current);
     if (iv.kind === "setFact" || iv.kind === "relocate") {
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
-      if (typeof predicate !== "string") continue;
-      const value = (object ?? null) as string | number | boolean | null;
-      if (factAssertionError(iv.target, predicate, value, vocabulary) !== null) continue;
-      current = overrideFact(current, iv.target, predicate, value);
+      if (typeof predicate === "string") {
+        const value = (object ?? null) as string | number | boolean | null;
+        if (factAssertionError(iv.target, predicate, value, vocabulary) === null) {
+          current = overrideFact(current, iv.target, predicate, value);
+        }
+      }
     } else if (iv.kind === "retractFact") {
       current = current.filter((f) => f.id !== iv.target);
     }
+    // S011: observe whether THIS step changed the effective fact list.
+    if (changedOut !== undefined) changedOut[i] = canonicalJson(current) !== before;
   }
   return current;
 }
@@ -539,4 +546,34 @@ export function derive(
   });
 
   return world;
+}
+
+/**
+ * S011 — per-intervention FOLD-STATE delta, produced by the authoritative fold.
+ *
+ * Deliberately NOT "did the semantic state change" (S010 proved that
+ * insufficient) and NOT "did one accumulator change" alone. It is the union of:
+ *   - the accumulator components changed by `buildModel`'s fold
+ *     (negated / forcedBy / retracted / overriddenCells / rejectedFactWrites / edges)
+ *   - whether `applyFactInterventions`'s effective-fact list changed
+ *
+ * Both are recorded AS THE FOLD RUNS; nothing here reimplements a semantic rule.
+ * An empty `components` array means the step left the fold's own state untouched,
+ * so it cannot influence any later step's derivation.
+ *
+ * This is a NECESSARY signal, not a proof of future irrelevance: over-retention
+ * is safe, and whether empty-delta dropping is safe is exactly what the S011
+ * differential harness tests.
+ */
+export function foldStateDeltas(canon: Canon, interventions: Intervention[]): FoldStepDelta[] {
+  const { model, deltas } = buildModelWithDeltas(canon, interventions);
+  const factChanged = new Array<boolean>(interventions.length).fill(false);
+  const { judgments } = propagateJudgments(model);
+  const base = computeEffectiveFacts(canon, judgments);
+  applyFactInterventions(base, interventions, model.factVocabulary, factChanged);
+  return deltas.map((d, i) => {
+    const components = [...d.components];
+    if (factChanged[i] === true && !components.includes("facts")) components.push("facts");
+    return { index: d.index, kind: d.kind, target: d.target, components };
+  });
 }

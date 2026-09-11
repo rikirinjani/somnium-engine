@@ -158,11 +158,15 @@ export function cellKey(subject: string, predicate: string): string {
 const byId = (a: { id: string }, b: { id: string }): number => a.id.localeCompare(b.id);
 
 /** Edge set after severEdge/addEdge interventions, applied in order. */
-function resolveEdges(canon: Canon, interventions: Intervention[]): CausalEdge[] {
+function resolveEdges(canon: Canon, interventions: Intervention[], changedOut?: boolean[]): CausalEdge[] {
   let edges: CausalEdge[] = canon.edges.map((e) => ({ ...e }));
-  for (const iv of interventions) {
+  for (let i = 0; i < interventions.length; i++) {
+    const iv = interventions[i]!;
     if (iv.kind === "severEdge") {
+      const n = edges.length;
       edges = edges.filter((e) => e.id !== iv.target);
+      // S011: observe whether THIS step changed the fold's edge set.
+      if (changedOut !== undefined) changedOut[i] = edges.length !== n;
     } else if (iv.kind === "addEdge") {
       const raw = iv.params?.edge;
       if (raw !== null && typeof raw === "object") {
@@ -180,8 +184,12 @@ function resolveEdges(canon: Canon, interventions: Intervention[]): CausalEdge[]
           // key so the edge falls back to the default group.
           const guarded: CausalEdge = { ...edge };
           if (typeof guarded.group !== "string") delete guarded.group;
+          const prev = edges.find((e) => e.id === guarded.id);
+          const same = prev !== undefined && canonicalJson(prev) === canonicalJson(guarded);
           edges = edges.filter((e) => e.id !== guarded.id);
           edges.push(guarded);
+          // S011: a re-add of an identical edge is a no-op for the edge fold.
+          if (changedOut !== undefined) changedOut[i] = !same;
         }
       }
     }
@@ -190,8 +198,43 @@ function resolveEdges(canon: Canon, interventions: Intervention[]): CausalEdge[]
   return edges;
 }
 
+/**
+ * S011 — per-intervention fold-state delta.
+ *
+ * `components` names the fold-state parts THIS intervention changed. An empty
+ * `components` array means the fold's own state was untouched by this step, so
+ * the step cannot influence any later step's derivation. The delta is produced
+ * BY the fold — recorded as the accumulators are updated — not by a separate
+ * semantic reducer.
+ */
+export interface FoldStepDelta {
+  index: number;
+  kind: string;
+  target: string;
+  components: string[];
+}
+
 export function buildModel(canon: Canon, interventions: Intervention[]): DerivationModel {
-  const edges = resolveEdges(canon, interventions);
+  return buildModelInternal(canon, interventions, undefined);
+}
+
+/** S011: the same fold, additionally reporting a per-intervention delta. */
+export function buildModelWithDeltas(
+  canon: Canon,
+  interventions: Intervention[]
+): { model: DerivationModel; deltas: FoldStepDelta[] } {
+  const deltas: FoldStepDelta[] = [];
+  const model = buildModelInternal(canon, interventions, deltas);
+  return { model, deltas };
+}
+
+function buildModelInternal(
+  canon: Canon,
+  interventions: Intervention[],
+  deltas: FoldStepDelta[] | undefined
+): DerivationModel {
+  const edgeChanged = deltas === undefined ? undefined : new Array<boolean>(interventions.length).fill(false);
+  const edges = resolveEdges(canon, interventions, edgeChanged);
 
   // `declared` = what canon actually SAYS EXISTS (events + facts). It answers
   // "may this node be treated as a root?" — see hardSupport.
@@ -282,11 +325,27 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
   const retracted = new Set<string>();
   const overriddenCells = new Map<string, string | number | boolean | null>();
   const rejectedFactWrites: DerivationModel["rejectedFactWrites"] = [];
-  for (const iv of interventions) {
-    if (iv.kind === "negateEvent") negated.add(iv.target);
-    else if (iv.kind === "forceEvent") forcedBy.set(iv.target, iv.id);
-    else if (iv.kind === "retractFact") retracted.add(iv.target);
-    else if (iv.kind === "setFact" || iv.kind === "relocate") {
+  for (let i = 0; i < interventions.length; i++) {
+    const iv = interventions[i]!;
+    // S011: `components` records which fold-state parts THIS step changed, as
+    // the fold itself performs them. This is an observation of the fold, not a
+    // second implementation of it.
+    const components: string[] = [];
+    if (iv.kind === "negateEvent") {
+      if (!negated.has(iv.target)) {
+        negated.add(iv.target);
+        components.push("negated");
+      }
+    } else if (iv.kind === "forceEvent") {
+      const prev = forcedBy.get(iv.target);
+      forcedBy.set(iv.target, iv.id);
+      if (prev !== iv.id) components.push("forcedBy");
+    } else if (iv.kind === "retractFact") {
+      if (!retracted.has(iv.target)) {
+        retracted.add(iv.target);
+        components.push("retracted");
+      }
+    } else if (iv.kind === "setFact" || iv.kind === "relocate") {
       // Applied IN ORDER, so the last write to a cell wins — matching
       // applyFactInterventions in world-state.ts, which owns the effective
       // fact list. These two views of "does this fact hold" must agree.
@@ -305,10 +364,18 @@ export function buildModel(canon: Canon, interventions: Intervention[]): Derivat
             source: iv.id,
             error,
           });
+          components.push("rejectedFactWrites");
         } else {
-          overriddenCells.set(cellKey(iv.target, predicate), value);
+          const key = cellKey(iv.target, predicate);
+          const prev = overriddenCells.get(key);
+          overriddenCells.set(key, value);
+          if (!sameCanonicalValue(prev, value)) components.push("overriddenCells");
         }
       }
+    }
+    if (deltas !== undefined) {
+      if (edgeChanged?.[i] === true) components.push("edges");
+      deltas.push({ index: i, kind: iv.kind, target: iv.target, components });
     }
   }
 
