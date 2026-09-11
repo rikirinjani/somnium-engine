@@ -542,7 +542,8 @@ export function propagateJudgmentsWithFootprint(model: DerivationModel): {
 function positiveFixpoint(
   model: DerivationModel,
   fp?: StageFootprint,
-  seed?: ReadonlyMap<string, TruthValue>
+  seed?: ReadonlyMap<string, TruthValue>,
+  prov?: Map<string, string>
 ): Map<string, TruthValue> {
   const truth = new Map<string, TruthValue>();
   for (const node of model.nodeIds) truth.set(node, seed?.get(node) ?? "NEITHER");
@@ -568,6 +569,7 @@ function positiveFixpoint(
       let next: TruthValue;
       if (model.negated.has(node)) {
         next = "FALSE"; // do(X never happens) is authoritative
+        prov?.set(node, "negated");
       } else {
         const fact = model.facts.get(node);
         const support = fact !== undefined ? factNodeTruth(fact, model, truth) : hardSupport(node, model, truth);
@@ -589,8 +591,10 @@ function positiveFixpoint(
           // window of any canon fact anchored to it — an id canon never declared
           // writing world state. Found by the second L2 gate (ncr-004).
           next = model.declared.has(node) || model.facts.has(node) ? "TRUE" : "FALSE";
+          prov?.set(node, "forced");
         } else {
           next = support;
+          prov?.set(node, "support");
         }
       }
 
@@ -781,6 +785,32 @@ export interface PropagationFootprint {
  * a prior truth map. Uses the same `positiveFixpoint`/`unfoundedSet` rules; the
  * only experimental difference is the initial judgment state.
  */
+/**
+ * S020 — decision provenance observation.
+ *
+ * For each node, `provenance` records WHICH rule established its Phase A
+ * judgment: "negated" | "forced" | "support" | "unfounded". This is evidence
+ * about the decision, not a reimplementation of it.
+ */
+export interface PropagationObservation {
+  truth: Map<string, TruthValue>;
+  provenance: Map<string, string>;
+}
+
+export function propagationObserve(
+  model: DerivationModel,
+  seed?: ReadonlyMap<string, TruthValue>
+): PropagationObservation {
+  const provenance = new Map<string, string>();
+  const truth = positiveFixpoint(model, undefined, seed, provenance);
+  const unfounded = unfoundedSet(model, truth, undefined);
+  for (const node of unfounded) {
+    truth.set(node, "FALSE");
+    provenance.set(node, "unfounded");
+  }
+  return { truth, provenance };
+}
+
 export function propagationTruth(
   model: DerivationModel,
   seed?: ReadonlyMap<string, TruthValue>
