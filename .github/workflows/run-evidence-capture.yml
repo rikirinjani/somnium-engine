@@ -1,0 +1,42 @@
+name: run-evidence-capture
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: revision-bound-capture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout ref under capture
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+
+      - name: Install default project toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Capture revision-bound evidence with run-evidence
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/evidence
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          python3 tools/run-evidence.py --repo . --base "$(git rev-parse HEAD^)" --evidence-dir "$EVIDENCE_DIR" --task-id ci-capture-001 --run-id "run-${{ github.run_id }}" --agent-id github-actions --model-id none --governance-config-version 1 --governance-config tools/evidence-governance.conf --command "npm test"
+
+      - name: Upload evidence record
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-record
+          path: ${{ runner.temp }}/evidence
+          if-no-files-found: error
