@@ -1,0 +1,262 @@
+# REQUIRED OPERATOR SETUP -- these controls cannot be installed by workflow YAML:
+#
+# 1. On the integration branch, require pull requests, up-to-date branches,
+#    code-owner approval for governance/CI files, and the "acceptance" check from
+#    GitHub Actions. Disallow force pushes and deletion; apply rules to admins
+#    and remove agent/bot bypass permissions. Do not enable merge queues without
+#    adding an equivalent merge_group gate.
+#
+# 2. Enforce THIS workflow as a centrally managed required workflow using an
+#    organization ruleset and a protected source/ref. A status-check name alone
+#    is insufficient: a PR could otherwise replace this YAML and emit that name.
+#    If required-workflow enforcement is unavailable, independent humans must
+#    control all CI/governance changes through enforced CODEOWNERS approval;
+#    ordinary editable PR workflows are not an adversarial security boundary.
+#
+# 3. Create environment "change-acceptance" with required HUMAN user reviewers,
+#    prevent self-review, and disallow administrator bypass. Set repository or
+#    organization variable ACCEPTANCE_HUMAN_IDS to their comma-separated numeric
+#    GitHub user IDs. Only independent operators may change these settings.
+#    Agent credentials must not authenticate as these users, administer the
+#    repository/environment, modify Actions variables, or bypass rules.
+#    The policy job checks the environment configuration and fails if absent.
+#
+# 4. Create protected branch "acceptance-evidence" in this repository. Only an
+#    independent evidence publisher/human may update it; agents must not have
+#    write/bypass authority. Store real records in the verify-change contract.
+#    Evidence is bound to the exact PR base/head and all changed Git objects.
+#    Evidence updates require rerunning this workflow; nothing is synthesized.
+#
+# 5. Install verify-change on the protected base branch before enabling this
+#    gate. Candidate versions of that script are deliberately never executed.
+#
+# 6. Configure trusted Actions variables INSTALL_COMMAND, BUILD_COMMAND,
+#    TYPECHECK_COMMAND, TEST_COMMAND and QMS_REQUIRED_TYPES if defaults do not
+#    fit the project. Commands must actually exercise the required checks.
+#    Default toolchain is Node 22 with npm lockfile; other toolchains require
+#    operator-reviewed changes to this protected workflow.
+#
+# No pull_request_target execution, write token, environment secret, persistent
+# self-hosted runner, shared cache, or approval credential reaches candidate code.
+# Approval is on a separate fresh runner after verification. Reviewers must
+# inspect the exact SHA, commands, raw job logs and evidence snapshot.
+#
+# GitHub environment reviewers use "any one reviewer" semantics, not unanimous
+# approval. A protected workflow plus external permissions is the enforcement
+# boundary; this YAML does not claim to configure those permissions itself.
+
+name: verify-change
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-change-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: acceptance-policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Validate independent approval configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+          HUMAN_IDS: ${{ vars.ACCEPTANCE_HUMAN_IDS }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.request
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit("REJECT: " + message)
+
+          def get(path):
+              request = urllib.request.Request(
+                  os.environ["API_URL"] + path,
+                  headers={
+                      "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          require(os.environ["IS_DRAFT"] == "false",
+                  "Draft pull requests cannot be accepted")
+          raw = os.environ["HUMAN_IDS"]
+          require(re.fullmatch(r"[1-9][0-9]*(,[1-9][0-9]*)*", raw),
+                  "Configure trusted ACCEPTANCE_HUMAN_IDS")
+          allowed = {int(value) for value in raw.split(",")}
+          environment = get(
+              "/repos/" + os.environ["REPOSITORY"] +
+              "/environments/change-acceptance"
+          )
+          require(environment.get("can_admins_bypass") is False,
+                  "Environment administrator bypass must be disabled")
+          rules = [
+              rule for rule in environment.get("protection_rules", [])
+              if rule.get("type") == "required_reviewers"
+          ]
+          require(len(rules) == 1, "Required reviewer protection is missing")
+          rule = rules[0]
+          require(rule.get("prevent_self_review") is True,
+                  "Environment must prevent self-review")
+          reviewers = rule.get("reviewers", [])
+          require(reviewers, "Environment has no required reviewers")
+          actual = set()
+          for entry in reviewers:
+              reviewer = entry.get("reviewer", {})
+              require(entry.get("type") == "User" and
+                      reviewer.get("type") == "User",
+                      "Only explicitly allowlisted human users may approve")
+              actual.add(reviewer.get("id"))
+          require(actual == allowed,
+                  "Environment reviewers differ from trusted human allowlist")
+          print("Approval policy validated; external permissions remain required.")
+          PY
+
+  verify:
+    name: verify-exact-change
+    needs: policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      evidence_commit: ${{ steps.snapshot.outputs.commit }}
+    env:
+      CI: "true"
+      REPOSITORY_ID: ${{ github.repository }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      INSTALL_COMMAND: ${{ vars.INSTALL_COMMAND || 'npm ci' }}
+      BUILD_COMMAND: ${{ vars.BUILD_COMMAND || 'npm run build' }}
+      TYPECHECK_COMMAND: ${{ vars.TYPECHECK_COMMAND || 'npm run typecheck' }}
+      TEST_COMMAND: ${{ vars.TEST_COMMAND || 'npm test' }}
+      QMS_REQUIRED_TYPES: ${{ vars.QMS_REQUIRED_TYPES || 'verification' }}
+    steps:
+      - name: Checkout trusted gate from exact protected base
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: control
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Checkout exact candidate, not synthetic merge commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+
+      - name: Checkout independently protected evidence
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ github.repository }}
+          ref: acceptance-evidence
+          path: evidence
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Record exact evidence snapshot
+        id: snapshot
+        working-directory: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse --verify HEAD)"
+          printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
+          printf 'Evidence snapshot: %s\n' "$commit"
+
+      - name: Install default project toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Verify evidence and execute mandatory project checks
+        working-directory: candidate
+        shell: bash
+        env:
+          EVIDENCE_DIR: ${{ github.workspace }}/evidence
+        run: |
+          set -euo pipefail
+          gate="$GITHUB_WORKSPACE/control/verify-change"
+          test -f "$gate"
+          test ! -L "$gate"
+          # Do not pipe through tee without pipefail or replace this with
+          # candidate/verify-change. GitHub retains the raw command output.
+          bash "$gate" "$BASE_SHA" "$HEAD_SHA"
+
+  approval:
+    name: independent-human-approval
+    needs: [policy, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    environment:
+      name: change-acceptance
+      url: ${{ format('{0}/{1}/commit/{2}', github.server_url, github.repository, github.event.pull_request.head.sha) }}
+    steps:
+      - name: Bind human approval to this verified candidate
+        env:
+          REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVIDENCE_COMMIT: ${{ needs.verify.outputs.evidence_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EVIDENCE_COMMIT"
+          {
+            printf '## Independent acceptance approval\n\n'
+            printf -- '- Repository: `%s`\n' "$REPOSITORY"
+            printf -- '- Base: `%s`\n' "$BASE_SHA"
+            printf -- '- Candidate: `%s`\n' "$HEAD_SHA"
+            printf -- '- Protected evidence snapshot: `%s`\n' "$EVIDENCE_COMMIT"
+            printf '\nApproval identity and time are retained in the environment deployment audit.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  acceptance:
+    name: acceptance
+    needs: [policy, verify, approval]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail closed unless every prerequisite succeeded
+        env:
+          POLICY_RESULT: ${{ needs.policy.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          APPROVAL_RESULT: ${{ needs.approval.result }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$POLICY_RESULT" = success
+          test "$VERIFY_RESULT" = success
+          test "$APPROVAL_RESULT" = success
+          printf 'ACCEPT: exact candidate %s; verification and independent approval succeeded.\n' "$HEAD_SHA"
