@@ -1,0 +1,66 @@
+{
+  "base": "41df4b78cb0fb5ecb65527010d2f37da2cd4cf4f",
+  "changes": [
+    {
+      "new_blob": "45f281001e88a3eaacd76842e4b751cdd4ac2cd6",
+      "new_mode": "100644",
+      "new_path": ".github/workflows/run-evidence-capture.yml",
+      "old_blob": null,
+      "old_mode": null,
+      "old_path": null,
+      "status": "A"
+    },
+    {
+      "new_blob": "2214f579fc54645a1d449eceda91273087da3f69",
+      "new_mode": "100644",
+      "new_path": "tools/evidence-governance.conf",
+      "old_blob": null,
+      "old_mode": null,
+      "old_path": null,
+      "status": "A"
+    },
+    {
+      "new_blob": "a6be90dbec78bbc4dc5f4cb63b82f55b8154790d",
+      "new_mode": "100644",
+      "new_path": "tools/run-evidence.py",
+      "old_blob": null,
+      "old_mode": null,
+      "old_path": null,
+      "status": "A"
+    }
+  ],
+  "commands": {
+    "build": "npm run build",
+    "install": "npm ci",
+    "test": "npm test",
+    "typecheck": "npm run check"
+  },
+  "created_at": "2026-10-02T02:36:21.173999Z",
+  "decision": "APPROVE",
+  "evidence": [
+    {
+      "path": "outputs/c7b0543a5c622b26446d0b063c5a433371e62e59/install.log",
+      "sha256": "d51fdee6d0751e24823794bd4610984198945c2302f3b72d484ea72f8c868497"
+    },
+    {
+      "path": "outputs/c7b0543a5c622b26446d0b063c5a433371e62e59/build.log",
+      "sha256": "459f1baafa6b86eb6dc4881ae9566f8593d353ab30e0f27722e64ec4a0e67755"
+    },
+    {
+      "path": "outputs/c7b0543a5c622b26446d0b063c5a433371e62e59/typecheck.log",
+      "sha256": "73050a906149cc85490cb09b27b03cd02b2dfc0a70c18898d6cbfb8a58751745"
+    },
+    {
+      "path": "outputs/c7b0543a5c622b26446d0b063c5a433371e62e59/test.log",
+      "sha256": "d12fd24ed8b9d2c958e3b197663fc586983b5e83e95e268223b287bb87141654"
+    }
+  ],
+  "head": "c7b0543a5c622b26446d0b063c5a433371e62e59",
+  "kind": "qms",
+  "outcome": "pass",
+  "qms_type": "verification",
+  "rationale": "L2 verification of candidate via independent verifier dispatch plus local execution of all four configured gate commands at the exact candidate head; raw logs retained with SHA-256 under outputs/. Diff reviewed: docs-only CODEOWNERS addition. Bound to this exact base/head revision.",
+  "repository": "rikirinjani/somnium-engine",
+  "schema": 1,
+  "task_id": "gate-exercise-002"
+}
