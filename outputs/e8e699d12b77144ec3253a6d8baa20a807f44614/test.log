@@ -1,0 +1,31 @@
+﻿
+> somnium-engine@0.1.0 test
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/think/Project_v2/Somnium-cod[39m
+
+ [32mΓ£ô[39m tests/acceptance/causal-acceptance.test.ts [2m([22m[2m33 tests[22m[2m)[22m[90m 56[2mms[22m[39m
+ [32mΓ£ô[39m src/derive/propagation.test.ts [2m([22m[2m38 tests[22m[2m)[22m[90m 105[2mms[22m[39m
+ [32mΓ£ô[39m tests/acceptance/cross-canon-acceptance.test.ts [2m([22m[2m69 tests[22m[2m)[22m[90m 215[2mms[22m[39m
+ [32mΓ£ô[39m src/derive/world-state.test.ts [2m([22m[2m26 tests[22m[2m)[22m[90m 84[2mms[22m[39m
+ [32mΓ£ô[39m src/depth/depth.test.ts [2m([22m[2m19 tests[22m[2m)[22m[90m 72[2mms[22m[39m
+ [32mΓ£ô[39m src/canon/ordos.test.ts [2m([22m[2m23 tests[22m[2m)[22m[90m 71[2mms[22m[39m
+ [32mΓ£ô[39m src/canon/canon.test.ts [2m([22m[2m27 tests[22m[2m)[22m[90m 81[2mms[22m[39m
+ [32mΓ£ô[39m src/derive/ordering.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 73[2mms[22m[39m
+ [32mΓ£ô[39m tests/acceptance/depth-acceptance.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 88[2mms[22m[39m
+ [32mΓ£ô[39m tests/acceptance/poc-acceptance.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 63[2mms[22m[39m
+ [32mΓ£ô[39m src/experiment/runner.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 155[2mms[22m[39m
+ [32mΓ£ô[39m src/canon/verrin.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 31[2mms[22m[39m
+ [32mΓ£ô[39m src/derive/judgment.test.ts [2m([22m[2m20 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32mΓ£ô[39m src/query/query.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32mΓ£ô[39m src/diff/diff.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 28[2mms[22m[39m
+ [32mΓ£ô[39m src/diff/projections.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32mΓ£ô[39m src/timeline/rewind-point.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32mΓ£ô[39m src/timeline/universe.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m18 passed[39m[22m[90m (18)[39m
+[2m      Tests [22m [1m[32m348 passed[39m[22m[90m (348)[39m
+[2m   Start at [22m 08:54:35
+[2m   Duration [22m 5.18s[2m (transform 983ms, setup 0ms, collect 2.81s, tests 1.20s, environment 5ms, prepare 5.02s)[22m
+

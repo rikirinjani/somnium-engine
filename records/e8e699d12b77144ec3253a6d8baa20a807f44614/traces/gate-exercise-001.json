@@ -1,0 +1,39 @@
+{
+  "base": "41df4b78cb0fb5ecb65527010d2f37da2cd4cf4f",
+  "changes": [
+    {
+      "new_blob": "85c378d907d003dfeaa6d3e75f9cae1d9d58f8a2",
+      "new_mode": "100644",
+      "new_path": ".github/CODEOWNERS",
+      "old_blob": null,
+      "old_mode": null,
+      "old_path": null,
+      "status": "A"
+    }
+  ],
+  "created_at": "2026-10-02T02:04:33.402921Z",
+  "evidence": [
+    {
+      "path": "outputs/e8e699d12b77144ec3253a6d8baa20a807f44614/install.log",
+      "sha256": "27888b6b46694cf69b88e993f458b021e5b555ed51d486e7b1cd10008e43eb9e"
+    },
+    {
+      "path": "outputs/e8e699d12b77144ec3253a6d8baa20a807f44614/build.log",
+      "sha256": "59de817980f8eef621c2e1519bcfdc5ac275c89d2e09d8bcde30a357c2948981"
+    },
+    {
+      "path": "outputs/e8e699d12b77144ec3253a6d8baa20a807f44614/typecheck.log",
+      "sha256": "e5fa4a831e6a50aedf36c6a8188a96b14f0bcf72c71d94ee21f33d79c5f4e095"
+    },
+    {
+      "path": "outputs/e8e699d12b77144ec3253a6d8baa20a807f44614/test.log",
+      "sha256": "e1dc1237935191e335c7880ebb81355f45f2d4c58a1db6520fb34f87746c79fd"
+    }
+  ],
+  "head": "e8e699d12b77144ec3253a6d8baa20a807f44614",
+  "kind": "trace",
+  "outcome": "pass",
+  "repository": "rikirinjani/somnium-engine",
+  "schema": 1,
+  "task_id": "gate-exercise-001"
+}
