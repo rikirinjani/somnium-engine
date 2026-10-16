@@ -166,4 +166,4 @@ No incremental Phase B, no unfounded-semantics change, no production merge. P-00
 | | |
 |---|---|
 | Ancestor | `dfa4cfa` |
-| S023 experiment commit | `{{S023_COMMIT}}` |
+| S023 experiment commit | `6aa4b74` |
