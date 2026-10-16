@@ -1,0 +1,30 @@
+{
+  "requirement_id": "req-011",
+  "title": "S011 — Fold-state delta / retention signal",
+  "category": "requirements/experiment",
+  "source": "S011 experiment specification (2026-09-11)",
+  "trace_id": "s011-fold-state-delta",
+  "date": "2026-09-11T02:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "443d3d9",
+  "branch": "s011",
+  "experiment_commit": "d92a15e",
+  "description": "S010 hypothesised that the authoritative fold may need to expose a per-intervention signal describing whether the intervention changed fold-relevant state. S011 tests that hypothesis: instrument the fold to emit a FoldStateDelta per intervention, prove it catches the S009 and S010 witnesses, attack it in the inverse direction, and test whether it is a sound basis for sufficient-history extraction without creating a second semantic authority.",
+  "scope_note": "Unlike S007-S010, this experiment is explicitly permitted narrowly scoped src/ instrumentation changes. No semantic model redesign, no incremental derivation, no history-reduction productionization.",
+  "result_summary": "PASS (with limitations). Instrumentation added to src/derive/propagation.ts (resolveEdges + accumulator fold record per-step components; buildModelWithDeltas shares the same fold body; buildModel delegates) and src/derive/world-state.ts (applyFactInterventions records fact-list change; new foldStateDeltas export). No semantic rule duplicated. S009 witness: all 3 steps non-empty delta. S010 witness: forceEvent[forcedBy] with an UNCHANGED semantic hash plus negateEvent[negated] - caught generically, no special-casing. Retention by delta (keep iff non-empty) is sound: 520/520 differential on verrin, ordos and the multi-fact overlap canon. Inverse attack (empty delta but future-relevant): 0 hits. Classification: A=19990, B=621 (semantic no-op / fold change / future-relevant), C=2692 (fold change / irrelevant = over-retention), D=14329. Determinism stable; branch isolation passes. Overhead 2.2x (H=10) to 57.7x (H=3000), dominated by the effective-fact-list comparison, optimisable to O(1) per step. The signal is NECESSARY for safe retention and sound as a retention basis, but NOT sufficient for minimality (category C). Semantic authority remained singular.",
+  "limitations": [
+    "Necessary, not sufficient for minimality: category C (2692 steps) is over-retention.",
+    "Empirical only (520/520 and 0 inverse hits are finite-corpus results, not a proof).",
+    "Cost up to 57x in this first correctness-first implementation.",
+    "relocate coverage is thin (1 case).",
+    "The forcedBy component includes the intervention id (lineage), making the delta slightly conservative."
+  ],
+  "productionization_recommendation": "Sound foundation; productionize as a separate justified task. (1) Move the fact-list observation into the fold's incremental state so the delta is O(1) per step. (2) Decide the forcedBy-id question before shipping public API. Keep buildModel's default behaviour; expose the delta behind foldStateDeltas.",
+  "references": [
+    "experiments/s011/REPORT.md",
+    "experiments/s011/results/results.json",
+    "src/derive/propagation.ts (FoldStepDelta, buildModelWithDeltas)",
+    "src/derive/world-state.ts (foldStateDeltas)",
+    "S010 report / NCR-007; S009 report / NCR-006"
+  ]
+}
