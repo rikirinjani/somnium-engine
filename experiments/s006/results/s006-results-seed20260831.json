@@ -1,0 +1,643 @@
+{
+  "experiment": "S006",
+  "frozenCommit": "5b41ded",
+  "frozenTag": "somnium-p005-final",
+  "seed": 20260831,
+  "canon": {
+    "id": "canon/synth",
+    "hash": "037f1ba6",
+    "events": 140
+  },
+  "horizons": [
+    {
+      "horizon": 0,
+      "residueBytes": 79,
+      "worldBytes": 33226,
+      "deriveMs": 35.802,
+      "activeFacts": 144,
+      "activeEvents": 140,
+      "contradictions": 0,
+      "unresolved": 0,
+      "stateHash": "de3d0662",
+      "identityHash": "d6c6cb38",
+      "replayMatches": true
+    },
+    {
+      "horizon": 1,
+      "residueBytes": 246,
+      "worldBytes": 33246,
+      "deriveMs": 8.363,
+      "activeFacts": 144,
+      "activeEvents": 140,
+      "contradictions": 0,
+      "unresolved": 0,
+      "stateHash": "3a7b03a3",
+      "identityHash": "1e2aafae",
+      "replayMatches": true
+    },
+    {
+      "horizon": 10,
+      "residueBytes": 1210,
+      "worldBytes": 33738,
+      "deriveMs": 5.12,
+      "activeFacts": 144,
+      "activeEvents": 46,
+      "contradictions": 2,
+      "unresolved": 0,
+      "stateHash": "5cefbfdf",
+      "identityHash": "a77db971",
+      "replayMatches": true
+    },
+    {
+      "horizon": 50,
+      "residueBytes": 6179,
+      "worldBytes": 34552,
+      "deriveMs": 6.048,
+      "activeFacts": 144,
+      "activeEvents": 58,
+      "contradictions": 6,
+      "unresolved": 0,
+      "stateHash": "0a06fee2",
+      "identityHash": "f4c452c8",
+      "replayMatches": true
+    },
+    {
+      "horizon": 100,
+      "residueBytes": 12394,
+      "worldBytes": 35840,
+      "deriveMs": 7.556,
+      "activeFacts": 144,
+      "activeEvents": 68,
+      "contradictions": 13,
+      "unresolved": 0,
+      "stateHash": "27253b1a",
+      "identityHash": "6b84902c",
+      "replayMatches": true
+    },
+    {
+      "horizon": 500,
+      "residueBytes": 59102,
+      "worldBytes": 46486,
+      "deriveMs": 28.423,
+      "activeFacts": 144,
+      "activeEvents": 19,
+      "contradictions": 72,
+      "unresolved": 0,
+      "stateHash": "2a85b6bb",
+      "identityHash": "ad9c52fa",
+      "replayMatches": true
+    },
+    {
+      "horizon": 1000,
+      "residueBytes": 117596,
+      "worldBytes": 54446,
+      "deriveMs": 48.256,
+      "activeFacts": 144,
+      "activeEvents": 3,
+      "contradictions": 117,
+      "unresolved": 0,
+      "stateHash": "d04f38d3",
+      "identityHash": "f1bdaee8",
+      "replayMatches": true
+    }
+  ],
+  "handoffs": [
+    {
+      "handoff": 1,
+      "residueBytes": 246,
+      "stateHash": "3a7b03a3",
+      "identityHash": "1e2aafae",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 140,
+      "facts": 144
+    },
+    {
+      "handoff": 2,
+      "residueBytes": 337,
+      "stateHash": "173b51a0",
+      "identityHash": "730d47f9",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 140,
+      "facts": 144
+    },
+    {
+      "handoff": 3,
+      "residueBytes": 428,
+      "stateHash": "70b0586b",
+      "identityHash": "50a50695",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 47,
+      "facts": 144
+    },
+    {
+      "handoff": 4,
+      "residueBytes": 516,
+      "stateHash": "36b6a100",
+      "identityHash": "9f263fd0",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 13,
+      "facts": 144
+    },
+    {
+      "handoff": 5,
+      "residueBytes": 684,
+      "stateHash": "3bb7c8de",
+      "identityHash": "0318e572",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 13,
+      "facts": 144
+    },
+    {
+      "handoff": 6,
+      "residueBytes": 772,
+      "stateHash": "44016a49",
+      "identityHash": "874e50be",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 79,
+      "facts": 144
+    },
+    {
+      "handoff": 7,
+      "residueBytes": 860,
+      "stateHash": "7ffbfe69",
+      "identityHash": "a2a2078d",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 98,
+      "facts": 144
+    },
+    {
+      "handoff": 8,
+      "residueBytes": 1028,
+      "stateHash": "f7977e2b",
+      "identityHash": "5e61904a",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 98,
+      "facts": 144
+    },
+    {
+      "handoff": 9,
+      "residueBytes": 1119,
+      "stateHash": "c8b22a61",
+      "identityHash": "84f7dd04",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 98,
+      "facts": 144
+    },
+    {
+      "handoff": 10,
+      "residueBytes": 1210,
+      "stateHash": "5cefbfdf",
+      "identityHash": "a77db971",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 11,
+      "residueBytes": 1335,
+      "stateHash": "c5673901",
+      "identityHash": "1dc61d93",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 12,
+      "residueBytes": 1420,
+      "stateHash": "a16f0cae",
+      "identityHash": "c9be708a",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 13,
+      "residueBytes": 1545,
+      "stateHash": "c000fed0",
+      "identityHash": "6f6d37f6",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 14,
+      "residueBytes": 1713,
+      "stateHash": "a16f0cae",
+      "identityHash": "f1256224",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 15,
+      "residueBytes": 1798,
+      "stateHash": "20595759",
+      "identityHash": "0f0b34b9",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 16,
+      "residueBytes": 1966,
+      "stateHash": "d9cb4cf3",
+      "identityHash": "b2e1f928",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 17,
+      "residueBytes": 2134,
+      "stateHash": "d9cb4cf3",
+      "identityHash": "37de9ff5",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 18,
+      "residueBytes": 2302,
+      "stateHash": "9a5c8b59",
+      "identityHash": "18aec53e",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 19,
+      "residueBytes": 2470,
+      "stateHash": "64302371",
+      "identityHash": "8715efd7",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 20,
+      "residueBytes": 2558,
+      "stateHash": "e250a970",
+      "identityHash": "208a4ff6",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 46,
+      "facts": 144
+    },
+    {
+      "handoff": 21,
+      "residueBytes": 2649,
+      "stateHash": "3294b399",
+      "identityHash": "f2bcbaf7",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 22,
+      "residueBytes": 2774,
+      "stateHash": "3294b399",
+      "identityHash": "9a2b15b8",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 23,
+      "residueBytes": 2899,
+      "stateHash": "ad136055",
+      "identityHash": "3ad7460d",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 24,
+      "residueBytes": 3067,
+      "stateHash": "68e3a3c3",
+      "identityHash": "38b40425",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 25,
+      "residueBytes": 3192,
+      "stateHash": "68e3a3c3",
+      "identityHash": "4b5cdd08",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 26,
+      "residueBytes": 3317,
+      "stateHash": "04445e04",
+      "identityHash": "ed7a5048",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 27,
+      "residueBytes": 3411,
+      "stateHash": "6ba7ba64",
+      "identityHash": "eb82248e",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 28,
+      "residueBytes": 3579,
+      "stateHash": "ffedf5bd",
+      "identityHash": "cf167c62",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 29,
+      "residueBytes": 3747,
+      "stateHash": "838fcf03",
+      "identityHash": "7ceda9e6",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 30,
+      "residueBytes": 3872,
+      "stateHash": "771ecc15",
+      "identityHash": "30205f9a",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 33,
+      "facts": 144
+    },
+    {
+      "handoff": 31,
+      "residueBytes": 3960,
+      "stateHash": "4f9b4285",
+      "identityHash": "70081282",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 47,
+      "facts": 144
+    },
+    {
+      "handoff": 32,
+      "residueBytes": 4051,
+      "stateHash": "c5b5e8c9",
+      "identityHash": "7d8e997a",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 47,
+      "facts": 144
+    },
+    {
+      "handoff": 33,
+      "residueBytes": 4176,
+      "stateHash": "bad84088",
+      "identityHash": "2c1deaed",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 47,
+      "facts": 144
+    },
+    {
+      "handoff": 34,
+      "residueBytes": 4267,
+      "stateHash": "ac2bc174",
+      "identityHash": "c84059bd",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 73,
+      "facts": 144
+    },
+    {
+      "handoff": 35,
+      "residueBytes": 4361,
+      "stateHash": "df405f49",
+      "identityHash": "3de88719",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 62,
+      "facts": 144
+    },
+    {
+      "handoff": 36,
+      "residueBytes": 4529,
+      "stateHash": "855e3e07",
+      "identityHash": "ebeb52f0",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 62,
+      "facts": 144
+    },
+    {
+      "handoff": 37,
+      "residueBytes": 4697,
+      "stateHash": "855e3e07",
+      "identityHash": "97c23789",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 62,
+      "facts": 144
+    },
+    {
+      "handoff": 38,
+      "residueBytes": 4788,
+      "stateHash": "681be4a5",
+      "identityHash": "3fce255e",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 69,
+      "facts": 144
+    },
+    {
+      "handoff": 39,
+      "residueBytes": 4879,
+      "stateHash": "7ab9bd58",
+      "identityHash": "59aa434d",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 74,
+      "facts": 144
+    },
+    {
+      "handoff": 40,
+      "residueBytes": 5004,
+      "stateHash": "bf0000aa",
+      "identityHash": "0008831d",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 74,
+      "facts": 144
+    },
+    {
+      "handoff": 41,
+      "residueBytes": 5095,
+      "stateHash": "f288c19e",
+      "identityHash": "8f71d4fc",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 72,
+      "facts": 144
+    },
+    {
+      "handoff": 42,
+      "residueBytes": 5263,
+      "stateHash": "8542f49d",
+      "identityHash": "e77e0553",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 72,
+      "facts": 144
+    },
+    {
+      "handoff": 43,
+      "residueBytes": 5431,
+      "stateHash": "a687b3cb",
+      "identityHash": "b484e8ee",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 72,
+      "facts": 144
+    },
+    {
+      "handoff": 44,
+      "residueBytes": 5599,
+      "stateHash": "a687b3cb",
+      "identityHash": "bedb6bcf",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 72,
+      "facts": 144
+    },
+    {
+      "handoff": 45,
+      "residueBytes": 5690,
+      "stateHash": "905fb156",
+      "identityHash": "69ba0520",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 72,
+      "facts": 144
+    },
+    {
+      "handoff": 46,
+      "residueBytes": 5781,
+      "stateHash": "4bca84a0",
+      "identityHash": "5fbc67b1",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 72,
+      "facts": 144
+    },
+    {
+      "handoff": 47,
+      "residueBytes": 5872,
+      "stateHash": "2a378300",
+      "identityHash": "824b6748",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 58,
+      "facts": 144
+    },
+    {
+      "handoff": 48,
+      "residueBytes": 5997,
+      "stateHash": "2a378300",
+      "identityHash": "c3ba6f6b",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 58,
+      "facts": 144
+    },
+    {
+      "handoff": 49,
+      "residueBytes": 6091,
+      "stateHash": "d0e84306",
+      "identityHash": "d161dfcd",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 50,
+      "facts": 144
+    },
+    {
+      "handoff": 50,
+      "residueBytes": 6179,
+      "stateHash": "0a06fee2",
+      "identityHash": "f4c452c8",
+      "stateHashStable": true,
+      "identityHashStable": true,
+      "events": 58,
+      "facts": 144
+    }
+  ],
+  "errorInjection": [
+    {
+      "scenario": "source replacement (canon tamper)",
+      "detected": true,
+      "whatChanged": [
+        "stateHash differs",
+        "canonHash differs"
+      ]
+    },
+    {
+      "scenario": "illegal fact write (undeclared type object)",
+      "detected": true,
+      "whatChanged": [
+        "contradictions=6"
+      ]
+    },
+    {
+      "scenario": "contradiction (force-vs-negated on declared)",
+      "detected": true,
+      "whatChanged": [
+        "ev/n1=CONTRADICTORY"
+      ]
+    },
+    {
+      "scenario": "unknown preserved (undeclared id object)",
+      "detected": true,
+      "whatChanged": [
+        "unresolved=0"
+      ]
+    }
+  ],
+  "notes": [
+    "horizon = ordered interventions applied to the SAME frozen canon",
+    "residue = (canonId, canonHash, rpId, interventions[]) — what a receiving worker would need",
+    "world = full WorldState projection (judgments/statuses/facts/workStatuses/contradictions/temporalViolations)",
+    "handoff rows: mechanical re-derivation from residue only; stateHash/identityHash stability = replay determinism"
+  ]
+}
