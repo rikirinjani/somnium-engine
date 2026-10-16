@@ -1,0 +1,33 @@
+{
+  "requirement_id": "req-019",
+  "title": "S019 — Prior-judgment seeded Phase-A equivalence",
+  "category": "requirements/experiment",
+  "source": "S019 experiment specification (2026-09-11)",
+  "trace_id": "s019-seeded-phase-a",
+  "date": "2026-09-11T10:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "c652204",
+  "branch": "s019",
+  "experiment_commit": "fb2ec51",
+  "description": "Test whether the authoritative Phase A fixpoint can be seeded from the previous authoritative judgment map and still converge to exactly the same result as the from-scratch implementation.",
+  "result_summary": "BLOCKED. Experiment A (complete prior-truth seeding) is NOT reference-equivalent: 26/400 steps diverge (6.5%). Breakdown: negateEvent 19/84, retractFact 2/32, severEdge 3/38, setFact 1/152, forceEvent 1/68, addEdge 0/26. Example: ev/treaty-of-ash ref=FALSE seeded=TRUE (stale TRUE). Negative control force->negate: ref=FALSE seeded=TRUE. EXACT CAUSE: Phase A is sticky ('if (current !== NEITHER) continue'), so a seeded decided value is never recomputed; a prior TRUE whose support the intervention removed is preserved forever. The reset to NEITHER is therefore semantically necessary for the current sticky Phase A. Seeding is sound only for monotone-increasing interventions. The required fix is an invalidation mechanism (a later experiment), which needs per-node decision provenance; the prior truth map alone is insufficient. No dirty queue, no invalidation, no selective recomputation, no cached fixpoint, no semantic rule change.",
+  "answers": {
+    "Q1_converges": "NO - 26/400 diverge",
+    "Q3_stale_mechanism": "sticky Phase A never recomputes a decided node, so a prior TRUE whose support was removed persists",
+    "Q4_must_invalidate": "every prior judgment whose support/override the intervention weakened (support removal, negateEvent, retractFact, severEdge, cycle creation)",
+    "Q5_structural_invalidation": "not from structure alone - 'support remains valid' needs per-node decision provenance",
+    "Q6_reduces_reconsideration": "no - it only changes starting values, and does so unsoundly",
+    "Q7_global_mechanisms": "Phase A global sticky closure and Phase B global unfounded-set shrink both remain",
+    "Q8_incremental_with_global_barrier": "not demonstrated; Phase A cannot become incremental without invalidation",
+    "Q9_min_state": "prior truth map PLUS per-node decision provenance (which support group/override decided it)",
+    "Q10_genuine_engine": "neither yet - naive seeding is a wrong full-propagation variant; a real engine first needs an invalidation mechanism"
+  },
+  "next_experiment": "minimum sound invalidation mechanism for a preserved fixpoint - requires per-node decision provenance, not merely the prior judgment map.",
+  "limitations": [
+    "Seed canons + 200-step random histories; the full adversarial corpus was not separately enumerated (Experiment A already failed).",
+    "Only sticky Phase A seeding was tested; seeded Phase B was not isolated.",
+    "Long-horizon, branch, determinism measurements not run (mechanism disqualified).",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s019/REPORT.md", "experiments/s019/probe.ts", "S018 report / req-018", "S017 report / req-017"]
+}
