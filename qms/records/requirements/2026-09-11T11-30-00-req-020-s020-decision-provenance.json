@@ -1,0 +1,35 @@
+{
+  "requirement_id": "req-020",
+  "title": "S020 — Decision provenance / minimum sound invalidation",
+  "category": "requirements/experiment",
+  "source": "S020 experiment specification (2026-09-11)",
+  "trace_id": "s020-decision-provenance",
+  "date": "2026-09-11T11:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "fb2ec51",
+  "branch": "s020",
+  "experiment_commit": "f219e67",
+  "description": "Determine the minimum information required to decide whether a previously established Phase A judgment remains valid after an intervention.",
+  "result_summary": "BLOCKED. A per-node decision-rule provenance (negated | forced | support | unfounded) is observable deterministically and explains every S019 divergence, but the rule-level invalidation predicate is NOT sound: FN=32, FP=0, invalidated=0 (negateEvent 26, retractFact 3, severEdge 2, forceEvent 1). Every false negative comes from the SUPPORT rule: to know whether a support-established TRUE still holds, the predicate must re-evaluate the support, which is precisely Phase A. Minimum-information analysis: Level 3 (deciding rule) is the richest level capturable without semantic work, and it is unsound; the minimum SOUND witness for support-decided nodes is effectively the derivation itself (Level 5). Shadow-engine audit: sound invalidation requires class D (reimplementation of propagation semantics) - the shadow engine the brief forbids.",
+  "answers": {
+    "Q1_evidence": "one of three rules decides a Phase A node: negated (FALSE), forced (TRUE/FALSE), support (factNodeTruth/hardSupport); Phase B can reject via unfounded",
+    "Q2_dependency_provenance_sufficient": "NO - it does not say which support actually decided the node",
+    "Q3_additional_provenance": "the deciding rule, plus for support the winning group AND its conjuncts current judgments (the last part is the derivation)",
+    "Q4_or_without_duplication": "NO - OR/disjunctive support cannot be handled without re-evaluating the groups = Phase A",
+    "Q5_force_negate_override": "YES - handled correctly by structural accumulator checks",
+    "Q6_cycles": "need the Phase B unfoundedSet result; unfounded provenance is conservatively safe (no FN) but cannot make a positive determination without re-running Phase B",
+    "Q7_granularity": "per node for the rule; but support decisions also depend on the conjuncts judgments, so a node-local record is insufficient",
+    "Q8_minimum_sound_witness": "deciding rule + (for support) the current support evaluation - i.e. the derivation; no cheaper sound witness found",
+    "Q9_state_per_judgment": "rule-level ~1 small value per node; a SOUND record is effectively the full support graph + current judgments",
+    "Q10_engine_can_record": "the rule-level record CAN (done); a SOUND witness CANNOT without class-D logic",
+    "Q11_basis_for_incremental": "not yet - incremental Phase A needs support re-validation, which is the engine"
+  },
+  "next_experiment": "either incrementalise WITHIN Phase A (accept support re-evaluation as the local operation), or find a support representation cheaper to re-check than to recompute.",
+  "limitations": [
+    "Seed canons + 200-step random histories; OR/AND/ENABLES/cycle cases were reasoned through the three deciding rules rather than built as synthetic graphs (budget).",
+    "Only the rule-level witness was implemented; Levels 4-5 were characterised, not implemented.",
+    "Long-horizon, branch, determinism measurements not run (predicate disqualified).",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s020/REPORT.md", "experiments/s020/probe.ts", "S019 report / req-019", "S018 report / req-018"]
+}
