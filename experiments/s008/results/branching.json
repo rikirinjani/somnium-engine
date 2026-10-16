@@ -1,0 +1,33 @@
+{
+  "env": {
+    "commit": "443d3d9aba8565900ba156e5cef5bd1ff4b9ee70",
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 4,
+    "cpuModel": "AMD Ryzen 3 4300U with Radeon Graphics         ",
+    "totalMemBytes": 7916294144,
+    "node": "v22.23.2",
+    "ts": "5.9.3",
+    "timestamp": "2026-09-10T16:18:59.724Z"
+  },
+  "branching": [
+    {
+      "canon": "verrin",
+      "branchCount": 6,
+      "depth": 12,
+      "isolationOk": true,
+      "hashesMatchLegacy": true,
+      "convergenceOk": true,
+      "distinctBranchHashes": 6
+    },
+    {
+      "canon": "ordos",
+      "branchCount": 6,
+      "depth": 12,
+      "isolationOk": true,
+      "hashesMatchLegacy": true,
+      "convergenceOk": true,
+      "distinctBranchHashes": 6
+    }
+  ]
+}

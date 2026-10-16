@@ -1,0 +1,43 @@
+{
+  "requirement_id": "req-008",
+  "title": "S008 — Incremental derivation equivalence",
+  "category": "requirements/experiment",
+  "source": "S008 experiment specification (2026-09-10)",
+  "trace_id": "s008-incremental-derivation",
+  "date": "2026-09-10T23:37:32Z",
+  "status": "complete",
+  "ancestor_commit": "443d3d9",
+  "branch": "s008",
+  "description": "S007 identified one dominant bottleneck: derive(canon, history) rebuilds the entire intervention chain on every call, making the prefix walk O(H^2). S008 asks whether Somnium can derive the same semantic world incrementally: can step(prevWorldState, I) extend a world by one intervention while producing exactly the same effective semantic world as the existing full-chain derivation? This is a semantic-equivalence experiment first; performance second.",
+  "constraints": [
+    "Do not modify S007, P-007, P-005 or S006.",
+    "Do not create an independent semantic engine; P-007's one-representation principle (stateHash and WorldDiff from one canonical semantic representation) must be preserved.",
+    "If incremental derivation requires duplicating a semantic rule, document the duplication before proceeding.",
+    "S008 code stays under experiments/s008/ unless a separately justified source modification is absolutely required.",
+    "Do not sacrifice semantic correctness for performance.",
+    "A counterexample (semantic divergence) is a valid experimental result; do not patch around it silently."
+  ],
+  "required_invariant": [
+    "semanticState(legacy) === semanticState(incremental)",
+    "stateHash(legacy) === stateHash(incremental)",
+    "worldDiff(legacy, incremental) === empty",
+    "Lineage (identityHash, WorldState.interventions) is NOT compared."
+  ],
+  "design": "derive remains the sole semantic authority. step(prev, I) appends I, reduces the accumulated chain by subsumption, and re-derives. reduceChain is order-preserving: legal writes keep last per (subject,predicate) cell; rejected writes keep first per contradiction id; negateEvent/forceEvent keep last per target; retractFact keeps first per fact id; severEdge/addEdge keep last per edge id.",
+  "acceptance_criteria": [
+    "Differential equivalence over constructed + random + adversarial histories on verrin and ordos.",
+    "Adversarial matrix exercising every P-007 semantic dimension, constraints (AT_MOST_ONE/AT_LEAST_ONE), causal structure (grouped/disjunctive support, propagation, cycles), temporal behaviour (validity windows, PRECEDES cycles), and S007 convergence patterns.",
+    "Invalid-input equivalence: legacy rejects I iff incremental rejects I.",
+    "Branch isolation: stepping one branch never changes a sibling; no shared mutable state.",
+    "Determinism: repeated identical inputs give identical semantic state, stateHash and WorldDiff.",
+    "Performance: measure legacy vs incremental at H = 10..100000, both single final state and full prefix walk.",
+    "Regression: 624/624 tests, verify-facts 3/3, frozen hashes unchanged, src/ unchanged from 443d3d9."
+  ],
+  "result_summary": "PASS. 1632/1632 differential cases pass. Reduced chain saturates (verrin 228, ordos 174) independent of H. Prefix walk is O(H) vs legacy O(H^2): 2.0x at H=1000, ~12x at H=10000, ~118x at H=100000. Caveats: the one-shot final derive is slower incrementally (the fold performs H steps), and the step is O(model) not O(1) (only the history scan is eliminated). One design defect was found and fixed during development (rejected-write contradiction id), recorded in self-harness/failures/20260910-233732-design-defect-s008-reduction-dropped-rejected-writes.json.",
+  "references": [
+    "experiments/s008/REPORT.md",
+    "experiments/s008/results/*.json",
+    "experiments/s008/incremental.ts",
+    "S007 report: experiments/s007/REPORT.md (bounded semantic state)"
+  ]
+}
