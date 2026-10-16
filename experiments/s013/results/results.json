@@ -1,0 +1,36 @@
+{
+  "env": {
+    "commit": "dabc4a1b02d655885270cc61535242cb832c9afa",
+    "platform": "win32",
+    "cpus": 4,
+    "cpuModel": "AMD Ryzen 3 4300U with Radeon Graphics         ",
+    "totalMemBytes": 7916294144,
+    "node": "v22.23.2",
+    "ts": "5.9.3",
+    "timestamp": "2026-09-11T00:59:44.538Z"
+  },
+  "perCanon": {
+    "verrin": {
+      "A": 124,
+      "B": 16,
+      "C": 0,
+      "D": 20,
+      "Cexposed": 0,
+      "Ctotal": 0,
+      "Cwitnesses": []
+    },
+    "ordos": {
+      "A": 119,
+      "B": 21,
+      "C": 1,
+      "D": 19,
+      "Cexposed": 0,
+      "Ctotal": 1,
+      "Cwitnesses": []
+    }
+  },
+  "diff": {
+    "total": 16,
+    "ok": 16
+  }
+}
