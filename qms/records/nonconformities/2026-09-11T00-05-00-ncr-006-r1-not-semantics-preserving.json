@@ -1,0 +1,33 @@
+{
+  "ncr_id": "ncr-006",
+  "title": "S008 reduction rule R1 is not semantics-preserving for multi-effective-fact cells",
+  "category": "nonconformities/design",
+  "source": "S009 experiment (counterexample search)",
+  "trace_id": "s009-subsumption-semantics",
+  "date": "2026-09-11T00:05:00Z",
+  "severity": "high",
+  "status": "open",
+  "found_in": "experiments/s008/incremental.ts (reduceChain), reproduced in experiments/s009/reduction.ts",
+  "requirement_violated": "A reduced intervention chain must preserve every semantic distinction the current model can observe: semanticState(derive(H)) == semanticState(derive(reduceChain(H))), stateHash equal, worldDiff empty.",
+  "description": "Rule R1 ('a legal setFact/relocate keeps the LAST write per (subject, predicate) cell') assumes a write's effect is fully determined by the last write to its cell. That holds only when a cell holds at most one effective fact. When a cell holds MULTIPLE simultaneously-effective facts (overlapping validity windows), overrideFact (src/derive/world-state.ts:190) reuses the LAST matching fact's id (last by validFrom). A retractFact of that fact between two writes changes which id the later write reuses, so dropping the earlier write changes the surviving fact's identity — which is part of the effective semantic representation (the facts dimension is keyed by id).",
+  "minimal_counterexample": {
+    "canon": "canon/s009-overlap-baked — char/x has two facts on cell (char/x, at): f1 (validFrom null, validTo ev/b) and f2 (validFrom ev/a, validTo null). ev/a is a root (occurs); ev/b is in a REQUIRES 2-cycle with ev/c and is therefore unfounded (does not occur). Both facts are effective at baseline. inspectCanon reports errors: [] (a notice about the well-founded cycle only).",
+    "history": ["setFact(char/x, at, W1)", "retractFact(fact/x-at-loc2)", "setFact(char/x, at, W2)"],
+    "reduced": ["retractFact(fact/x-at-loc2)", "setFact(char/x, at, W2)"],
+    "legacy_effective_fact": "derived:[\"char/x\",\"at\"]=W2",
+    "reduced_effective_fact": "fact/x-at-loc1=W2",
+    "legacy_stateHash": "2eaa050a",
+    "reduced_stateHash": "f41330b7",
+    "semanticEqual": false,
+    "hashEqual": false,
+    "diffEmpty": false
+  },
+  "scope": "Not reachable on the shipped seed canons (verrin, ordos): their multi-fact cells have DISJOINT validity windows, so at most one fact is effective at a time. It IS reachable on any valid canon the engine supports that has overlapping effective windows.",
+  "proposed_correction": "Strengthen R1: refuse to subsume an earlier legal write to a cell if a retractFact of one of that cell's canon facts occurred between them (the 'multi-fact guard'). With the guard the counterexample canon is repaired (semanticEqual=true, hashEqual=true, diffEmpty=true). The guard is reported here, not silently adopted.",
+  "recommendation": "Do not productionize reduceChain in its current form. If adopted, require the explicit precondition 'at most one effective fact per cell', enforced at canon validation. Prefer the architectural end-state: derive the reduced chain from the model's own fold accumulators so the reduction cannot disagree with the fold.",
+  "evidence": [
+    "experiments/s009/probe-overlap.ts",
+    "experiments/s009/probe-minimize.ts",
+    "experiments/s009/REPORT.md §7.2, §15, §17"
+  ]
+}
