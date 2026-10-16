@@ -1,0 +1,33 @@
+{
+  "requirement_id": "req-026",
+  "title": "S026 — Phase-A reconsideration semantics / sound invalidation boundary",
+  "category": "requirements/experiment",
+  "source": "S026 experiment specification (2026-09-11)",
+  "trace_id": "s026-reconsideration-semantics",
+  "date": "2026-09-11T17:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "d1d6f66",
+  "branch": "s026",
+  "experiment_commit": "b540e13",
+  "description": "Characterise exactly what causes a node to be re-decided by the authoritative from-scratch Phase-A fixpoint, and whether that reconsideration condition can be represented as maintained execution state.",
+  "result_summary": "HOLD. Reproduced the S025 first divergence exactly (ordos, seed 0, prefix 5, negateEvent:ev/vaela-invested; directChanged=[ev/vaela-invested]; 11-node reset closure; 3 divergent nodes). ROOT CAUSE A - a MISSING AUTHORITATIVE DEPENDENCY: fact/seal-held-vaela changed OUTSIDE the closure because it is a FACT whose truth comes from its VALIDITY WINDOW (validFrom/validTo via factNodeTruth), and the reverse index (supportGroups/enablesIn/excludes/invariant/precedes) OMITS validity-window edges. ROOT CAUSE B - STICKY ORDER-DEPENDENCE: ev/rite-of-binding-vaela and ev/succession-settled were INSIDE the reset closure but still diverged, decided TRUE using a stale member value before the member was re-decided (the sticky rule skips decided nodes). R \\ closure = 51 over 800 prefixes (max 5 per prefix) - small and systematic. S021's aggregate remains exact; the dependency index is the gap. CLASSIFICATION: C - conditionally incremental. Minimum missing requirement: add fact validity-window edges to the reverse index and iterate to a fixpoint. Not validated. No incremental engine implemented.",
+  "answers": {
+    "reconsidered_vs_changed": "the from-scratch fixpoint evaluates every node (all start NEITHER) but only a few change; R (changed) is the right quantity and is small",
+    "root_cause_a": "the reverse-dependency index omits fact validity-window edges (validFrom/validTo -> fact node)",
+    "root_cause_b": "sticky order-dependence: nodes inside the closure can be decided with stale member values before the member is re-decided",
+    "R_minus_closure": "51 over 800 prefixes, max 5 per prefix",
+    "aggregate_exact": "yes (S021) - the aggregate is not the failure",
+    "decision_provenance_sufficient": "previous decision + support evidence + current aggregate is sufficient ONLY if the index also carries validity-window edges and members are re-evaluated before dependents (or iterated to a fixpoint)",
+    "ordering": "the authoritative result is deterministic but schedule-sensitive; an incremental engine must preserve the schedule or iterate to a fixpoint after a sufficient reset"
+  },
+  "architectural_classification": "C - conditionally incremental with an explicit dependency/order requirement",
+  "minimum_requirement": "add fact validity-window (validFrom/validTo) edges to the reverse index, and iterate to a fixpoint after resetting the resulting closure",
+  "next_experiment": "validate a validity-window-aware dependency index: add validFrom/validTo -> fact-node edges, reset the resulting closure, and re-run the S025 differential; if R \\ closure reaches 0 the boundary is compact.",
+  "limitations": [
+    "R used the judgment-changed definition; a stricter 're-evaluated and could have changed' definition is the whole model by construction.",
+    "Only 800 prefixes (20 histories x H=20 x 2 canons); no S024 synthetic corpus, no long horizon.",
+    "Ordering was analysed, not controlled (the schedule was not varied).",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s026/REPORT.md", "experiments/s026/probe.ts", "S025 report / req-025", "S021 report / req-021"]
+}
