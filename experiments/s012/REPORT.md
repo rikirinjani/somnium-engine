@@ -253,4 +253,4 @@ No reduced-history derivation, no incremental propagation, no change to `buildMo
 | | |
 |---|---|
 | Ancestor | `d92a15e` |
-| S012 experiment commit | `{{S012_COMMIT}}` |
+| S012 experiment commit | `dabc4a1` |
