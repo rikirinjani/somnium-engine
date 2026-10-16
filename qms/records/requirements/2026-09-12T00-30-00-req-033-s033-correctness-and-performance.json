@@ -1,0 +1,30 @@
+{
+  "requirement_id": "req-033",
+  "title": "S033 — Full correctness gate and wall-clock performance validation",
+  "category": "requirements/experiment",
+  "source": "S033 experiment specification (2026-09-11)",
+  "trace_id": "s033-correctness-and-performance",
+  "date": "2026-09-12T00:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "c064ab4",
+  "branch": "s033",
+  "experiment_commit": "d7631b0",
+  "description": "Establish whether the corrected event-driven Phase-A executor is both exactly equivalent to authoritative derivation and materially faster than the reset-scope baseline.",
+  "result_summary": "HOLD. Correctness is clean and broad: 25,500 prefixes, 0 mismatches across Verrin, Ordos and the full S024 corpus (including the five previously failing topologies); determinism 20/20; branch-from-incremental 20/20. The corrected executor is exactly equivalent to authoritative derivation. BUT the wall-clock benefit is workload-dependent and currently insufficient: TARGET is slower than from-scratch at H=100-1000 and wins only on some H=10,000 workloads (up to 2.13x). Measured A/T: sparse 0.48/0.81/1.12, medium 0.44/0.61/0.58, dense 0.67/0.57/2.13. The reason is precise: buildModel(canon, prefix) is O(H) per prefix and dominates BOTH paths, so the worklist's excellent locality (0.03-5.89 nodes processed/step vs 14 model nodes = 0.2-42%) is swamped by model construction at small H. Correction to S030: the ~6% figure was a node-count metric; the end-to-end wall-clock picture is mixed. 'Materially incremental' holds for the algorithm, not for wall clock.",
+  "correctness": {"prefixes": 25500, "mismatches": 0, "determinism": "20/20", "branch": "20/20"},
+  "performance": {
+    "A_over_T": {"sparse": [0.48, 0.81, 1.12], "medium": [0.44, 0.61, 0.58], "dense": [0.67, 0.57, 2.13]},
+    "dominant_cost": "buildModel(canon, prefix) O(H) per prefix"
+  },
+  "locality": "worklist processes 0.03-5.89 nodes/step vs 14 model nodes (0.2-42%)",
+  "next_experiment": "incrementalise buildModel itself (maintain the derivation model across prefixes by applying one intervention to the previous model instead of rebuilding from the full chain), then re-run the S033 three-way comparison.",
+  "limitations": [
+    "Only Verrin used for the performance sweep (Ordos omitted for budget); correctness covers both canons.",
+    "H=50k/100k not run.",
+    "No p50/p95 per-intervention distributions (totals only).",
+    "Memory not separately instrumented.",
+    "Single run per configuration.",
+    "Empirical only; no asymptotic claim."
+  ],
+  "references": ["experiments/s033/REPORT.md", "experiments/s033/probe.ts", "S032 report / req-032", "S030 report / req-030", "S014 report / req-014"]
+}
