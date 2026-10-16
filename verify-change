@@ -1,0 +1,383 @@
+#!/usr/bin/env bash
+# Requires Bash, Python 3.9+, and Git 2.30+.
+#
+# Usage:
+#   REPOSITORY_ID=owner/repo EVIDENCE_DIR=/protected/evidence \
+#     bash verify-change BASE_COMMIT HEAD_COMMIT
+#
+# BASE_SHA and HEAD_SHA may replace arguments; HEAD_SHA defaults to HEAD.
+# Execute from a clean checkout of HEAD_COMMIT. BASE_COMMIT must be its ancestor.
+#
+# Commands are trusted operator configuration, not values supplied by evidence:
+#   INSTALL_COMMAND   default: npm ci
+#   BUILD_COMMAND     default: npm run build
+#   TYPECHECK_COMMAND default: npm run typecheck
+#   TEST_COMMAND      default: npm test
+#   QMS_REQUIRED_TYPES default: verification
+# Additional QMS types are comma-separated; verification cannot be disabled.
+#
+# Evidence is EXTERNAL to the candidate checkout, from a protected evidence
+# store. This avoids a circular requirement to commit evidence of its own hash.
+# Every changed file, including governance files, requires coverage.
+#
+# Layout:
+#   EVIDENCE_DIR/records/<full-head-object-id>/traces/*.json
+#   EVIDENCE_DIR/records/<full-head-object-id>/qms/*.json
+#   EVIDENCE_DIR/outputs/...                 retained execution/review outputs
+#
+# Record contract (JSON objects; timestamps use RFC3339 UTC "...Z"):
+#   schema: 1
+#   kind: "trace" or "qms"
+#   repository: exact REPOSITORY_ID
+#   base, head: full Git commit object IDs
+#   task_id: nonempty task identifier
+#   created_at: after base's committer timestamp, not in the future
+#   outcome: "pass"
+#   changes: nonempty list of exact change objects:
+#     status: "A", "M", "D", "T", or Git rename status such as "R100"
+#     old_path, new_path: repository-relative names, null if absent
+#     old_blob, new_blob: Git object IDs, null if absent
+#     old_mode, new_mode: Git modes as strings, null if absent
+#   evidence: nonempty list of:
+#     path: POSIX-relative path within EVIDENCE_DIR
+#     sha256: lowercase SHA-256 of the retained, nonempty output file
+#
+# QMS records additionally require:
+#   qms_type: "verification", "nonconformity", "requirement", etc.
+#   decision: "APPROVE"
+#   rationale: nonempty explanation
+# Verification records additionally require:
+#   commands: object containing the exact "install", "build", "typecheck",
+#             and "test" command strings configured for this invocation
+#
+# A trace may cover a subset of the diff. For each (task_id, change) in a trace,
+# matching QMS coverage is required for every required QMS type. Orphan QMS
+# coverage, extra changes, malformed records and stale records are rejected.
+# Native PM-1 files may be retained as evidence attachments; this gate consumes
+# the documented JSON envelope rather than guessing undocumented PM-1 formats.
+#
+# This command does not mint records, grant approvals, or change protection.
+# Run its TRUSTED version in protected CI. Candidate code/tests are untrusted;
+# never give their runner approval credentials, secrets, or repository writes.
+
+set -euo pipefail
+export LC_ALL=C
+export TZ=UTC
+export CI=true
+export GIT_NO_REPLACE_OBJECTS=1
+export GIT_TERMINAL_PROMPT=0
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
+
+if (( $# > 2 )); then
+  printf 'Usage: bash verify-change [base] [head]\n' >&2
+  exit 2
+fi
+
+export VERIFY_BASE_REF="${1:-${BASE_SHA:-}}"
+export VERIFY_HEAD_REF="${2:-${HEAD_SHA:-HEAD}}"
+: "${VERIFY_BASE_REF:?Supply a base argument or BASE_SHA}"
+: "${REPOSITORY_ID:?Set REPOSITORY_ID to the trusted repository identity}"
+: "${EVIDENCE_DIR:?Set EVIDENCE_DIR to the external protected evidence checkout}"
+
+export INSTALL_COMMAND="${INSTALL_COMMAND-npm ci}"
+export BUILD_COMMAND="${BUILD_COMMAND-npm run build}"
+export TYPECHECK_COMMAND="${TYPECHECK_COMMAND-npm run typecheck}"
+export TEST_COMMAND="${TEST_COMMAND-npm test}"
+export QMS_REQUIRED_TYPES="${QMS_REQUIRED_TYPES-verification}"
+export REPOSITORY_ID EVIDENCE_DIR
+
+command -v python3 >/dev/null
+command -v git >/dev/null
+
+python3 - <<'PY'
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import subprocess
+import sys
+
+
+class Rejected(Exception):
+    pass
+
+
+def require(condition, message):
+    if not condition:
+        raise Rejected(message)
+
+
+def git(*args):
+    return subprocess.check_output(
+        ["git", *args], stderr=subprocess.PIPE
+    )
+
+
+def text(data):
+    return data.decode("utf-8", errors="strict")
+
+
+def resolve(ref):
+    return text(git("rev-parse", "--verify", "--end-of-options",
+                    ref + "^{commit}")).strip()
+
+
+def nonempty(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=True,
+                      separators=(",", ":"))
+
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result, f"Duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def timestamp(value):
+    require(isinstance(value, str) and re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value
+    ), "created_at must be an RFC3339 UTC timestamp ending in Z")
+    return dt.datetime.fromisoformat(value[:-1] + "+00:00").timestamp()
+
+
+def tree(commit):
+    result = {}
+    for item in git("ls-tree", "-r", "-z", "--full-tree", commit).split(b"\0"):
+        if not item:
+            continue
+        metadata, path = item.split(b"\t", 1)
+        mode, object_type, oid = metadata.split(b" ")
+        result[text(path)] = (text(mode), text(oid))
+    return result
+
+
+def changed_files(base, head):
+    old_tree, new_tree = tree(base), tree(head)
+    raw = git(
+        "-c", "diff.renames=true",
+        "diff", "--no-ext-diff", "--no-textconv", "--no-relative",
+        "--ignore-submodules=none", "--find-renames=50%",
+        "--name-status", "-z", base, head, "--"
+    )
+    fields = raw.split(b"\0")
+    require(fields[-1] == b"", "Malformed Git diff output")
+    fields.pop()
+    changes = []
+    index = 0
+    while index < len(fields):
+        status = text(fields[index])
+        index += 1
+        require(status in {"A", "M", "D", "T"} or
+                re.fullmatch(r"R(?:100|[0-9]{1,2})", status),
+                f"Unsupported diff status: {status}")
+        require(index < len(fields), "Truncated Git diff")
+        first = text(fields[index])
+        index += 1
+        if status.startswith("R"):
+            require(index < len(fields), "Truncated rename")
+            old_path, new_path = first, text(fields[index])
+            index += 1
+        else:
+            old_path = None if status == "A" else first
+            new_path = None if status == "D" else first
+        old_mode, old_blob = old_tree[old_path] if old_path else (None, None)
+        new_mode, new_blob = new_tree[new_path] if new_path else (None, None)
+        changes.append({
+            "status": status,
+            "old_path": old_path, "new_path": new_path,
+            "old_blob": old_blob, "new_blob": new_blob,
+            "old_mode": old_mode, "new_mode": new_mode,
+        })
+    require(changes, "Empty change set is not an acceptable change")
+    return changes
+
+
+def safe_path(root, relative, directory=False):
+    require(isinstance(relative, str) and "\\" not in relative,
+            "Evidence paths must be POSIX-relative paths")
+    path = PurePosixPath(relative)
+    require(relative and not path.is_absolute() and
+            all(part not in {"", ".", ".."} for part in relative.split("/")),
+            f"Unsafe evidence path: {relative!r}")
+    current = root
+    for part in path.parts:
+        current = current / part
+        require(not current.is_symlink(), f"Evidence symlink forbidden: {current}")
+    require(current.is_dir() if directory else current.is_file(),
+            f"Missing evidence {'directory' if directory else 'file'}: {current}")
+    return current
+
+
+def records(root, head, kind):
+    directory = safe_path(root, f"records/{head}/{kind}", directory=True)
+    entries = sorted(directory.iterdir(), key=lambda p: p.name)
+    require(entries, f"No {kind} records for {head}")
+    for path in entries:
+        require(path.suffix == ".json" and path.is_file() and not path.is_symlink(),
+                f"Unexpected entry in record directory: {path}")
+        require(path.stat().st_size <= 16 * 1024 * 1024,
+                f"Oversized evidence record: {path}")
+        with path.open("r", encoding="utf-8") as stream:
+            record = json.load(stream, object_pairs_hook=unique_object,
+                               parse_constant=lambda v: (_ for _ in ()).throw(
+                                   Rejected(f"Invalid JSON constant: {v}")))
+        require(isinstance(record, dict), f"Record is not an object: {path}")
+        yield path, record
+
+
+def validate_evidence(root, base, head, changes, commands, required_types):
+    base_time = int(text(git("show", "-s", "--format=%ct", base)).strip())
+    now = dt.datetime.now(dt.timezone.utc).timestamp()
+    expected = {canonical(change) for change in changes}
+    traces = set()
+    qms = {kind: set() for kind in required_types}
+    all_qms_pairs = set()
+    attachments = {}
+
+    for folder, expected_kind in (("traces", "trace"), ("qms", "qms")):
+        for path, record in records(root, head, folder):
+            label = str(path)
+            require(type(record.get("schema")) is int and record["schema"] == 1,
+                    f"{label}: unsupported schema")
+            for key, value in {
+                "kind": expected_kind,
+                "repository": os.environ["REPOSITORY_ID"],
+                "base": base, "head": head, "outcome": "pass",
+            }.items():
+                require(record.get(key) == value, f"{label}: mismatched {key}")
+            task = record.get("task_id")
+            require(nonempty(task), f"{label}: missing task_id")
+            created = timestamp(record.get("created_at"))
+            require(base_time < created <= now, f"{label}: stale/future evidence")
+            covered = record.get("changes")
+            require(isinstance(covered, list) and covered,
+                    f"{label}: empty/missing changes")
+            keys = [canonical(change) for change in covered]
+            require(len(keys) == len(set(keys)), f"{label}: duplicate changes")
+            require(set(keys) <= expected, f"{label}: mismatched change coverage")
+            pairs = {(task, key) for key in keys}
+
+            refs = record.get("evidence")
+            require(isinstance(refs, list) and refs, f"{label}: no retained outputs")
+            for ref in refs:
+                require(isinstance(ref, dict) and set(ref) == {"path", "sha256"},
+                        f"{label}: malformed output reference")
+                digest = ref["sha256"]
+                require(isinstance(digest, str) and
+                        re.fullmatch(r"[0-9a-f]{64}", digest),
+                        f"{label}: invalid output checksum")
+                attachment = safe_path(root, ref["path"])
+                require(attachment.stat().st_size > 0,
+                        f"{label}: empty retained output")
+                if attachment not in attachments:
+                    h = hashlib.sha256()
+                    with attachment.open("rb") as stream:
+                        for block in iter(lambda: stream.read(1024 * 1024), b""):
+                            h.update(block)
+                    attachments[attachment] = h.hexdigest()
+                require(attachments[attachment] == digest,
+                        f"{label}: retained output checksum mismatch")
+
+            if expected_kind == "trace":
+                traces.update(pairs)
+            else:
+                kind = record.get("qms_type")
+                require(isinstance(kind, str) and
+                        re.fullmatch(r"[a-z][a-z0-9_-]*", kind),
+                        f"{label}: invalid qms_type")
+                require(record.get("decision") == "APPROVE" and
+                        nonempty(record.get("rationale")),
+                        f"{label}: QMS is not justified and approved")
+                if kind == "verification":
+                    require(record.get("commands") == commands,
+                            f"{label}: command evidence does not match CI")
+                all_qms_pairs.update(pairs)
+                if kind in qms:
+                    qms[kind].update(pairs)
+
+    missing = expected - {key for _, key in traces}
+    require(not missing, "Missing trace coverage:\n" + "\n".join(sorted(missing)))
+    require(all_qms_pairs <= traces, "QMS coverage has no matching task trace")
+    for kind, coverage in qms.items():
+        require(traces <= coverage,
+                f"Missing {kind} QMS coverage for {len(traces - coverage)} "
+                "task/change pair(s)")
+
+
+def main():
+    root = Path(text(git("rev-parse", "--show-toplevel")).strip()).resolve()
+    os.chdir(root)
+    require(not (root / ".git" / "shallow").exists(),
+            "Shallow repositories are not supported")
+    require(text(git("rev-parse", "--is-shallow-repository")).strip() == "false",
+            "Fetch full commit history")
+    base = resolve(os.environ["VERIFY_BASE_REF"])
+    head = resolve(os.environ["VERIFY_HEAD_REF"])
+    require(resolve("HEAD") == head, "Working checkout is not the candidate head")
+    subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
+    require(not git("status", "--porcelain=v1", "-z", "--untracked-files=all",
+                    "--ignore-submodules=none"),
+            "Candidate checkout must initially be clean")
+
+    evidence_input = Path(os.environ["EVIDENCE_DIR"]).absolute()
+    for part in (evidence_input, *evidence_input.parents):
+        require(not part.is_symlink(), "Evidence root may not traverse symlinks")
+    evidence_root = evidence_input.resolve(strict=True)
+    require(evidence_root.is_dir(), "EVIDENCE_DIR is not a directory")
+    require(evidence_root != root and root not in evidence_root.parents,
+            "Evidence must be outside the candidate checkout")
+
+    commands = {
+        name: os.environ[name.upper() + "_COMMAND"]
+        for name in ("install", "build", "typecheck", "test")
+    }
+    for name, command in commands.items():
+        require(nonempty(command), f"{name} command cannot be empty")
+    types = os.environ["QMS_REQUIRED_TYPES"].split(",")
+    require(all(re.fullmatch(r"[a-z][a-z0-9_-]*", kind) for kind in types),
+            "Invalid QMS_REQUIRED_TYPES")
+    required_types = set(types) | {"verification"}
+    changes = changed_files(base, head)
+
+    print(canonical({
+        "repository": os.environ["REPOSITORY_ID"],
+        "base": base, "head": head, "changes": changes,
+        "commands": commands, "required_qms_types": sorted(required_types),
+    }), flush=True)
+    validate_evidence(evidence_root, base, head, changes, commands, required_types)
+
+    # Commands inherit no workflow write token or approval secret. Each must
+    # succeed; missing package scripts, missing tooling and skipped-by-absence
+    # commands are not silently accepted.
+    for name, command in commands.items():
+        print(f"\n=== {name}: {command} ===", flush=True)
+        subprocess.run(
+            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command],
+            cwd=root, check=True,
+        )
+
+    require(resolve("HEAD") == head, "Commands changed candidate HEAD")
+    require(not git("status", "--porcelain=v1", "-z", "--untracked-files=no",
+                    "--ignore-submodules=none"),
+            "Commands modified tracked candidate files")
+    require(changed_files(base, head) == changes, "Candidate change set drifted")
+    validate_evidence(evidence_root, base, head, changes, commands, required_types)
+    print(f"\nPASS: verified exact candidate {head}", flush=True)
+
+
+try:
+    main()
+except (Rejected, OSError, ValueError, KeyError, TypeError,
+        subprocess.SubprocessError) as error:
+    print(f"REJECT: {error}", file=sys.stderr, flush=True)
+    sys.exit(1)
+PY
