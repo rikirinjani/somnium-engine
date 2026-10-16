@@ -187,4 +187,4 @@ No incremental propagation, no seeded Phase A, no dirty queue, no engine change.
 | | |
 |---|---|
 | Ancestor | `f219e67` |
-| S021 experiment commit | `{{S021_COMMIT}}` |
+| S021 experiment commit | `dfa4cfa` |
