@@ -1,0 +1,334 @@
+{
+  "env": {
+    "commit": "d92a15ed5a4050fd91e44bad6245af5910662c09",
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 4,
+    "cpuModel": "AMD Ryzen 3 4300U with Radeon Graphics         ",
+    "totalMemBytes": 7916294144,
+    "node": "v22.23.2",
+    "ts": "5.9.3",
+    "timestamp": "2026-09-11T00:34:20.058Z"
+  },
+  "witnesses": {
+    "s009": [
+      {
+        "index": 0,
+        "kind": "setFact",
+        "target": "char/x",
+        "components": [
+          "overriddenCells",
+          "facts"
+        ]
+      },
+      {
+        "index": 1,
+        "kind": "retractFact",
+        "target": "fact/x-at-loc2",
+        "components": [
+          "retracted",
+          "facts"
+        ]
+      },
+      {
+        "index": 2,
+        "kind": "setFact",
+        "target": "char/x",
+        "components": [
+          "overriddenCells",
+          "facts"
+        ]
+      }
+    ],
+    "s010": [
+      {
+        "index": 0,
+        "kind": "forceEvent",
+        "target": "ev/maren-return",
+        "components": [
+          "forcedBy"
+        ]
+      },
+      {
+        "index": 1,
+        "kind": "negateEvent",
+        "target": "ev/maren-return",
+        "components": [
+          "negated"
+        ]
+      }
+    ]
+  },
+  "diffs": [
+    {
+      "canon": "verrin",
+      "cases": 520,
+      "equivalent": 520,
+      "failures": []
+    },
+    {
+      "canon": "ordos",
+      "cases": 520,
+      "equivalent": 520,
+      "failures": []
+    },
+    {
+      "canon": "overlap",
+      "cases": 520,
+      "equivalent": 520,
+      "failures": []
+    }
+  ],
+  "cov": [
+    {
+      "canon": "verrin",
+      "rows": [
+        {
+          "operation": "setFact",
+          "tested": 4993,
+          "changedCount": 4978,
+          "emptyCount": 15,
+          "failures": 0
+        },
+        {
+          "operation": "relocate",
+          "tested": 1,
+          "changedCount": 1,
+          "emptyCount": 0,
+          "failures": 0
+        },
+        {
+          "operation": "negateEvent",
+          "tested": 1890,
+          "changedCount": 1644,
+          "emptyCount": 246,
+          "failures": 0
+        },
+        {
+          "operation": "forceEvent",
+          "tested": 1915,
+          "changedCount": 1674,
+          "emptyCount": 241,
+          "failures": 0
+        },
+        {
+          "operation": "retractFact",
+          "tested": 1517,
+          "changedCount": 1365,
+          "emptyCount": 152,
+          "failures": 0
+        },
+        {
+          "operation": "severEdge",
+          "tested": 1228,
+          "changedCount": 1171,
+          "emptyCount": 57,
+          "failures": 0
+        },
+        {
+          "operation": "addEdge",
+          "tested": 1000,
+          "changedCount": 38,
+          "emptyCount": 962,
+          "failures": 0
+        }
+      ]
+    },
+    {
+      "canon": "ordos",
+      "rows": [
+        {
+          "operation": "setFact",
+          "tested": 4993,
+          "changedCount": 4974,
+          "emptyCount": 19,
+          "failures": 0
+        },
+        {
+          "operation": "relocate",
+          "tested": 1,
+          "changedCount": 1,
+          "emptyCount": 0,
+          "failures": 0
+        },
+        {
+          "operation": "negateEvent",
+          "tested": 1890,
+          "changedCount": 1623,
+          "emptyCount": 267,
+          "failures": 0
+        },
+        {
+          "operation": "forceEvent",
+          "tested": 1915,
+          "changedCount": 1652,
+          "emptyCount": 263,
+          "failures": 0
+        },
+        {
+          "operation": "retractFact",
+          "tested": 1517,
+          "changedCount": 1388,
+          "emptyCount": 129,
+          "failures": 0
+        },
+        {
+          "operation": "severEdge",
+          "tested": 1228,
+          "changedCount": 1171,
+          "emptyCount": 57,
+          "failures": 0
+        },
+        {
+          "operation": "addEdge",
+          "tested": 1000,
+          "changedCount": 46,
+          "emptyCount": 954,
+          "failures": 0
+        }
+      ]
+    },
+    {
+      "canon": "overlap",
+      "rows": [
+        {
+          "operation": "setFact",
+          "tested": 4993,
+          "changedCount": 3341,
+          "emptyCount": 1652,
+          "failures": 0
+        },
+        {
+          "operation": "relocate",
+          "tested": 1,
+          "changedCount": 1,
+          "emptyCount": 0,
+          "failures": 0
+        },
+        {
+          "operation": "negateEvent",
+          "tested": 1890,
+          "changedCount": 1099,
+          "emptyCount": 791,
+          "failures": 0
+        },
+        {
+          "operation": "forceEvent",
+          "tested": 1915,
+          "changedCount": 1103,
+          "emptyCount": 812,
+          "failures": 0
+        },
+        {
+          "operation": "retractFact",
+          "tested": 1517,
+          "changedCount": 808,
+          "emptyCount": 709,
+          "failures": 0
+        },
+        {
+          "operation": "severEdge",
+          "tested": 1228,
+          "changedCount": 830,
+          "emptyCount": 398,
+          "failures": 0
+        },
+        {
+          "operation": "addEdge",
+          "tested": 1000,
+          "changedCount": 327,
+          "emptyCount": 673,
+          "failures": 0
+        }
+      ]
+    }
+  ],
+  "inverse": [],
+  "inverseCount": 0,
+  "classify": {
+    "A": 19990,
+    "B": 621,
+    "C": 2692,
+    "D": 14329
+  },
+  "det": [
+    {
+      "canon": "verrin",
+      "stable": true
+    },
+    {
+      "canon": "ordos",
+      "stable": true
+    }
+  ],
+  "branch": [
+    {
+      "canon": "verrin",
+      "isolationOk": true,
+      "legacyMatch": true
+    },
+    {
+      "canon": "ordos",
+      "isolationOk": true,
+      "legacyMatch": true
+    }
+  ],
+  "costs": [
+    {
+      "canon": "verrin",
+      "h": 10,
+      "plainMs": 0.5338000000010652,
+      "instrumentedMs": 0.13889999999810243,
+      "overhead": 0.2602098164065666
+    },
+    {
+      "canon": "verrin",
+      "h": 100,
+      "plainMs": 1.4012000000002445,
+      "instrumentedMs": 0.5911999999989348,
+      "overhead": 0.4219240650862344
+    },
+    {
+      "canon": "verrin",
+      "h": 1000,
+      "plainMs": 19.324000000000524,
+      "instrumentedMs": 15.257300000001123,
+      "overhead": 0.7895518526185422
+    },
+    {
+      "canon": "verrin",
+      "h": 3000,
+      "plainMs": 79.27900000000227,
+      "instrumentedMs": 71.81340000000273,
+      "overhead": 0.9058313046330134
+    },
+    {
+      "canon": "ordos",
+      "h": 10,
+      "plainMs": 0.7316999999966356,
+      "instrumentedMs": 0.3599000000031083,
+      "overhead": 0.4918682520223632
+    },
+    {
+      "canon": "ordos",
+      "h": 100,
+      "plainMs": 1.8067000000010012,
+      "instrumentedMs": 0.5329000000056112,
+      "overhead": 0.29495765761073556
+    },
+    {
+      "canon": "ordos",
+      "h": 1000,
+      "plainMs": 12.80000000000291,
+      "instrumentedMs": 10.440699999999197,
+      "overhead": 0.8156796874997517
+    },
+    {
+      "canon": "ordos",
+      "h": 3000,
+      "plainMs": 45.114699999998265,
+      "instrumentedMs": 36.64600000000064,
+      "overhead": 0.8122851310105587
+    }
+  ]
+}

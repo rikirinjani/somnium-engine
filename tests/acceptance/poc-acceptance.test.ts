@@ -120,7 +120,7 @@ describe("capability 8: world diff", () => {
     expect(d.statusChanges.some((c) => c.entityId === "ev/blight-begins" && c.to === "EXCLUDED")).toBe(true);
     expect(d.statusChanges.some((c) => c.entityId === "ev/exodus" && c.to === "UNSUPPORTED")).toBe(true);
     expect(d.factRemovals.length).toBeGreaterThan(0); // exodus-established facts vanish
-    expect(d.workStatuses["work/verrin-ashfall"]).toBe("IMPOSSIBLE");
+    expect(d.workStatusChanges.some((w) => w.workId === "work/verrin-ashfall" && w.to === "IMPOSSIBLE")).toBe(true);
     expect(d.hash).toMatch(/^[0-9a-f]{8}$/);
   });
 

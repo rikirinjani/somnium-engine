@@ -1,0 +1,35 @@
+{
+  "requirement_id": "req-023",
+  "title": "S023 — Unfounded-set non-empty / candidate sufficiency",
+  "category": "requirements/experiment",
+  "source": "S023 experiment specification (2026-09-11)",
+  "trace_id": "s023-unfounded-nonempty",
+  "date": "2026-09-11T14:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "dfa4cfa",
+  "branch": "s023",
+  "experiment_commit": "6aa4b74",
+  "description": "Exercise the actual unfounded-set rejection path (|U| > 0) with synthetic cycles and determine whether every Phase-B consequence lies inside the changed NEITHER/candidate frontier dC.",
+  "result_summary": "HOLD (with a strong positive core). Built synthetic REQUIRES-cycle canons to exercise |U| > 0: A 2-cycle |C|=2 |U|=2; B 3-cycle |C|=3 |U|=3; C/F SCCs+bridge |C|=5 |U|=5; D support gain dC=1 dU=0; E support loss dC=2 dU=2; F+ force ground dC=2 dU=2. FINDINGS: U is a subset of C in every witness; dU <= dC in every transition; the cross-SCC cascade showed U-flips outside dC = 0; behaviour follows only from the CURRENT candidate set (no prior-U or SCC state needed). observeUnfoundedSet wraps the authoritative positiveFixpoint/unfoundedSet; no reimplementation. ANSWER: an incremental Phase-A engine must hand Phase B dC (the changed NEITHER/candidate set). Phase B = Global algorithm over a local candidate domain (class B). HOLD because the corpus is 6 minimal witnesses (no randomized stress), the OR-group external-support case was mis-constructed, and determinism/branch isolation were not tested.",
+  "answers": {
+    "Q1_candidate_set": "the Phase-A NEITHER set (before Phase B rejects)",
+    "Q2_candidate_change": "when Phase A changes the NEITHER set",
+    "Q3_dC_local": "yes (0-2 nodes on these witnesses)",
+    "Q4_dU_local": "yes, and bounded by dC (dU <= dC)",
+    "Q5_why_global": "global by algorithm, local by domain - C is small",
+    "Q6_scc_sufficient": "yes - dC sufficed to predict every unfounded change observed",
+    "Q7_support_triggers_phase_b": "yes - a support change alters C without topology change",
+    "Q8_external_support_local": "yes - gain/loss localised to the affected candidates",
+    "Q9_boundary_exists": "yes - dC",
+    "Q10_engine_must_hand_phase_b": "dC (the changed NEITHER/candidate set)",
+    "Q11_global_barrier_ok": "yes - Phase B can remain a global barrier over a locally-supplied dC"
+  },
+  "architectural_classification": "B - Global algorithm over a local candidate domain. Recommended: incremental Phase A + authoritative global Phase B, with Phase A handing Phase B the dC frontier.",
+  "limitations": [
+    "Six minimal witnesses; no randomized SCC stress (5-20 nodes, 20-100 topologies).",
+    "The SCC-2 external-support construction in canon C/F did not create a genuine OR group (the external edge was ANDed into the cycle group), so 'partially externally supported SCC' was not correctly exercised.",
+    "No long-horizon runs, no determinism/branch-isolation checks.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s023/REPORT.md", "experiments/s023/probe.ts", "S022 report / req-022", "S021 report / req-021"]
+}

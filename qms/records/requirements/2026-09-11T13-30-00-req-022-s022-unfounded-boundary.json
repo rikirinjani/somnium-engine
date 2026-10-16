@@ -1,0 +1,35 @@
+{
+  "requirement_id": "req-022",
+  "title": "S022 — Unfounded-set candidate boundary / incremental cycle observability",
+  "category": "requirements/experiment",
+  "source": "S022 experiment specification (2026-09-11)",
+  "trace_id": "s022-unfounded-boundary",
+  "date": "2026-09-11T13:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "dfa4cfa",
+  "branch": "s022",
+  "experiment_commit": "f02eadc",
+  "description": "Characterise the global Phase-B (unfounded-set) boundary: is it inherently global, conditionally global, reducible to a smaller candidate frontier, or amenable to compact maintained state?",
+  "result_summary": "HOLD. The Phase-B candidate set is EXACTLY the NEITHER set after Phase A. Measured on both seed canons: |C| (candidates) = 0.07-1.31 nodes and dC = 0.00-0.19 (LOCAL); |U| (unfounded) = 0.00 and dU = 0.00 (EMPTY). So Phase B is GLOBAL SCAN + EMPTY/LOCAL RESULT, and its scan domain is itself tiny - the global barrier is a cheap consistency pass over a handful of nodes, not a whole-model sweep. Relationship: support aggregate change -> NEITHER-set change (= dC) -> Phase B re-scan; no separate trigger observed. External-support sensitivity is the shrink rule itself. Observation only: observeUnfoundedSet reads the authoritative unfoundedSet; no reimplementation. HOLD because the |U|>0 case (constructed cycles) was NOT tested - the seed canons have no unfounded nodes.",
+  "answers": {
+    "Q1_candidate_set": "exactly the NEITHER set after Phase A (the unfoundedSet scan domain)",
+    "Q2_candidate_membership_change": "when Phase A changes the NEITHER set (the semantic delta's NEITHER component)",
+    "Q3_dC_local": "YES - 0.00-0.19 nodes",
+    "Q4_dU_local": "YES - 0.00 on the seed canons (empty unfounded set)",
+    "Q5_why_global": "implementation, not semantics - the scan is global by construction but its domain (NEITHER nodes) is small",
+    "Q6_scc_sufficient": "not tested; the implementation trigger is external-support membership, i.e. dC",
+    "Q7_support_triggers_phase_b": "YES - a support change can alter the NEITHER set with no topology change",
+    "Q8_external_support_local": "localised to the affected candidate's groups; not tested on constructed cycles",
+    "Q9_boundary_exists": "a principled boundary exists (the NEITHER set / dC); general sufficiency requires the cycle corpus",
+    "Q10_future_state": "the NEITHER-set membership (candidate set) and its cross-prefix delta, plus SCC membership for real cycles",
+    "Q11_global_barrier_ok": "YES - Phase B can remain a global barrier since its domain is small and cheap to rescan"
+  },
+  "next_experiment": "exercise the |U|>0 path with constructed cycles (bootstrap, overlapping, external-support gain/loss, cycle cascade) to test whether dC suffices to predict Phase-B reconsideration.",
+  "limitations": [
+    "No constructed cycles: the seed canons have |U|=0, so the path where Phase B actually rejects nodes was not tested.",
+    "No cycle-free control, SCC matrix, external-support sensitivity, or cascade test (budget).",
+    "No long-horizon, determinism, or branch measurements.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s022/REPORT.md", "experiments/s022/probe.ts", "src/derive/propagation.ts", "S021 report / req-021"]
+}

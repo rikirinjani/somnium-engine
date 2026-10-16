@@ -1,0 +1,33 @@
+{
+  "requirement_id": "req-016",
+  "title": "S016 — Propagation observability / reference re-evaluation footprint",
+  "category": "requirements/experiment",
+  "source": "S016 experiment specification (2026-09-11)",
+  "trace_id": "s016-propagation-observability",
+  "date": "2026-09-11T07:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "dabc4a1",
+  "branch": "s016",
+  "experiment_commit": "56fac34",
+  "description": "Test whether the authoritative propagateJudgments can expose per-stage considered/recomputed/changed sets without changing semantics or creating a second semantic engine, to discover the true observational boundary of the reference fixpoint.",
+  "result_summary": "HOLD. Instrumentation added to src/derive/propagation.ts (StageFootprint + PropagationFootprint; optional sinks in positiveFixpoint/unfoundedSet/propagateJudgments; new propagateJudgmentsWithFootprint). Semantics preserved: 624/624, verify-facts 3/3, frozen hashes unchanged. KEY FINDING: the reference footprint is GLOBAL, not local. Phase A considers all nodes every pass and its from-scratch fixpoint changes ~the whole model on every intervention (verrin 14/14, ordos 16/17), while the S015 reverse-dependency closure was local (0.4-5.2 nodes). Phase B is cheap (0-1 candidates changed). Cause: Phase A restarts from NEITHER, so it has no notion of 'unchanged since last time'. The S015 closure approximated the SEMANTIC delta, not the footprint. The current implementation therefore exposes NO local invalidation boundary.",
+  "definitions": {
+    "considered": "nodes inspected by the stage's scan",
+    "recomputed": "nodes for which the stage actually re-evaluated a judgment",
+    "changed": "nodes whose resulting value differs from the stage's prior value in this run",
+    "chain": "considered >= recomputed >= changed (verified)"
+  },
+  "global_stage_findings": [
+    "Phase A positiveFixpoint: global scan AND global change (because it restarts from NEITHER).",
+    "Phase B unfoundedSet: global scan, small change (0-1 nodes).",
+    "Global scan != global semantic change."
+  ],
+  "next_experiment": "propagation delta observability - instrument the fixpoint to report, per node, the change relative to a supplied prior judgment map (previous prefix). If that cross-prefix delta is small and matches the true semantic change, it is the boundary an incremental engine needs.",
+  "limitations": [
+    "Only seed canons + 200-step random histories; no synthetic topologies.",
+    "The 'changed' definition is within-run (vs initial NEITHER), which is why it is global; a cross-run delta was not instrumented.",
+    "No overhead benchmark, no long-horizon run, no branch run (budget).",
+    "Empirical only; no Big-O claim."
+  ],
+  "references": ["experiments/s016/REPORT.md", "experiments/s016/probe.ts", "src/derive/propagation.ts", "S015 report / req-015"]
+}

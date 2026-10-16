@@ -1,0 +1,35 @@
+{
+  "requirement_id": "req-024",
+  "title": "S024 — Randomized SCC / OR-support boundary stress",
+  "category": "requirements/experiment",
+  "source": "S024 experiment specification (2026-09-11)",
+  "trace_id": "s024-randomized-scc-stress",
+  "date": "2026-09-11T15:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "6aa4b74",
+  "branch": "s024",
+  "experiment_commit": "19f6c98",
+  "description": "Stress the S023 Phase-B boundary (U subset of C, dU subset of dC, PhaseBOnlyDelta subset of dC) with randomized SCC topologies and correctly constructed OR-group external support.",
+  "result_summary": "PASS. 100 randomized 5-20-node topologies (seeded, reproducible), biased toward cycles and genuine OR groups. 80 contain a real unfounded SCC (|U|>0); 45 contain a genuine OR group (A AND B) OR G with a separate group label; 500 transitions exercised (forceEvent/negateEvent/severEdge/addEdge). All three invariants hold UNIVERSALLY: U subset of C 500/500; dU subset of dC 500/500; PhaseBOnlyDelta subset of dC 500/500; failures = 0. The S023 OR-group gap is closed. No Phase-B consequence escaped the changed candidate frontier, including cross-SCC cases. Phase B = class B (global algorithm over a local candidate domain). Per the stop condition, Phase-B locality investigation ends; no incremental Phase B, SCC caching, candidate prediction or partial unfounded execution was implemented.",
+  "invariants": {
+    "U_subset_C": "500/500",
+    "dU_subset_dC": "500/500",
+    "PhaseBOnlyDelta_subset_dC": "500/500",
+    "failures": 0
+  },
+  "coverage": {
+    "topologies": 100,
+    "with_nonempty_U": 80,
+    "with_OR_group": 45,
+    "transitions": 500
+  },
+  "architectural_classification": "B - Global algorithm over a local candidate domain. Working architecture: incremental Phase A -> dC -> authoritative global Phase B -> final judgments.",
+  "next_architectural_question": "Can Phase A itself be implemented incrementally using S021's exact support aggregates while preserving the authoritative derive() semantics?",
+  "limitations": [
+    "100 topologies / 500 transitions - a finite corpus; empirical, not a proof.",
+    "Determinism and branch isolation are by construction but not independently measured.",
+    "No long-horizon bounded stress (H=20/100/1000).",
+    "PhaseBOnlyDelta is defined as judgment changes among unfounded nodes; the strict dU subset of dC assertion is definition-independent and also held."
+  ],
+  "references": ["experiments/s024/REPORT.md", "experiments/s024/probe.ts", "S023 report / req-023", "S022 report / req-022"]
+}

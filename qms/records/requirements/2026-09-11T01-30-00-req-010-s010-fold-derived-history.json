@@ -1,0 +1,38 @@
+{
+  "requirement_id": "req-010",
+  "title": "S010 — Fold-derived sufficient history",
+  "category": "requirements/experiment",
+  "source": "S010 experiment specification (2026-09-11)",
+  "trace_id": "s010-fold-derived-history",
+  "date": "2026-09-11T01:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "443d3d9",
+  "branch": "s010",
+  "experiment_commit": "37b3354",
+  "description": "S009 found that the hand-written S008 reducer is not universally semantics-preserving (NCR-006) and suggested deriving sufficient retained history from the model's own authoritative fold accumulators rather than maintaining an independent reducer. S010 investigates that proposal: can Somnium derive a semantics-preserving sufficient history FROM the authoritative semantic fold without creating a second semantic engine?",
+  "constraints": [
+    "Branch from 443d3d9 only; do NOT branch from S007/S008/S009.",
+    "All experiment code under experiments/s010/. Do not modify src/. Do not merge.",
+    "The retention mechanism must consume information produced by the authoritative fold rather than independently reimplementing semantic rules.",
+    "If avoiding duplication is impossible, classify the architecture HOLD or BLOCKED rather than silently accepting a second semantic engine.",
+    "Do not patch around individual counterexamples.",
+    "No unsupported canonical/minimality claim."
+  ],
+  "required_checks": [
+    "Reproduce the S009 minimal counterexample.",
+    "Prototype fold-derived retention (mechanism(s) discovered, not assumed).",
+    "Differential equivalence across constructed + random histories, verrin + ordos, synthetic canons, overlapping and disjoint multi-fact cells.",
+    "Multi-fact / identity stress (write-retract-write, write-write-retract, multiple retractions, identity reuse).",
+    "Complete vocabulary coverage (setFact, relocate, negateEvent, forceEvent, retractFact, severEdge, addEdge) plus constraints, causal, temporal, contradiction, UNKNOWN/IMPOSSIBLE/UNREACHABLE.",
+    "No-second-semantic-engine analysis.",
+    "Idempotence, determinism, branch isolation, history scaling, performance sanity."
+  ],
+  "result_summary": "BLOCKED. Two independent fold-derived mechanisms were built and both fail, for complementary reasons. M-B (accumulator-only) preserves the fold's accumulators but loses effective-fact identity provenance: fails S009's NCR-006, 6/10 multi-fact stress cases, and 493/517 (verrin) / 483/517 (ordos) differential cases. M-H (semantic-state-change oracle) preserves fact identity but loses the accumulators: fails 279/517 (verrin) / 297/517 (ordos), with a minimal 2-intervention counterexample on the SEED canon [forceEvent(ev/maren-return), negateEvent(ev/maren-return)] where M-H drops the no-op force and the world becomes EXCLUDED instead of CONTRADICTORY. Root cause: the semantic state is a projection that omits the fold's accumulators (negated/forcedBy/retracted/overriddenCells), and the accumulators omit fact-identity provenance. Neither observable is sufficient; combining them requires reconstructing the fold's own retention rules, i.e. the second semantic authority the spec forbids. Determinism stable, branch isolation pure (M-H legacy-match fails). M-B retained size saturates (10.9% at H=3000); M-H does not (42.2%).",
+  "recommendation": "The enabling change is in src/, not the experiment: have the fold emit, per intervention, a flag/fingerprint recording whether it changed the fold state (accumulators + effective facts). A retention driven by that flag is sound by construction and adds no semantic authority. That is a separate, justified productionization task.",
+  "references": [
+    "experiments/s010/REPORT.md",
+    "experiments/s010/results/results.json",
+    "experiments/s010/retain.ts",
+    "S009 report / NCR-006; S008 report"
+  ]
+}

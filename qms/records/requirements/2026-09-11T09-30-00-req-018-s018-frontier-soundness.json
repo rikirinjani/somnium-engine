@@ -1,0 +1,33 @@
+{
+  "requirement_id": "req-018",
+  "title": "S018 — Node-set & topology-aware frontier soundness",
+  "category": "requirements/experiment",
+  "source": "S018 experiment specification (2026-09-11)",
+  "trace_id": "s018-frontier-soundness",
+  "date": "2026-09-11T09:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "4ad78c7",
+  "branch": "s018",
+  "experiment_commit": "c652204",
+  "description": "Determine whether the S017 false negatives can be eliminated by explicitly modeling node-set and topology changes, from a principled finite set of pre-propagation state variables, without creating a second semantic engine.",
+  "result_summary": "HOLD. Adding pre-propagation node-set + edge-endpoint + cycle-membership terms to the S017 frontier ELIMINATES the false negatives (FN 3 -> 0): the frontier is SOUND on both canons for all seven operations. The S017 edge residue is fully explained by node-set change + edge-endpoint change. BUT the sound frontier is GLOBAL: F18 is approximately the whole model (verrin 14/14, ordos 18/18) with precision about 1 percent (FP 6339), because cycle membership - the one input that removes the last false negatives - is globally connected through the same reverse index. Fallback frequency is about 100 percent, so a local->global hybrid buys no locality. Shadow-engine audit: all inputs are class A (structural) or B (existing semantic state); the frontier only over-approximates WHICH nodes might change, never a judgment value; no class D. Semantic authority remains singular. Conclusion: locality can be predicted soundly without a second engine, but only at global scope.",
+  "answers": {
+    "Q1_nodeset_eliminates_fn": "yes (3 -> 0)",
+    "Q2_topology_aware_eliminates": "yes",
+    "Q3_smallest_sufficient_state": "previous + current node sets, edge endpoints, cycle membership, reverse dependency index",
+    "Q4_structural_or_semantic": "structural (class A/B only); no propagation semantics reconstructed",
+    "Q5_remaining_global_triggers": "cycle membership (the globaliser) and node-set changes",
+    "Q6_isolatable_fallback": "yes but it fires ~100% of the time on these canons, so it buys no locality",
+    "Q7_pct_local_frontier": "~0%",
+    "Q8_one_or_two_engines": "ONE engine - the predictive layer only over-approximates which nodes might change"
+  },
+  "next_experiment": "reconsider the execution architecture around a different boundary: seeding Phase A from a prior truth (a semantic-execution change, out of S018 scope) rather than elaborating invalidation rules.",
+  "limitations": [
+    "Seed canons + 200-step random histories only; the 21-topology adversarial corpus was not built (budget).",
+    "H=10..10000 long-horizon sweep not run.",
+    "Branch isolation not separately run.",
+    "Precision (~1%) reported, not optimised (the brief forbids optimising).",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s018/REPORT.md", "experiments/s018/probe.ts", "S017 report / req-017", "S016 report / req-016"]
+}

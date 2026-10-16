@@ -1,0 +1,43 @@
+{
+  "requirement_id": "req-031",
+  "title": "S031 — Incremental execution state lifecycle / production boundary validation",
+  "category": "requirements/experiment",
+  "source": "S031 experiment specification (2026-09-11)",
+  "trace_id": "s031-execution-state-lifecycle",
+  "date": "2026-09-11T22:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "8a39cc4",
+  "branch": "s031",
+  "experiment_commit": "ad8340d",
+  "description": "Characterize the lifecycle, isolation, persistence, rewind, branching and real performance boundary of the S030 incremental execution state before any productionization.",
+  "result_summary": "HOLD. The execution-state lifecycle is validated: initialization 50/50, rewind 50/50, branch cloning 50/50, determinism 50/50. Execution state = { model, truth } -> O(model), reconstructible from canon+prefix or WorldState, and NOT part of stateHash/identityHash. Clean production boundary: CanonicalModel + WorldState + IncrementalPhaseAState, where IncrementalPhaseAState is execution state only. BUT the S024 synthetic corpus (which S029/S030 never ran) reveals 5 of 100 randomized topologies failing (1487/1500 prefixes), so the S028 dependency boundary (validated only on Verrin/Ordos) is INCOMPLETE for some synthetic SCC/OR topologies. This is a CORRECTNESS gap in the dependency index, not a lifecycle defect. Per the failure discipline scaling was stopped; the failure was classified as dependency-index incompleteness on synthetic topologies and was NOT patched; the 5 topologies were not minimised (budget).",
+  "execution_state_structure": "{ model: DerivationModel, truth: Map<nodeId, TruthValue> }",
+  "field_lifecycle": {
+    "model": "reconstructible from (canon, prefix); immutable/shareable",
+    "truth": "required; mutable; branch-local (must be copied)",
+    "dependency_index": "reconstructible per step; cache-only",
+    "aggregates": "not stored - implicit in truth",
+    "queue_dirty_markers": "transient (during a step)",
+    "intervention_history": "not retained",
+    "lineage_provenance": "not part of execution state"
+  },
+  "lifecycle_results": {
+    "initialization": "50/50",
+    "rewind": "50/50",
+    "branch_cloning": "50/50",
+    "determinism": "50/50",
+    "s024_topologies_exact": "95/100",
+    "s024_prefixes_exact": "1487/1500"
+  },
+  "failure_class": "dependency-index incompleteness on synthetic SCC/OR topologies (not patched, not minimised)",
+  "next_experiment": "minimise and characterise the 5 failing S024 topologies, identify the missing authoritative dependency class, extend the index only if causally justified, and re-run the S024 corpus to zero.",
+  "limitations": [
+    "Only 5/100 failures detected; they were not minimised.",
+    "Wall-clock performance not measured.",
+    "Different fair queue orders were not swept.",
+    "Long-horizon (H=50k/100k) not run.",
+    "15-step history per synthetic topology; deeper histories may reveal more failures.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s031/REPORT.md", "experiments/s031/probe.ts", "S030 report / req-030", "S028 report / req-028"]
+}

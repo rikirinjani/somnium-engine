@@ -1,0 +1,909 @@
+{
+  "env": {
+    "commit": "443d3d9aba8565900ba156e5cef5bd1ff4b9ee70",
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 4,
+    "cpuModel": "AMD Ryzen 3 4300U with Radeon Graphics         ",
+    "totalMemBytes": 7916294144,
+    "node": "v22.23.2",
+    "ts": "5.9.3",
+    "timestamp": "2026-09-10T23:50:56.697Z"
+  },
+  "allAttacks": [
+    {
+      "canon": "verrin",
+      "results": [
+        {
+          "name": "R1 write A then B",
+          "rule": "R1",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "7770a482",
+          "reducedHash": "7770a482",
+          "ok": true
+        },
+        {
+          "name": "R1 write B then A",
+          "rule": "R1",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "e09fd4eb",
+          "reducedHash": "e09fd4eb",
+          "ok": true
+        },
+        {
+          "name": "R1 write A→B→A",
+          "rule": "R1",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "e09fd4eb",
+          "reducedHash": "e09fd4eb",
+          "ok": true
+        },
+        {
+          "name": "R2 rejected then rejected (same id)",
+          "rule": "R2",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "d649f507",
+          "reducedHash": "d649f507",
+          "ok": true
+        },
+        {
+          "name": "R2 rejected then legal (same cell)",
+          "rule": "R2",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "f0185e63",
+          "reducedHash": "f0185e63",
+          "ok": true
+        },
+        {
+          "name": "R2 legal then rejected then legal",
+          "rule": "R2",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "b27f9514",
+          "reducedHash": "b27f9514",
+          "ok": true
+        },
+        {
+          "name": "R2 rejected(subject X) then rejected(subject X, other value)",
+          "rule": "R2",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "d649f507",
+          "reducedHash": "d649f507",
+          "ok": true
+        },
+        {
+          "name": "R3 negate A then negate B",
+          "rule": "R3",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "47e8445d",
+          "reducedHash": "47e8445d",
+          "ok": true
+        },
+        {
+          "name": "R3 negate A→negate A",
+          "rule": "R3",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "f28e326e",
+          "reducedHash": "f28e326e",
+          "ok": true
+        },
+        {
+          "name": "R4 force A→force A",
+          "rule": "R4",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "f0185e63",
+          "reducedHash": "f0185e63",
+          "ok": true
+        },
+        {
+          "name": "R3/R4 negate then force same",
+          "rule": "R3/R4",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "c46cc76f",
+          "reducedHash": "c46cc76f",
+          "ok": true
+        },
+        {
+          "name": "R3/R4 force then negate same",
+          "rule": "R3/R4",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "c46cc76f",
+          "reducedHash": "c46cc76f",
+          "ok": true
+        },
+        {
+          "name": "R3/R4 negate→force→negate",
+          "rule": "R3/R4",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "c46cc76f",
+          "reducedHash": "c46cc76f",
+          "ok": true
+        },
+        {
+          "name": "R5 retract A then A",
+          "rule": "R5",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "67a23f18",
+          "reducedHash": "67a23f18",
+          "ok": true
+        },
+        {
+          "name": "R5 retract A then write A then retract A",
+          "rule": "R5",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "f14a5490",
+          "reducedHash": "f14a5490",
+          "ok": true
+        },
+        {
+          "name": "R5 write A then retract A",
+          "rule": "R5",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "67a23f18",
+          "reducedHash": "67a23f18",
+          "ok": true
+        },
+        {
+          "name": "R5 write→retract→write",
+          "rule": "R5",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "35fb6e08",
+          "reducedHash": "35fb6e08",
+          "ok": true
+        },
+        {
+          "name": "R6 sever then sever",
+          "rule": "R6",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "38015b70",
+          "reducedHash": "38015b70",
+          "ok": true
+        },
+        {
+          "name": "R6 add then add",
+          "rule": "R6",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "f0185e63",
+          "reducedHash": "f0185e63",
+          "ok": true
+        },
+        {
+          "name": "R6 sever→add→sever",
+          "rule": "R6",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "38015b70",
+          "reducedHash": "38015b70",
+          "ok": true
+        },
+        {
+          "name": "R6 add→sever→add",
+          "rule": "R6",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "f0185e63",
+          "reducedHash": "f0185e63",
+          "ok": true
+        },
+        {
+          "name": "SYN relocate vs setFact(located_in)",
+          "rule": "SYN",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "565231b0",
+          "reducedHash": "565231b0",
+          "ok": true
+        },
+        {
+          "name": "SYN setFact then relocate same cell",
+          "rule": "SYN",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "565231b0",
+          "reducedHash": "565231b0",
+          "ok": true
+        },
+        {
+          "name": "R1-MULTIFACT write→retract(fact/vara-in-valdar)→write [char/vara.located_in]",
+          "rule": "R1-multifact",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "570d564a",
+          "reducedHash": "570d564a",
+          "ok": true
+        },
+        {
+          "name": "R1-MULTIFACT retract(fact/vara-in-valdar)→write [char/vara.located_in]",
+          "rule": "R1-multifact",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "570d564a",
+          "reducedHash": "570d564a",
+          "ok": true
+        },
+        {
+          "name": "R1-MULTIFACT write→retract(fact/vara-in-thornhollow)→write [char/vara.located_in]",
+          "rule": "R1-multifact",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "28885590",
+          "reducedHash": "28885590",
+          "ok": true
+        }
+      ],
+      "multiFact": [
+        {
+          "cell": "char/vara.located_in",
+          "subject": "char/vara",
+          "predicate": "located_in",
+          "factIds": [
+            "fact/vara-in-thornhollow",
+            "fact/vara-in-valdar"
+          ]
+        }
+      ]
+    },
+    {
+      "canon": "ordos",
+      "results": [
+        {
+          "name": "R1 write A then B",
+          "rule": "R1",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "5645908f",
+          "reducedHash": "5645908f",
+          "ok": true
+        },
+        {
+          "name": "R1 write B then A",
+          "rule": "R1",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "ea4aba04",
+          "reducedHash": "ea4aba04",
+          "ok": true
+        },
+        {
+          "name": "R1 write A→B→A",
+          "rule": "R1",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "ea4aba04",
+          "reducedHash": "ea4aba04",
+          "ok": true
+        },
+        {
+          "name": "R2 rejected then rejected (same id)",
+          "rule": "R2",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "d3a541d7",
+          "reducedHash": "d3a541d7",
+          "ok": true
+        },
+        {
+          "name": "R2 rejected then legal (same cell)",
+          "rule": "R2",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "45258823",
+          "reducedHash": "45258823",
+          "ok": true
+        },
+        {
+          "name": "R2 legal then rejected then legal",
+          "rule": "R2",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "75918b5b",
+          "reducedHash": "75918b5b",
+          "ok": true
+        },
+        {
+          "name": "R2 rejected(subject X) then rejected(subject X, other value)",
+          "rule": "R2",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "d3a541d7",
+          "reducedHash": "d3a541d7",
+          "ok": true
+        },
+        {
+          "name": "R3 negate A then negate B",
+          "rule": "R3",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "4a86f8fe",
+          "reducedHash": "4a86f8fe",
+          "ok": true
+        },
+        {
+          "name": "R3 negate A→negate A",
+          "rule": "R3",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "d4350410",
+          "reducedHash": "d4350410",
+          "ok": true
+        },
+        {
+          "name": "R4 force A→force A",
+          "rule": "R4",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "2fd3b1d2",
+          "reducedHash": "2fd3b1d2",
+          "ok": true
+        },
+        {
+          "name": "R3/R4 negate then force same",
+          "rule": "R3/R4",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "1d368369",
+          "reducedHash": "1d368369",
+          "ok": true
+        },
+        {
+          "name": "R3/R4 force then negate same",
+          "rule": "R3/R4",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "1d368369",
+          "reducedHash": "1d368369",
+          "ok": true
+        },
+        {
+          "name": "R3/R4 negate→force→negate",
+          "rule": "R3/R4",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "1d368369",
+          "reducedHash": "1d368369",
+          "ok": true
+        },
+        {
+          "name": "R5 retract A then A",
+          "rule": "R5",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "ece853cb",
+          "reducedHash": "ece853cb",
+          "ok": true
+        },
+        {
+          "name": "R5 retract A then write A then retract A",
+          "rule": "R5",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "86647e9b",
+          "reducedHash": "86647e9b",
+          "ok": true
+        },
+        {
+          "name": "R5 write A then retract A",
+          "rule": "R5",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "86647e9b",
+          "reducedHash": "86647e9b",
+          "ok": true
+        },
+        {
+          "name": "R5 write→retract→write",
+          "rule": "R5",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "5cb7e131",
+          "reducedHash": "5cb7e131",
+          "ok": true
+        },
+        {
+          "name": "R6 sever then sever",
+          "rule": "R6",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "15c0bfb4",
+          "reducedHash": "15c0bfb4",
+          "ok": true
+        },
+        {
+          "name": "R6 add then add",
+          "rule": "R6",
+          "historyLen": 2,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "ece853cb",
+          "reducedHash": "ece853cb",
+          "ok": true
+        },
+        {
+          "name": "R6 sever→add→sever",
+          "rule": "R6",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "15c0bfb4",
+          "reducedHash": "15c0bfb4",
+          "ok": true
+        },
+        {
+          "name": "R6 add→sever→add",
+          "rule": "R6",
+          "historyLen": 3,
+          "reducedLen": 1,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "ece853cb",
+          "reducedHash": "ece853cb",
+          "ok": true
+        },
+        {
+          "name": "R1-MULTIFACT write→retract(fact/seal-held-vaela)→write [obj/seal-of-office.held_by]",
+          "rule": "R1-multifact",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "e6edcc3a",
+          "reducedHash": "e6edcc3a",
+          "ok": true
+        },
+        {
+          "name": "R1-MULTIFACT retract(fact/seal-held-vaela)→write [obj/seal-of-office.held_by]",
+          "rule": "R1-multifact",
+          "historyLen": 2,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "e6edcc3a",
+          "reducedHash": "e6edcc3a",
+          "ok": true
+        },
+        {
+          "name": "R1-MULTIFACT write→retract(fact/seal-held-anselm)→write [obj/seal-of-office.held_by]",
+          "rule": "R1-multifact",
+          "historyLen": 3,
+          "reducedLen": 2,
+          "semanticEqual": true,
+          "hashEqual": true,
+          "diffEmpty": true,
+          "legacyHash": "3d69a32d",
+          "reducedHash": "3d69a32d",
+          "ok": true
+        }
+      ],
+      "multiFact": [
+        {
+          "cell": "obj/seal-of-office.held_by",
+          "subject": "obj/seal-of-office",
+          "predicate": "held_by",
+          "factIds": [
+            "fact/seal-held-anselm",
+            "fact/seal-held-galen",
+            "fact/seal-held-petronius",
+            "fact/seal-held-vaela"
+          ]
+        }
+      ]
+    }
+  ],
+  "idem": [
+    {
+      "canon": "verrin",
+      "cases": 1021,
+      "idempotent": 1021,
+      "failures": []
+    },
+    {
+      "canon": "ordos",
+      "cases": 1021,
+      "idempotent": 1021,
+      "failures": []
+    }
+  ],
+  "suff": [
+    {
+      "canon": "verrin",
+      "cases": 1021,
+      "equivalent": 1021,
+      "failures": []
+    },
+    {
+      "canon": "ordos",
+      "cases": 1021,
+      "equivalent": 1021,
+      "failures": []
+    }
+  ],
+  "det": [
+    {
+      "canon": "verrin",
+      "trials": 5,
+      "stable": true,
+      "sampleLen": 184
+    },
+    {
+      "canon": "ordos",
+      "trials": 5,
+      "stable": true,
+      "sampleLen": 159
+    }
+  ],
+  "branch": [
+    {
+      "canon": "verrin",
+      "branches": 4,
+      "isolationOk": true,
+      "legacyMatch": true
+    },
+    {
+      "canon": "ordos",
+      "branches": 4,
+      "isolationOk": true,
+      "legacyMatch": true
+    }
+  ],
+  "commute": [
+    {
+      "canon": "verrin",
+      "pair": "negate(e0) vs force(e0)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "verrin",
+      "pair": "write(cellA) vs write(cellB)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "verrin",
+      "pair": "retract(f0) vs write(cellA)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "verrin",
+      "pair": "negate(e0) vs write(cellA)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "ordos",
+      "pair": "negate(e0) vs force(e0)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "ordos",
+      "pair": "write(cellA) vs write(cellB)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "ordos",
+      "pair": "retract(f0) vs write(cellA)",
+      "sameState": true,
+      "sameReduced": false
+    },
+    {
+      "canon": "ordos",
+      "pair": "negate(e0) vs write(cellA)",
+      "sameState": true,
+      "sameReduced": false
+    }
+  ],
+  "cov": [
+    {
+      "canon": "verrin",
+      "rows": [
+        {
+          "operation": "setFact",
+          "rule": "R1/R2",
+          "tested": 1009,
+          "counterexamples": 0
+        },
+        {
+          "operation": "relocate",
+          "rule": "R1/R2",
+          "tested": 1,
+          "counterexamples": 0
+        },
+        {
+          "operation": "negateEvent",
+          "rule": "R3",
+          "tested": 984,
+          "counterexamples": 0
+        },
+        {
+          "operation": "forceEvent",
+          "rule": "R4",
+          "tested": 988,
+          "counterexamples": 0
+        },
+        {
+          "operation": "retractFact",
+          "rule": "R5",
+          "tested": 967,
+          "counterexamples": 0
+        },
+        {
+          "operation": "severEdge",
+          "rule": "R6",
+          "tested": 927,
+          "counterexamples": 0
+        },
+        {
+          "operation": "addEdge",
+          "rule": "R6",
+          "tested": 872,
+          "counterexamples": 0
+        }
+      ]
+    },
+    {
+      "canon": "ordos",
+      "rows": [
+        {
+          "operation": "setFact",
+          "rule": "R1/R2",
+          "tested": 1009,
+          "counterexamples": 0
+        },
+        {
+          "operation": "relocate",
+          "rule": "R1/R2",
+          "tested": 1,
+          "counterexamples": 0
+        },
+        {
+          "operation": "negateEvent",
+          "rule": "R3",
+          "tested": 984,
+          "counterexamples": 0
+        },
+        {
+          "operation": "forceEvent",
+          "rule": "R4",
+          "tested": 988,
+          "counterexamples": 0
+        },
+        {
+          "operation": "retractFact",
+          "rule": "R5",
+          "tested": 967,
+          "counterexamples": 0
+        },
+        {
+          "operation": "severEdge",
+          "rule": "R6",
+          "tested": 927,
+          "counterexamples": 0
+        },
+        {
+          "operation": "addEdge",
+          "rule": "R6",
+          "tested": 872,
+          "counterexamples": 0
+        }
+      ]
+    }
+  ],
+  "cex": {
+    "bothEffective": true,
+    "effectiveFactIds": [
+      "fact/x-at-loc1",
+      "fact/x-at-loc2"
+    ],
+    "history": [
+      "negateEvent:ev/b",
+      "setFact:char/x",
+      "retractFact:fact/x-at-loc2",
+      "setFact:char/x"
+    ],
+    "reducedHistory": [
+      "negateEvent:ev/b",
+      "retractFact:fact/x-at-loc2",
+      "setFact:char/x"
+    ],
+    "legacyHash": "e5bb683d",
+    "reducedHash": "83c0c994",
+    "legacyEffectiveFacts": [
+      "derived:[\"char/x\",\"at\"]=W2"
+    ],
+    "reducedEffectiveFacts": [
+      "fact/x-at-loc1=W2"
+    ],
+    "semanticEqual": false,
+    "hashEqual": false,
+    "diffEmpty": false,
+    "counterexample": true
+  },
+  "cexGuarded": {
+    "bothEffective": true,
+    "effectiveFactIds": [],
+    "history": [
+      "negateEvent:ev/b",
+      "setFact:char/x",
+      "retractFact:fact/x-at-loc2",
+      "setFact:char/x"
+    ],
+    "reducedHistory": [
+      "negateEvent:ev/b",
+      "setFact:char/x",
+      "retractFact:fact/x-at-loc2",
+      "setFact:char/x"
+    ],
+    "legacyHash": "e5bb683d",
+    "reducedHash": "e5bb683d",
+    "legacyEffectiveFacts": [
+      "derived:[\"char/x\",\"at\"]=W2"
+    ],
+    "reducedEffectiveFacts": [
+      "derived:[\"char/x\",\"at\"]=W2"
+    ],
+    "semanticEqual": true,
+    "hashEqual": true,
+    "diffEmpty": true,
+    "counterexample": false
+  }
+}

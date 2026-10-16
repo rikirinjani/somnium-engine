@@ -49,8 +49,12 @@ function diffWith(facts: Fact[]): WorldDiff {
     edgeChanges: [],
     contradictionsIntroduced: [],
     contradictionsResolved: [],
+    constraintViolationsIntroduced: [],
+    constraintViolationsResolved: [],
+    temporalViolationsIntroduced: [],
+    temporalViolationsResolved: [],
     reachabilityChanges: [],
-    workStatuses: {},
+    workStatusChanges: [],
     hash: "",
   };
 }

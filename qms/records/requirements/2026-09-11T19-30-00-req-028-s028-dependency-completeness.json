@@ -1,0 +1,41 @@
+{
+  "requirement_id": "req-028",
+  "title": "S028 — Authoritative Phase-A dependency completeness audit",
+  "category": "requirements/experiment",
+  "source": "S028 experiment specification (2026-09-11)",
+  "trace_id": "s028-dependency-completeness",
+  "date": "2026-09-11T19:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "94533fe",
+  "branch": "s028",
+  "experiment_commit": "553b347",
+  "description": "Determine the complete set of authoritative Phase-A dependencies actually required to know which previously decided nodes must be reconsidered, derived from what the implementation actually reads.",
+  "result_summary": "PASS. Audited the authoritative Phase-A reads (positiveFixpoint -> nodeSupport -> hardSupport / factNodeTruth / factWindowTruth). FINDING: the S027 Ordos residual (mismatch=38, R\\closure=67) was caused by a MISSING DEPENDENCY EDGE, not an unknown semantic class - S027's directChanged OMITTED the overriddenCells delta (the facts in a changed cell). factNodeTruth reads model.overriddenCells via cellKey, so an override changes a fact node's truth; without that delta the fact and its dependents stayed outside the reset closure. Adding the override delta: ordos V1/V2/V3/V5 all reach mismatch=0 and R\\closure=0; Verrin was already 0 in S027. COMPLETE dependency set: supportGroups, enablesIn, excludesEdges, invariantEdges, precedesEdges, validity windows (validFrom/validTo -> fact node), overriddenCells (cell -> fact node), nodeIds/edge endpoints, negated/forcedBy, retracted. Exactly one class was missing: overriddenCells. CLASSIFICATION: A - locally incrementalisable Phase A. No incremental engine, no second evaluator, no alternative dependency interpretation.",
+  "complete_dependency_set": [
+    "supportGroups (conjunct -> node)",
+    "enablesIn (source -> node)",
+    "excludesEdges (endpoint <-> endpoint)",
+    "invariantEdges (from -> to)",
+    "precedesEdges (endpoint <-> endpoint)",
+    "validity windows (validFrom/validTo -> fact node)",
+    "overriddenCells (cell -> fact node) - the class S027 missed",
+    "nodeIds / edge endpoints (node-set)",
+    "negated / forcedBy (-> node)",
+    "retracted (fact -> itself)"
+  ],
+  "ordos_results": {
+    "V1_validity": {"mismatch": 0, "rOutsideClosure": 0},
+    "V2_validity_override": {"mismatch": 0, "rOutsideClosure": 0},
+    "V3_validity_retracted": {"mismatch": 0, "rOutsideClosure": 0},
+    "V5_validity_override_retracted": {"mismatch": 0, "rOutsideClosure": 0}
+  },
+  "architectural_classification": "A - locally incrementalisable Phase A",
+  "next_experiment": "implement the event-driven incremental Phase-A engine using the validated dependency index and S021's exact support aggregates, and prove prefix-by-prefix equivalence.",
+  "limitations": [
+    "Ordos was the only canon re-run in S028 (Verrin was already 0 in S027); the randomized history corpus and the S024 synthetic SCC/OR corpus were not re-run.",
+    "Determinism and branch isolation hold by construction but were not independently measured.",
+    "The S027/S028 discrepancy is a harness difference (directChanged composition), not a semantic discovery.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s028/REPORT.md", "experiments/s028/probe.ts", "S027 report / req-027", "S026 report / req-026", "S021 report / req-021"]
+}

@@ -45,15 +45,22 @@
  * The `interventions` field on the WorldState keeps the full ordered chain.
  */
 import type { Canon, Fact, WorkBinding } from "../canon/types";
-import { canonicalJson, hashState } from "../canon/hash";
+import { DERIVED_ID_PREFIX } from "../canon/types";
+import type { FactVocabulary } from "../canon/fact-rules";
+import { factAssertionError } from "../canon/fact-rules";
+import { canonicalJson, hashState, sameCanonicalValue } from "../canon/hash";
 import type { EventStatus, WorkStatus } from "./lattice";
 import type { Intervention, RewindPoint } from "../timeline/types";
 import type { ContradictionRecord } from "../diff/types";
 import type { Judgment } from "./judgment";
 import { occurs, projectStatus } from "./judgment";
-import { buildModel, propagateJudgments, temporalViolations } from "./propagation";
-import type { TemporalViolation } from "./propagation";
+import { buildModel, buildModelWithDeltas, propagateJudgments, temporalViolations, cellKey } from "./propagation";
+import type { TemporalViolation, FoldStepDelta } from "./propagation";
 import { detectContradictions } from "./contradictions";
+import { evaluateConstraints } from "./constraints";
+import type { ConstraintViolationRecord } from "./constraints";
+import { semanticState, canonicalizeEdge } from "./semantic";
+import type { CanonicalEdge } from "./semantic";
 
 export interface WorldState {
   canonId: string;
@@ -74,10 +81,34 @@ export interface WorldState {
   /** PRECEDES cycles among occurring events — unsatisfiable timelines */
   temporalViolations: TemporalViolation[];
   /**
-   * "Are these the same WORLD?" — effective state only, provenance-independent.
-   * Folded from canon + judgments + statuses + facts + workStatuses +
-   * contradictions + temporalViolations. DELIBERATELY excludes `rpId` and
-   * `interventions`: a world is the same world regardless of how it was reached.
+   * P-006 — cardinality constraint violations (AT_MOST_ONE / AT_LEAST_ONE over
+   * an EventType), evaluated over the effective occurrence set of THIS world.
+   *
+   * Distinct from contradictions (the world asserting P and ¬P) and from causal
+   * impossibility (UNSUPPORTED). A violated constraint does NOT mutate the world
+   * to become valid; the extra occurrence keeps its causal status. Part of the
+   * effective world, therefore folded into `stateHash`.
+   */
+  constraintViolations: ConstraintViolationRecord[];
+  /**
+   * P-007 — the effective causal LAW of this world: the canon's edge set after
+   * severEdge/addEdge interventions, canonicalized (id, kind, from, to) and
+   * sorted by id. The world's meaning includes WHY things happen, not just
+   * WHETHER: severing a load-bearing REQUIRES edge can leave every verdict
+   * unchanged (the event becomes a root) while the world's causal structure is
+   * genuinely different. Part of the effective world, folded into `stateHash`
+   * and diffed as `edgeChanges`.
+   */
+  edges: CanonicalEdge[];
+  /**
+   * "Are these the same WORLD?" — effective state only, provenance-independent
+   * BY CONSTRUCTION (P-007): folded from canon + the canonical semantic
+   * projection (src/derive/semantic.ts) — statuses, fact content, the effective
+   * edge set, work classifications, contradiction content, temporal violations,
+   * constraint violations. Lineage (judgments' forced/negated marks, facts'
+   * source/overridden flags, contradictions' source, `rpId`, `interventions`)
+   * is DELIBERATELY excluded: a world is the same world regardless of how it
+   * was reached, and "reached differently" is `identityHash`'s question.
    */
   stateHash: string;
   /**
@@ -158,7 +189,15 @@ function overrideFact(
     .sort((a, b) => (a.validFrom ?? "").localeCompare(b.validFrom ?? ""));
   const replaced = matching[matching.length - 1];
   const derived: FactView = {
-    id: replaced?.id ?? `derived:${subject}.${predicate}`,
+    // P-007 gate 3: the synthetic id must be INJECTIVE over (subject,
+    // predicate), because the effective fact list is id-keyed downstream —
+    // `worldDiff` builds a Map from it and `computeWorkStatuses` matches canon
+    // facts by id. Joining with `.` was not: `(char/ash, "the.elder.mood")` and
+    // `(char/ash.the.elder, "mood")` minted ONE id for two distinct cells, so
+    // the hash saw two facts while the diff saw one and a real value change
+    // became invisible. `cellKey` is the SAME key `buildModel` uses for the same
+    // reason — one implementation, in propagation.ts.
+    id: replaced?.id ?? `${DERIVED_ID_PREFIX}${cellKey(subject, predicate)}`,
     subject,
     predicate,
     object: (object ?? null) as string | number | boolean | null,
@@ -173,19 +212,71 @@ function overrideFact(
   return out;
 }
 
-/** Fact interventions applied in order over the effective fact list. */
-function applyFactInterventions(facts: FactView[], interventions: Intervention[]): FactView[] {
+/**
+ * Fact interventions applied in order over the effective fact list.
+ *
+ * Uses `factAssertionError` — the SAME function `validateCanon` and `buildModel`
+ * apply — because this function and `buildModel`'s `overriddenCells` are TWO
+ * VIEWS OF THE SAME FACT and must agree. §18.6 was exactly this defect (fact
+ * nodes ignoring fact interventions), and gating only one side here recreated it
+ * twice in one sitting: first the subject rule, then the object rule. One
+ * function at every call site makes the views incapable of disagreeing, and
+ * makes the claim differential: an intervention may assert no more than canon may.
+ */
+/**
+ * S012 — cheap structural equality of two effective-fact lists.
+ *
+ * S011 observed fact-list change with `canonicalJson(current)`, which serializes
+ * the WHOLE list on every intervention and dominated the instrumentation cost
+ * (~57x at H=3000). This compares the fold's own output field-by-field with no
+ * serialization and no semantic rule: it is an observation of the fold, not a
+ * second implementation of it.
+ */
+function factViewEqual(a: FactView, b: FactView): boolean {
+  return (
+    a.id === b.id &&
+    a.subject === b.subject &&
+    a.predicate === b.predicate &&
+    sameCanonicalValue(a.object, b.object) &&
+    a.source === b.source &&
+    a.validFrom === b.validFrom &&
+    a.validTo === b.validTo &&
+    a.overridden === b.overridden
+  );
+}
+
+function factListsEqual(a: FactView[], b: FactView[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!factViewEqual(a[i]!, b[i]!)) return false;
+  }
+  return true;
+}
+
+function applyFactInterventions(
+  facts: FactView[],
+  interventions: Intervention[],
+  vocabulary: FactVocabulary,
+  changedOut?: boolean[]
+): FactView[] {
   let current = facts;
-  for (const iv of interventions) {
+  for (let i = 0; i < interventions.length; i++) {
+    const iv = interventions[i]!;
+    const before = changedOut === undefined ? undefined : current.slice();
     if (iv.kind === "setFact" || iv.kind === "relocate") {
       const predicate = iv.kind === "setFact" ? iv.params?.predicate : "located_in";
       const object = iv.kind === "setFact" ? iv.params?.object : iv.params?.to;
       if (typeof predicate === "string") {
-        current = overrideFact(current, iv.target, predicate, object);
+        const value = (object ?? null) as string | number | boolean | null;
+        if (factAssertionError(iv.target, predicate, value, vocabulary) === null) {
+          current = overrideFact(current, iv.target, predicate, value);
+        }
       }
     } else if (iv.kind === "retractFact") {
       current = current.filter((f) => f.id !== iv.target);
     }
+    // S012: structural comparison of the fold's own output (no serialization).
+    if (changedOut !== undefined) changedOut[i] = !factListsEqual(before!, current);
   }
   return current;
 }
@@ -222,7 +313,26 @@ function computeWorkStatuses(
   facts: FactView[]
 ): Record<string, WorkStatus> {
   const result: Record<string, WorkStatus> = {};
-  const overridden = facts.filter((f) => f.overridden === true);
+  // P-007 (D4): ALTERED is VALUE-BASED, not touch-based. A fact is
+  // altered-from-canon iff its effective object differs from the canon fact
+  // of the same id, or canon never declared that fact id. The old rule keyed
+  // on the `overridden` lineage flag, so an idempotent write (the value
+  // restored to canon's) still flipped a Work to ALTERED — record churn
+  // becoming semantic change, exactly what P-007 forbids.
+  //
+  // The comparison is `sameCanonicalValue`, never `!==` (P-007 gate 2). This
+  // feeds `workStatuses`, which IS a semanticState dimension, so a comparison
+  // that disagrees with the canonical encoding puts a wrong value INTO world
+  // identity — worse than the diff-level version of the same bug, because INV
+  // cannot catch it (both sides read the same wrong value). With `!==`, a canon
+  // fact whose object is NaN read as altered-from-canon against ITSELF, so an
+  // untouched world reported ALTERED and a genuine later change reported no
+  // work-status delta at all.
+  const canonObjectById = new Map(canon.facts.map((f) => [f.id, f.object]));
+  const altered = facts.filter((f) => {
+    const canonObject = canonObjectById.get(f.id);
+    return !canonObjectById.has(f.id) || !sameCanonicalValue(canonObject, f.object);
+  });
   const effectiveById = new Map(facts.map((f) => [f.id, f]));
   for (const work of canon.workBindings) {
     const members = work.events.map((e) => statuses[e] ?? "UNKNOWN");
@@ -236,20 +346,20 @@ function computeWorkStatuses(
     //   2. missing required facts: a fact listed in `work.facts` that is NOT
     //      effective in this world => IMPOSSIBLE — the story cannot hold as
     //      written.
-    //   3. all members ESTABLISHED AND any fact the Work depends on has been
-    //      overridden => ALTERED (see workDependsOnFact for the dependency
-    //      union).
+    //   3. all members ESTABLISHED AND any fact the Work depends on is
+    //      altered-from-canon (value differs, or canon never declared it)
+    //      => ALTERED (see workDependsOnFact for the dependency union).
     //   4. all members ESTABLISHED => PRESERVED.
     //   5. any CONTINGENT member (and not all established) => UNREACHABLE.
     //   6. otherwise => UNKNOWN.
     const missingRequired = (work.facts ?? []).some((id) => !effectiveById.has(id));
-    const affectedByOverride = allEstablished && overridden.some((f) => workDependsOnFact(canon, work, f));
+    const affectedByAlteration = allEstablished && altered.some((f) => workDependsOnFact(canon, work, f));
 
     if (any("EXCLUDED") || any("UNSUPPORTED") || any("CONTRADICTORY")) {
       result[work.workId] = "IMPOSSIBLE";
     } else if (missingRequired) {
       result[work.workId] = "IMPOSSIBLE";
-    } else if (affectedByOverride) {
+    } else if (affectedByAlteration) {
       result[work.workId] = "ALTERED";
     } else if (allEstablished) {
       result[work.workId] = "PRESERVED";
@@ -331,11 +441,59 @@ function canonicalInterventions(interventions: Intervention[]): {
  * sequential cell assignments, so both of those classes are order-sensitive.
  * `identityHash` encodes exactly that split via `canonicalInterventions`.
  */
+/**
+ * Derivation's canon id-space assumptions, asserted at the point of reliance
+ * (P-007 gate 4 blocker 4 / review ▲3).
+ *
+ * `inspectCanon` is the authoring-time tool and stays complete; what was
+ * missing is that ORDINARY DERIVATION silently forgot to check anything —
+ * every seed canon and test fixture is a hand-built literal that never passes
+ * through the loader. This asserts exactly the two invariants the derivation's
+ * id-keyed consumers rely on, and nothing else:
+ *   1. canon-declared ids (entities, facts, edges) are unique among themselves;
+ *   2. none is in the engine's reserved synthetic namespace (`derived:` — the
+ *      prefix `overrideFact` mints into; a canon fact there can collide with a
+ *      minted id and make an unrelated Work read ALTERED).
+ *
+ * MEMOIZATION (review ▲3): keyed by the canonical encoding OF THE VALIDATED
+ * CONTENT ITSELF — the id arrays — never the declared `canon.hash` field,
+ * which a hand-built literal may set to anything. A cache keyed on untrusted
+ * input is a liability; this key is computed from exactly what the checks read,
+ * so two canons share a verdict only when their id spaces are identical.
+ */
+const assertedCanonIdSpaces = new Set<string>();
+function assertCanonIdSpace(canon: Canon): void {
+  const idSpace = canonicalJson([
+    canon.entities.map((e) => e.id),
+    canon.facts.map((f) => f.id),
+    canon.edges.map((e) => e.id),
+  ]);
+  if (assertedCanonIdSpaces.has(idSpace)) return;
+  const seen = new Set<string>();
+  const declare = (id: string, where: string): void => {
+    if (id.startsWith(DERIVED_ID_PREFIX)) {
+      throw new Error(
+        `canon declares id "${id}" (${where}) in the reserved "${DERIVED_ID_PREFIX}" namespace — ` +
+          `that prefix belongs to engine-minted facts and a collision corrupts world identity`
+      );
+    }
+    if (seen.has(id)) {
+      throw new Error(`canon declares duplicate id "${id}" (${where}) — the effective fact list is id-keyed downstream`);
+    }
+    seen.add(id);
+  };
+  for (const e of canon.entities) declare(e.id, "entity");
+  for (const f of canon.facts) declare(f.id, "fact");
+  for (const ed of canon.edges) declare(ed.id, "edge");
+  assertedCanonIdSpaces.add(idSpace);
+}
+
 export function derive(
   canon: Canon,
   interventions: Intervention[],
   rp?: RewindPoint
 ): WorldState {
+  assertCanonIdSpace(canon);
   const model = buildModel(canon, interventions);
   const { judgments, conflicts } = propagateJudgments(model);
 
@@ -344,13 +502,19 @@ export function derive(
     statusMap.set(node, projectStatus(judgment));
   }
 
-  const facts = applyFactInterventions(computeEffectiveFacts(canon, judgments), interventions);
+  const facts = applyFactInterventions(
+    computeEffectiveFacts(canon, judgments),
+    interventions,
+    model.factVocabulary
+  );
   const statuses = toSortedRecord(statusMap);
   const workStatuses = computeWorkStatuses(canon, statuses, facts);
   const contradictions = detectContradictions(conflicts);
   const violations = temporalViolations(model, judgments);
   const rpId = rp?.id ?? null;
 
+  // Construct the world once; P-006 constraint evaluation reads occurrenceCount
+  // which reads effective facts, so it needs the world to exist first.
   const world: WorldState = {
     canonId: canon.canonId,
     interventions: [...interventions], // full ordered chain from baseline
@@ -361,20 +525,31 @@ export function derive(
     workStatuses,
     contradictions,
     temporalViolations: violations,
+    constraintViolations: [],
+    // P-007: the effective causal LAW — the resolved edge set this world was
+    // derived under (severEdge/addEdge applied in order), canonicalized.
+    // `canonicalizeEdge` owns the normalization (group defaulted on REQUIRES,
+    // null elsewhere) so the hash folds exactly what the derivation reads.
+    edges: model.edges.map(canonicalizeEdge),
     stateHash: "",
     identityHash: "",
   };
+  world.constraintViolations = evaluateConstraints(canon, world);
 
-  // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4):
+  // Two hashes, two questions (P-004, docs/ARCHITECTURE-RECONNAISSANCE.md §18.4;
+  // P-007 made the first provenance-independent BY CONSTRUCTION):
   //
-  //   stateHash — "are these the same WORLD?" The effective state only:
-  //   canon + judgments + statuses + effective facts + work statuses +
-  //   contradictions + temporal violations. DELIBERATELY excludes `rpId` and
-  //   `interventions`: a world is the same world regardless of how it was
-  //   reached, and "did two different intervention chains reach the same world?"
-  //   must be answerable (that is the deferred minimum-intervention search's
-  //   immediate neighbourhood, and cross-canon genericity is exactly where
-  //   convergent branches show up).
+  //   stateHash — "are these the same WORLD?" The effective state only, folded
+  //   from canon + the canonical semantic projection (src/derive/semantic.ts):
+  //   statuses, fact CONTENT (no source/overridden lineage flags), the effective
+  //   edge set, work statuses, contradiction CONTENT (no source), temporal
+  //   violations, constraint violations. Judgments are NOT folded — statuses is
+  //   their world-semantic projection; the forced/negated marks are lineage.
+  //   DELIBERATELY excludes `rpId` and `interventions`: a world is the same
+  //   world regardless of how it was reached, and "did two different
+  //   intervention chains reach the same world?" must be answerable (that is
+  //   the deferred minimum-intervention search's immediate neighbourhood, and
+  //   cross-canon genericity is exactly where convergent branches show up).
   //
   //   identityHash — "was this world reached the same WAY?" The full derivation
   //   identity: stateHash + rpId + the canonical intervention form. This is the
@@ -385,15 +560,14 @@ export function derive(
   // commutation semantics: set-like marks (negateEvent / forceEvent) as a sorted
   // deduplicated set, every sequential kind (severEdge / addEdge / setFact /
   // relocate / retractFact) in ACTUAL order.
+  //
+  // P-007 INVARIANT: worldDiff(A, B) is empty ⟺ stateHash(A) === stateHash(B)
+  // (same canon) — both sides consume the SAME semanticState projection, so the
+  // invariant holds by construction (32-bit hash collisions excepted).
   world.stateHash = hashState({
     canonId: canon.canonId,
     canonHash: canon.hash,
-    judgments: world.judgments,
-    statuses,
-    facts,
-    workStatuses,
-    contradictions,
-    temporalViolations: violations,
+    semantic: semanticState(world),
   });
   world.identityHash = hashState({
     stateHash: world.stateHash,
@@ -402,4 +576,34 @@ export function derive(
   });
 
   return world;
+}
+
+/**
+ * S011 — per-intervention FOLD-STATE delta, produced by the authoritative fold.
+ *
+ * Deliberately NOT "did the semantic state change" (S010 proved that
+ * insufficient) and NOT "did one accumulator change" alone. It is the union of:
+ *   - the accumulator components changed by `buildModel`'s fold
+ *     (negated / forcedBy / retracted / overriddenCells / rejectedFactWrites / edges)
+ *   - whether `applyFactInterventions`'s effective-fact list changed
+ *
+ * Both are recorded AS THE FOLD RUNS; nothing here reimplements a semantic rule.
+ * An empty `components` array means the step left the fold's own state untouched,
+ * so it cannot influence any later step's derivation.
+ *
+ * This is a NECESSARY signal, not a proof of future irrelevance: over-retention
+ * is safe, and whether empty-delta dropping is safe is exactly what the S011
+ * differential harness tests.
+ */
+export function foldStateDeltas(canon: Canon, interventions: Intervention[]): FoldStepDelta[] {
+  const { model, deltas } = buildModelWithDeltas(canon, interventions);
+  const factChanged = new Array<boolean>(interventions.length).fill(false);
+  const { judgments } = propagateJudgments(model);
+  const base = computeEffectiveFacts(canon, judgments);
+  applyFactInterventions(base, interventions, model.factVocabulary, factChanged);
+  return deltas.map((d, i) => {
+    const components = [...d.components];
+    if (factChanged[i] === true && !components.includes("facts")) components.push("facts");
+    return { index: d.index, kind: d.kind, target: d.target, components };
+  });
 }

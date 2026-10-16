@@ -1,0 +1,27 @@
+{
+  "requirement_id": "req-015",
+  "title": "S015 — Incremental propagation / affected-fixpoint derivation",
+  "category": "requirements/experiment",
+  "source": "S015 experiment specification (2026-09-11)",
+  "trace_id": "s015-incremental-propagation",
+  "date": "2026-09-11T06:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "dabc4a1",
+  "branch": "s015",
+  "experiment_commit": "5575efd",
+  "description": "Test whether Somnium can update its semantic fixpoint incrementally after an intervention, recomputing only the affected dependency region, while remaining exactly equivalent to the full propagateJudgments().",
+  "result_summary": "HOLD. Measured the affected region per intervention type and tested whether a naive reverse-dependency closure is a sound over-approximation for a scoped recompute. Locality: setFact 7%, retractFact 3-10%, addEdge 1-2%, severEdge 5-6% of the model (LOCAL); forceEvent 23-31%, negateEvent 29-38% (WIDE, because event status cascades through REQUIRES chains). But the closure is NOT sound: 1-3 nodes outside it changed per intervention kind on both canons (verrin and ordos). Cause: Phase B unfoundedSet is GLOBAL (a change can reclassify a bootstrap cycle not reverse-reachable), and Phase A's sticky rule makes outcomes order-dependent across the whole node set. A correct incremental path needs a stronger over-approximation or explicit full fallback. Correctness was never compromised: the full propagateJudgments remained the reference, no second semantic engine, nothing shipped. Long-horizon and scaling not run because the correctness gate failed.",
+  "locality_findings": {
+    "highly_local": ["setFact 7%", "retractFact 3-10%", "addEdge 1-2%", "severEdge 5-6%"],
+    "widely_local": ["forceEvent 23-31%", "negateEvent 29-38%"]
+  },
+  "next_experiment": "propagation observability - instrument propagateJudgments to emit its own per-stage re-evaluation set, mirroring S011's fold-state delta, so an incremental path can invalidate exactly what the reference touches.",
+  "limitations": [
+    "Only seed canons + 200-step random histories tested.",
+    "The invalidation model does not model the global unfoundedSet reclassification - exactly where it fails.",
+    "Synthetic topologies (chains/trees/DAGs/diamonds) not built.",
+    "No long-horizon or scaling measurements (correctness gate failed).",
+    "Empirical only; no Big-O claim."
+  ],
+  "references": ["experiments/s015/REPORT.md", "experiments/s015/probe.ts", "S014 report / req-014", "S012 report / req-012"]
+}

@@ -1,0 +1,32 @@
+{
+  "requirement_id": "req-032",
+  "title": "S032 — Minimise and characterise the 5 failing S024 synthetic topologies",
+  "category": "requirements/experiment",
+  "source": "S032 experiment specification (2026-09-11)",
+  "trace_id": "s032-s024-failures",
+  "date": "2026-09-11T23:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "ad8340d",
+  "branch": "s032",
+  "experiment_commit": "c064ab4",
+  "description": "Determine exactly why the S030 incremental Phase-A execution diverges from the authoritative reference on the 5 S024 synthetic topologies, minimise the failures, and identify the missing knowledge causally.",
+  "result_summary": "PASS. Root cause: NOT a missing dependency class - a RECONSIDERATION-SCOPE error in S030's worklist. S030 seeded the queue with directChanged ONLY and carried the PREVIOUS truth, so a closure node that was not itself directly changed kept a stale value and was never re-evaluated. All 5 failures share one shape: the divergent nodes are INSIDE the closure (inClosure=true) yet OUTSIDE directChanged, holding stale FALSE where the reference holds NEITHER. FIX (only the queue seed changed): reset the DEPENDENCY CLOSURE to NEITHER and seed the queue with it (= S029's closure reset + S030's worklist). nodeSupport remains the authoritative per-node rule; no semantic rule added; the S028 dependency index is UNCHANGED. CAUSAL PROOF: minimal witness diverges -> fix -> divergence gone; remove fix -> divergence returns. S024 REVALIDATION: 95/100 -> 100/100 topologies; 1487/1500 -> 1500/1500 prefixes; 13 -> 0 mismatches. Architectural conclusion: the S028 dependency boundary is CORRECT; S030's EXECUTION was incomplete.",
+  "root_cause": "reconsideration scope: the dependency closure must be reset and reconsidered, not only the directly-changed nodes",
+  "fix": "reset the dependency closure to NEITHER and seed the worklist queue with it",
+  "candidate_classes_rejected": [
+    "supportGroups incomplete - rejected (edges present and correct)",
+    "enablesIn/excludesEdges/invariantEdges/precedesEdges - rejected (not consulted)",
+    "validity windows/overriddenCells/retracted - rejected (divergent nodes are events)",
+    "SCC/cycle membership as a new dependency - rejected (expressed through supportGroups)"
+  ],
+  "s024_results": {"topologies_exact": "100/100", "prefixes_exact": "1500/1500", "mismatches": 0},
+  "next_experiment": "re-run the full correctness gate with the corrected seed (Verrin/Ordos randomized histories, S009/S010 witnesses, S021 aggregate checks, S022/S023 unfounded witnesses, U subset of C, dU subset of dC, S024) and only then resume the wall-clock performance comparison.",
+  "limitations": [
+    "Verrin/Ordos randomized corpus was not re-run with the fix (the fix resets a superset, so it cannot regress correctness, but this is not measured).",
+    "The 5 failures were not minimised to the smallest node/edge set (budget).",
+    "Determinism/branch isolation were not re-run in S032.",
+    "Wall-clock performance not measured.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s032/REPORT.md", "experiments/s032/probe.ts", "S031 report / req-031", "S030 report / req-030", "S028 report / req-028"]
+}

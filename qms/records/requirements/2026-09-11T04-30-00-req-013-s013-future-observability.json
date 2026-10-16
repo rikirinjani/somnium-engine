@@ -1,0 +1,33 @@
+{
+  "requirement_id": "req-013",
+  "title": "S013 — Future observability / minimal sufficient retention",
+  "category": "requirements/experiment",
+  "source": "S013 experiment specification (2026-09-11)",
+  "trace_id": "s013-future-observability",
+  "date": "2026-09-11T04:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "dabc4a1",
+  "branch": "s013",
+  "experiment_commit": "e82af66",
+  "description": "S012 left a conservative FoldStateDelta that over-retains (category C: fold-changed but apparently future-irrelevant). S013 asks whether Somnium can distinguish fold-changed-AND-future-relevant from fold-changed-BUT-future-irrelevant without a second semantic authority, using an observational definition of future relevance: I is future-observable within H iff there exists a suffix S with derive(H+S) != derive(H without I + S).",
+  "result_summary": "HOLD. The suffix oracle OVERTURNS S012's reading of category C. S012 classified C by immediate removal only; under suffix exploration almost every fold-changed step is future-observable. Full run: verrin A=124 B=16 C=0 D=20; ordos A=119 B=21 C=1 D=19. Of 281 fold-changed steps, only 17 were future-invisible within the tested suffix bound; 37 were semantic-invisible but future-visible (the S010 class). Smallest exposing suffix is the S010 shape: I=forceEvent(ev/maren-return), S=[negateEvent(ev/maren-return)]. No generic rule expressible from fold information separates the 17 invisible steps from the 264 relevant ones without semantic interpretation, so a tighter retention rule is NOT justified; S012's conservative boundary is close to necessary, not merely safe. S012 delta-retention re-run: 16/16 differential equivalent. Semantic authority remained singular (the oracle only calls derive; no semantic rule encoded).",
+  "key_distinctions": [
+    "fold-state change, semantic-state change and future relevance are three distinct dimensions (confirmed).",
+    "S012's category C was largely 'not relevant immediately', not 'truly irrelevant'.",
+    "17/281 fold-changed steps were future-invisible under the tested bound; 'not observed' != 'proven irrelevant'.",
+    "Branch semantics: the same forceEvent target is future-invisible in one history and observable in another, so relevance must not key on intervention identity alone (S012's per-step delta already satisfies this)."
+  ],
+  "recommendation": "Keep S012's conservative FoldStateDelta boundary. Do not pursue a tighter retention rule. If anything is productionized, it is S012's mechanism as-is (experimental API), with the honest statement that it may over-retain a small, unidentifiable minority.",
+  "limitations": [
+    "The suffix population is finite; 'not observed' != 'proven irrelevant'.",
+    "S013's corpus is smaller than S012's (suffix search is expensive), so A/B/C/D counts are not directly comparable to S012's.",
+    "Horizons beyond H=20 per history were not fully suffix-searched; H=100000 was not practical for the oracle.",
+    "relocate coverage remains thin.",
+    "No claim of global minimality; no canonicality attempt."
+  ],
+  "references": [
+    "experiments/s013/REPORT.md",
+    "experiments/s013/results/results.json",
+    "S012 report / req-012; S011 report / req-011"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "ncr_id": "ncr-004",
+  "title": "The same universal claim was stated and refuted four times in one change",
+  "category": "records/nonconformities",
+  "trigger": "L2 verifier gate on P-005 returned REJECT three consecutive times",
+  "severity": "major",
+  "trace_ids": [
+    "somnium-verifier-p005",
+    "somnium-verifier-p005-recheck",
+    "somnium-verifier-p005-recheck2"
+  ],
+  "agent": "orchestrator",
+  "role": "P-005 repeatable events and occurrence identity",
+  "date": "2026-08-31T06-21-25Z",
+  "status": "closed",
+  "recurrence_of": [
+    "ncr-001",
+    "ncr-002",
+    "ncr-003"
+  ],
+  "description": "P-005's headline rule is the occurrence generation rule: only canon declares an occurrence, so an intervention may change an occurrence's status but never bring one into existence. The rule was stated as a universal over interventions, and refuted by execution four times. Each fix closed the route the gate had just demonstrated, restated the universal, and was defeated by the next route.",
+  "the_four_refutations": [
+    {
+      "pass": "120c171 (original)",
+      "route": "forceEvent on an undeclared id set truth TRUE before consulting support, bypassing the declared gate entirely. Returned ESTABLISHED with support HARD and zero contradictions.",
+      "claim_made": "the engine cannot manufacture occurrences; nothing in the pipeline adds a node",
+      "found_by": "orchestrator probe before the first gate (the forceEvent hole) — but the accompanying prose claim was broader than the fix"
+    },
+    {
+      "pass": "ee70f76 (fix 1)",
+      "route": "addEdge naming an undeclared id as a REQUIRES target gave it support rules, so it fell through hardSupport's no-support-rules branch to disjoin and inherited its prerequisite's truth. It chained: three added edges produced three ESTABLISHED invented occurrences that joined an EventType and were counted. ENABLES had the same shape via softSupported.",
+      "claim_made": "every other route to an undeclared id already respected that gate",
+      "found_by": "gate 1 (somnium-verifier-p005), by trying to defeat the claim rather than read it"
+    },
+    {
+      "pass": "77bd283 (fix 2)",
+      "route": "the repair of the forceEvent hole set truth TRUE and let Phase D join it to BOTH, giving status CONTRADICTORY. occurs() accepts BOTH, so the invented occurrence was still counted by occurrenceCount, still joined an EventType, and still opened the validity window of any canon fact anchored to it. Five forced ghosts gave an invented recurrence pattern of arbitrary size.",
+      "claim_made": "an undeclared id can never occur, be counted, join an EventType, or open a fact window",
+      "found_by": "gate 2 (somnium-verifier-p005-recheck)"
+    },
+    {
+      "pass": "02cf3ea (fix 3)",
+      "route": "fix 2 excluded the forced-undeclared conflict KIND from the taints-truth set. negateEvent + forceEvent on the same ghost emits forced-vs-negated instead — a different kind, not in the exclusion set — which tainted truth to BOTH and restored the entire hole including count inflation, validFrom windows opening, and validTo windows retiring. Two individually harmless interventions composed into an unsafe one, and neither's test covered the pair.",
+      "claim_made": "a forced undeclared id is FALSE and that record cannot taint truth to BOTH",
+      "found_by": "gate 3 (somnium-verifier-p005-recheck2)"
+    }
+  ],
+  "root_cause": "The unifying error was the SHAPE of the claim, not any individual oversight. A universal quantified over an open set ('any intervention', 'every route') was defended by enumerating members of that set. Each enumeration was complete with respect to the routes then known, so each fix looked total and each restated claim looked earned. But the set is open: new conflict kinds, new intervention kinds, and — decisively — COMPOSITIONS of existing interventions all add members. Enumeration cannot close a universal over an open set; only an invariant at the point where all routes converge can.",
+  "corrective_action": [
+    "ee70f76: declared gate applied in hardSupport before support rules rather than only in their absence; same gate added to softSupported.",
+    "77bd283: forced undeclared node yields truth FALSE rather than TRUE-then-BOTH, because the world provably does not contain it — canon defines the vocabulary. Every downstream consumer (occurs, fact windows, occurrenceCount, diffOccurrences, temporalViolations) then behaves correctly for free, since they all read truth.",
+    "02cf3ea: the guard changed SHAPE. cannotBeTainted(node) is a predicate on the node, so no conflict about an undeclared id — present or future kind, single or composed — can lift its truth above FALSE. Phase D.1 also reordered to check undeclared-ness before negation, so the record reported is force-undeclared (non-existence is the primary defect) rather than force-vs-negate.",
+    "02cf3ea: tests quantify over the intervention vocabulary rather than a route list — every kind alone and every kind composed with forceEvent — plus a direct assertion that no non-declared node in the derived world satisfies occurs()."
+  ],
+  "preventive_action": [
+    "ESCALATION beyond ncr-003. ncr-003's action was 'a claim quantified over a set must be a test parameterized over that set'. That was necessary and insufficient: P-005 had parameterized tests over edge kinds and over ghost counts, and still shipped four false universals, because the set being quantified over was mis-identified. State the quantifier explicitly before writing the test, and ask what the set's MEMBERS actually are — for interventions, the members include compositions, not just kinds.",
+    "Prefer an invariant at a convergence point over a guard per route. If a rule must hold for an open set of inputs, enforce it where all inputs converge (here: the node's truth value) and assert the invariant directly ('no non-declared node occurs'), not a list of the ways it could be violated. A guard keyed on a closed enumeration of causes will be defeated by the next cause.",
+    "When two operations are each individually safe, test the composition. negateEvent and forceEvent each had a passing safety test on a ghost; the pair did not, and the pair was the defeat.",
+    "A fix that closes the demonstrated route is not evidence that the claim now holds. After remediating, re-derive the universal from the code rather than narrowing the previous sentence."
+  ],
+  "verifier_credit": "All three rejections came from the gate attempting to DEFEAT the claim by execution rather than reviewing it by reading. Gate 2 and gate 3 each enumerated intervention kinds and edge kinds against a ghost id and reported exact reproductions. This is the behaviour that made the defect class visible; it should be the default brief for any change asserting an invariant.",
+  "linked_records": [
+    "qms/records/nonconformities/2026-08-30T13-40-00-ncr-001-doc-contradicts-change.json",
+    "qms/records/nonconformities/2026-08-31T02-46-51-ncr-002-refuted-claim-survived.json",
+    "qms/records/nonconformities/2026-08-31T08-54-34-ncr-003-unsupported-state-claim.json",
+    "qms/records/verifications/2026-08-31T06-21-25-ver-005-p005-l2-gate.json"
+  ],
+  "notes": "No functional regression at any point: 393 -> 399 -> 401 -> 431 tests green, tsc clean, verify-facts 3/3 throughout, and the four prior acceptance suites unchanged. As with ncr-002 and ncr-003 the defect was a false claim rather than broken behaviour, which is why only an adversarial gate catches this class. Four recurrences across four phases now indicates the failure is systematic to how I state invariants, not incidental to any one change. One process gap this record closes: it was cited from five code and doc sites before it existed, which gate 3 flagged."
+}

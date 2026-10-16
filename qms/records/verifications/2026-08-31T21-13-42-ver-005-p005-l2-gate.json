@@ -1,0 +1,80 @@
+{
+  "verification_id": "ver-005",
+  "title": "Somnium Engine P-005 — L2 verifier gate (repeatable events and occurrence identity)",
+  "category": "records/verifications",
+  "trace_id": "somnium-verifier-p005-recheck6",
+  "date": "2026-08-31T21-13-42Z",
+  "result": "APPROVE-WITH-RESIDUAL-RISK",
+  "description": "Independent L2 review of P-005 (branch occurrence, fourteen commits on merged baseline cbbaae3). SEVEN gates: six REJECT, then approve-with-residual-risk. Ten distinct routes were found around one rule, and seven successive prose statements of that rule were false. Every rejection found a real defect; the seventh found only a prose-scope error and recommended acceptance.",
+  "gate_history": [
+    {
+      "trace_id": "somnium-verifier-p005",
+      "commit": "120c171",
+      "result": "REJECT",
+      "finding": "addEdge naming an undeclared id as a REQUIRES target gave it support rules so it inherited its prerequisite's truth; it chained, joined an EventType and was counted. ENABLES had the same shape. Docs claimed 'nothing in the pipeline adds a node — none possible'."
+    },
+    {
+      "trace_id": "somnium-verifier-p005-recheck",
+      "commit": "ee70f76",
+      "result": "REJECT",
+      "finding": "The forceEvent repair set truth TRUE and let Phase D join to BOTH. occurs() accepts BOTH, so the invented occurrence was still counted and still opened fact windows."
+    },
+    {
+      "trace_id": "somnium-verifier-p005-recheck2",
+      "commit": "77bd283",
+      "result": "REJECT",
+      "finding": "Excluding only the forced-undeclared KIND left negateEvent+forceEvent emitting forced-vs-negated instead, restoring the whole hole. Two individually harmless interventions composed into an unsafe one."
+    },
+    {
+      "trace_id": "somnium-verifier-p005-recheck3",
+      "commit": "02cf3ea",
+      "result": "REJECT",
+      "finding": "The node-level truth guard did not protect type membership: setFact(ghost, instance_of, type) alone enrolled an invented id as a non-occurring member row."
+    },
+    {
+      "trace_id": "somnium-verifier-p005-recheck4",
+      "commit": "3f4643a",
+      "result": "REJECT",
+      "finding": "Three routes past the object check. 7a: a SLASH-FREE phantom type invented an EventType on shipped Verrin (occurrenceCount 1, real oath count 2->1) because the check was includes('/'). 7b: a canon FACT id as a subject inflated Ordos's investiture count 1->2, while validateCanon rejects the identical canon fact. 7c: a type instantiating itself. Plus fact-write-undeclared-object was dead code, so the report documented a record the engine could not emit."
+    },
+    {
+      "trace_id": "somnium-verifier-p005-recheck5",
+      "commit": "c27e1dc",
+      "result": "REJECT",
+      "finding": "Route 8. A REFUSED fact write mutated world state: setFact('ev/galen-invested', instance_of, 'phantomtype') on shipped Ordos moved that event UNKNOWN->ESTABLISHED, inflated occurrenceCount 1->2, opened fact/seal-held-galen so both Seal holders were effective, and did NOT report the canon EXCLUDES violation. Mechanism: Phase D.0's note names the write's subject, normally declared, and joinTruth('NEITHER','TRUE') = TRUE promoted a dormant node. 150 refused writes across three shipped canons changed world state. Also named the framing error: the differential claim compared 'did the fact appear in world.facts' — the fact list, not the world."
+    },
+    {
+      "trace_id": "somnium-verifier-p005-recheck6",
+      "commit": "ca1037b",
+      "result": "APPROVE-WITH-RESIDUAL-RISK",
+      "evidence": "264 refused writes across three shipped canons: 0 world moves, 0 silent refusals, 0 count changes, 0 dormant promotions (the same sweep at c27e1dc reproduces gate 6's 150 exactly: verrin 39, ordos 36, adversarial 75). All four over-fire cases still taint. Mutation testing: guard B removed -> 0 world moves; name list removed -> 114 of 264. taintTruth(NEITHER) made to throw -> 0 hits across 4,386 derivations. Seed canons byte-identical to c27e1dc. Only finding was a prose-scope error ('two independent guards, either sufficient'), which changes no derived world state and silences no contradiction.",
+      "verifier_recommendation": "Another iteration is not warranted. Six rejections each bought a real defect; a seventh would buy a sentence. The marginal return has crossed below the cost, and continuing to gate on prose precision at this rate risks the opposite failure — a change that is correct sitting unmerged while the report accumulates edits."
+    }
+  ],
+  "post_gate_remediation": {
+    "commits": ["f903f62", "24a54ba"],
+    "closed": [
+      "Risk 1 (guard symmetry): the false 'either guard alone suffices' claim replaced with gate 7's mutation measurement in both propagation.ts and report section 19.3.",
+      "Risk 2 (no coverage): taintTruth exported and unit-tested directly, since its NEITHER branch is unreachable through derive so a test through derive would cover nothing.",
+      "Risk 3 (unguarded enumeration): ABOUT_THE_WORLD added alongside ABOUT_THE_INTERVENTION, with a test asserting the two sets PARTITION ConflictNote['kind'] — no gaps, no overlaps, neither empty, plus a `satisfies` check so a new kind fails at compile time. This closes the enumeration shape ncr-004 is about."
+    ],
+    "documented_as_residual": [
+      "Risk 4 -> section 19.11 item 10: not every incoherent intervention is reported (retractFact on a non-existent id, severEdge on a missing edge, a malformed addEdge, a non-string predicate are silent no-ops).",
+      "New -> section 19.11 item 11: the backstop guard is unreachable, so its correctness rests on reasoning rather than measurement."
+    ],
+    "tests_after_remediation": 479
+  },
+  "checks": [
+    { "id": 1, "name": "Scope", "result": "PASS", "evidence": "SE-only; Kronos untouched; worktree clean" },
+    { "id": 2, "name": "Route 8 closed, generalised", "result": "PASS", "evidence": "264 refused writes, 0 world moves across all three shipped canons" },
+    { "id": 3, "name": "Taint discipline neither leaks nor over-fires", "result": "PASS", "evidence": "6 kinds enumerated; 4,386-derivation reachability probe; all four over-fire cases intact; legitimate forceEvent path still reports both EXCLUDES records" },
+    { "id": 4, "name": "No seed-canon regression", "result": "PASS", "evidence": "validateCanon [] for all three; judgments/statuses/facts/workStatuses/temporalViolations/contradictions/stateHash/identityHash byte-identical to c27e1dc" },
+    { "id": 5, "name": "Build, tests, gate", "result": "PASS", "evidence": "tsc exit 0; 469 -> 479 tests; poc 14, causal 33, depth 14, cross-canon 89 unchanged; verify-facts 3/3" },
+    { "id": 6, "name": "Recurrence sweep", "result": "PASS after remediation", "evidence": "18 sites judged; the one SURVIVING claim (guard symmetry) corrected in 24a54ba" },
+    { "id": 7, "name": "Quantified-claim audit", "result": "PASS after remediation", "evidence": "the seventh claim (guard independence) had no isolating test; f903f62 adds the unit test and the partition test" }
+  ],
+  "verifier_judgement_on_correctness": "The engine is correct to the best of the verifier's ability to determine, and the basis is different from the six prior passes: the argument is no longer 'no route reached it' but that the routes cannot exist, verified by making the vulnerable branch throw and finding it unreachable, and by confirming the legitimate path to the same world still reports its EXCLUDES. The decisive change was the OBSERVABLE: the suite now compares worlds, not writes, on fixtures that contain dormant declared events, and it fails when the fix is broken (mutation-verified).",
+  "linked_tasks": ["P-005 repeatable events and occurrence identity (req-005)"],
+  "nonconformities": ["qms/records/nonconformities/2026-08-31T06-21-25-ncr-004-four-false-universals.json"],
+  "evidence_path": "src/canon/fact-rules.test.ts, src/derive/taint.test.ts, src/query/occurrence.test.ts"
+}

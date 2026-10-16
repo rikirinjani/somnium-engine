@@ -128,21 +128,56 @@ describe("intervention ordering", () => {
       expect(severAdd.identityHash).not.toBe(addSever.identityHash);
     });
 
-    it("two chains whose derived worlds coincide: same stateHash, different identityHash", () => {
-      // P-004 (docs §18.4): this is the CONVERGENCE case. On the adversarial
-      // canon the edge is NOT load-bearing, so [sever, add] and [add, sever]
-      // derive the same effective world — same stateHash. But the WorldState
-      // carries different `interventions` provenance, so the identities differ
-      // — a hash-keyed memo keyed on identityHash can never hand back a state
-      // whose intervention chain is a lie.
+    it("two chains reaching the same VERDICTS under different causal laws are different worlds (P-007)", () => {
+      // P-004 (docs §18.4) wrote this as the CONVERGENCE case: on the
+      // adversarial canon the edge is not load-bearing, so [sever, add] and
+      // [add, sever] derive the same statuses and facts, and pre-P-007 that was
+      // enough to call them the same WORLD (same stateHash, different
+      // identityHash).
+      //
+      // P-007 CHANGED THAT DEFINITION, deliberately. The effective edge set is
+      // part of a world's meaning: [sever, add] leaves the edge PRESENT (exodus
+      // happens BECAUSE of the blight) and [add, sever] leaves it ABSENT (exodus
+      // is uncaused). Those are different fictional worlds even though every
+      // verdict coincides — measured as probe P6 in experiments/p007/probes.ts
+      // and predicted as D2 in experiments/p007/predictions.md. Folding `edges`
+      // into stateHash is what makes the P-007 invariant hold:
+      //   worldDiff(A, B) empty ⟺ stateHash(A) === stateHash(B).
+      // Under the old definition this pair had one stateHash and a NON-EMPTY
+      // semantic diff (edgeChanges), which is exactly the failure P-007 exists
+      // to remove.
+      //
+      // The derived CONTENT still coincides, so this remains the sharpest
+      // available statement of "the verdicts agree but the worlds do not".
       const edge: CausalEdge = { id: EDGES.exodusRequiresBlight, kind: "REQUIRES", from: A.blight, to: A.exodus };
       const severAdd = derive(adv, [severEdge(edge.id), addEdge(edge)]);
       const addSever = derive(adv, [addEdge(edge), severEdge(edge.id)]);
 
-      expect(severAdd.statuses).toEqual(addSever.statuses); // same derived content
-      expect(severAdd.stateHash).toBe(addSever.stateHash); // same WORLD
-      expect(severAdd.identityHash).not.toBe(addSever.identityHash); // reached differently
+      expect(severAdd.statuses).toEqual(addSever.statuses); // same verdicts
+      expect(severAdd.facts).toEqual(addSever.facts); // same effective facts
+      // ...but not the same causal law:
+      expect(severAdd.edges.some((e) => e.id === edge.id)).toBe(true);
+      expect(addSever.edges.some((e) => e.id === edge.id)).toBe(false);
+      expect(severAdd.stateHash).not.toBe(addSever.stateHash); // DIFFERENT world (P-007)
+      expect(severAdd.identityHash).not.toBe(addSever.identityHash); // and reached differently
       expect(severAdd.interventions.map((i) => i.kind)).not.toEqual(addSever.interventions.map((i) => i.kind));
+    });
+
+    it("P-004's convergence invariant still holds, on a pair that genuinely converges", () => {
+      // The invariant the case above used to carry — same effective world
+      // reached by different chains => same stateHash, different identityHash —
+      // is still load-bearing (a memo keyed on stateHash alone could hand back
+      // someone else's provenance). It needs a pair that converges under the
+      // P-007 definition: two chains that write the same cell to the same value
+      // and leave the edge set untouched.
+      const direct = derive(adv, [setFact(vara, "located_in", thornhollow)]);
+      const viaRelocate = derive(adv, [relocate(vara, thornhollow)]);
+
+      expect(direct.statuses).toEqual(viaRelocate.statuses);
+      expect(direct.facts).toEqual(viaRelocate.facts);
+      expect(direct.edges).toEqual(viaRelocate.edges);
+      expect(direct.stateHash).toBe(viaRelocate.stateHash); // same WORLD
+      expect(direct.identityHash).not.toBe(viaRelocate.identityHash); // reached differently
     });
   });
 

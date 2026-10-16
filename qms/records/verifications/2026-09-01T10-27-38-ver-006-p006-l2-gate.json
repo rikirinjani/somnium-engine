@@ -1,0 +1,50 @@
+{
+  "verification_id": "ver-006",
+  "title": "Somnium Engine P-006 — L2 verifier gate (constraint-layer cardinality: AT_MOST_ONE / AT_LEAST_ONE)",
+  "category": "records/verifications",
+  "trace_id": "somnium-verifier-p006",
+  "date": "2026-09-01T10-27-38Z",
+  "result": "APPROVE",
+  "description": "Independent L2 review of P-006 (constraint-layer cardinality, one commit 013a95d on frozen baseline somnium-p005-final). First-pass APPROVE — the first change in the series to clear the gate without a rejection cycle. All twelve claims verified by execution; five adversarial attacks on the semantics held; frozen baseline intact; no test bent.",
+  "gate_history": [
+    {
+      "trace_id": "somnium-verifier-p006",
+      "commit": "013a95d",
+      "result": "APPROVE",
+      "evidence": "507/507 tests (22 files), tsc exit 0, verify-facts 3/3, worktree clean. Claims 1-12 all verified by execution: predictions precede implementation (every prediction carries a concrete 'Falsified by:' clause; §0 ground truth confirmed — zero cardinality terms at 5b41ded; the report honestly marks C2 PARTIALLY SUPPORTED, which a retrofitted file would not); semantic orthogonality holds (violating world: 0 contradictions, 0 impossible events, statuses preserved, three distinct record kinds); no silent mutation; multi-depth recomputation (force→violation→negate→valid, no accumulating counter); occurrences-not-writes (retractFact on a nonexistent id leaves count unchanged); hash semantics (stateHash folds constraintViolations at world-state.ts:437; identityHash unchanged at :439-443; Verrin canon hash bit-identical to frozen e4c79cec; stripping Ordos's constraints reproduces frozen ef9cbe0c exactly — the Ordos hash delta is solely the constraints block); EXCLUDES and cardinality co-fire as two axes; C3 is a genuine it.each parameterized test over {verrin, ordos} plus a loop test that every declared constraint references a real EventType; K asserts diagnostic.observed === occurrenceQueryCount; scope is global-per-EventType only; EXACTLY_ONE is compositional with no third primitive; diff-stat shows only the anticipated files, Verrin.ts blob identical at both commits."
+    }
+  ],
+  "adversarial_attacks": [
+    { "attack": "Can a constraint violation taint truth?", "result": "PASS — could not construct one; violating world has 0 contradictions, 0 impossible events, statuses preserved" },
+    { "attack": "Can a violated AT_MOST_ONE be 'fixed' by an illegal write?", "result": "PASS — retractFact('fact/nonexistent-xyz') on a violating world: count unchanged (2), violation persists; forced undeclared ghost never becomes an occurrence" },
+    { "attack": "AT_LEAST_ONE with all-UNKNOWN occurrences (case-K)?", "result": "PASS — toy canon, all 3 occurrences causally stranded: 0 occurring → AT_LEAST_ONE violated, observed=0" },
+    { "attack": "Branch leak?", "result": "PASS — sibling branch clean (0 violations) while violating branch holds 1" },
+    { "attack": "Is the Ordos baseline stateHash change only from the added constraints?", "result": "PASS — stripped-constraints hash reproduces the frozen hash bit-for-bit; no other Ordos behavior changed. (Verifier's initial D-composition 'failure' was its own over-strict assertion: forcing both investitures legitimately cascades both rites, so the rite constraint correctly co-fires; investigated, correct.)" }
+  ],
+  "recurrence_sweep": "No prose-only universals over seed canons. Report §11's claim is the it.each test; A1's 'Verrin oath-sworn, count 2, zero records' is backed by the parameterized baseline test AND cross-canon-acceptance.test.ts recurrence data (baselineCount: 2) AND verifier execution. 'Every declared constraint references a real EventType' is a loop test. Clean.",
+  "residuals": [
+    {
+      "id": "H1-WorldDiff",
+      "finding": "Prediction H1 also claimed the violation 'appears in WorldDiff as a new constraint-diagnostic record' — WorldDiff has no constraint-delta field and diff.hash does not fold it. Unimplemented and unacknowledged in the report's H1 row at gate time.",
+      "disposition": "Non-blocking for P-006 (claim 6 as specified — stateHash/identityHash — verified intact). Report H1/H2 row corrected to PARTIALLY CONFIRMED with the gap acknowledged; WorldDiff constraint-delta surface deferred to P-007."
+    }
+  ],
+  "checks": [
+    { "id": 1, "name": "Predictions precede implementation", "result": "PASS", "evidence": "single commit carries both; every prediction has a 'Falsified by:' clause; §0 ground truth: 0 cardinality terms at 5b41ded; C2 honestly PARTIALLY SUPPORTED" },
+    { "id": 2, "name": "Semantic orthogonality (violation vs UNSUPPORTED vs CONTRADICTORY)", "result": "PASS", "evidence": "violating world: 0 contradictions, 0 impossible events, statuses preserved, distinct record kinds" },
+    { "id": 3, "name": "No silent mutation (G)", "result": "PASS", "evidence": "no auto-removal, no impossibility declared, no unrelated taint" },
+    { "id": 4, "name": "Multi-depth recomputation, not historical counter (M)", "result": "PASS", "evidence": "m1 valid → m2 violation → m3 valid again; later-branch removal restores validity" },
+    { "id": 5, "name": "Occurrences, not writes (E)", "result": "PASS", "evidence": "rejected writes cannot trip the bound; retractFact on nonexistent id changes nothing" },
+    { "id": 6, "name": "Hash semantics (H)", "result": "PASS", "evidence": "stateHash folds constraintViolations (world-state.ts:437); identityHash unchanged (:439-443); Verrin hash bit-identical to frozen; stripped-Ordos reproduces frozen hash exactly" },
+    { "id": 7, "name": "EXCLUDES vs cardinality (X1-X3)", "result": "PASS", "evidence": "forcing both recognition+rite yields BOTH violation/constraint/rite-at-most-one AND contra:…excludes" },
+    { "id": 8, "name": "Cross-canon parameterized universal (ncr-004 rule)", "result": "PASS", "evidence": "it.each over {verrin, ordos} (constraints.test.ts:256-263), both 0 violations at baseline; loop test for real EventType references" },
+    { "id": 9, "name": "Adversarial agreement (K)", "result": "PASS", "evidence": "diagnostic.observed === occurrenceQueryCount asserted and independently probed on toy canon and Ordos" },
+    { "id": 10, "name": "Scope (S1)", "result": "PASS", "evidence": "CardinalityConstraint = {id, typeId, bound, note?} only; scoped forms documented as future abstraction" },
+    { "id": 11, "name": "EXACTLY_ONE composition (D)", "result": "PASS", "evidence": "no third primitive; composed on real Ordos: 0 investitures → AT_LEAST_ONE fires, 2 → AT_MOST_ONE fires" },
+    { "id": 12, "name": "Frozen baseline integrity", "result": "PASS", "evidence": "somnium-p005-final = 5b41deda; worktree clean; diff-stat only anticipated files; Verrin.ts blob identical; 507 = 479 + 28; no test bent" }
+  ],
+  "verifier_judgement_on_correctness": "All twelve claims verified by execution rather than by reading. The orthogonality held under every attack: a cardinality violation never taints truth, never mutates the world, never leaks across branches, and cannot be created or repaired by writes that do not change the occurrence set. The hash discipline is exact: constraint-free canons hash bit-identically to the frozen baseline, and the Ordos delta is provably the constraints block alone. The one residual (H1's WorldDiff clause) is a documentation-honesty gap, not an engine defect.",
+  "linked_tasks": ["P-006 constraint-layer cardinality (req-006)"],
+  "nonconformities": [],
+  "evidence_path": "src/derive/constraints.ts, src/derive/constraints.test.ts, src/canon/types.ts, src/canon/ordos.ts, docs/P006-CARDINALITY.md, experiments/p006/predictions.md"
+}

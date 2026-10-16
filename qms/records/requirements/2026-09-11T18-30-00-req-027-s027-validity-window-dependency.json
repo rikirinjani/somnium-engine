@@ -1,0 +1,30 @@
+{
+  "requirement_id": "req-027",
+  "title": "S027 — Validity-window dependency / reconsideration boundary validation",
+  "category": "requirements/experiment",
+  "source": "S027 experiment specification (2026-09-11)",
+  "trace_id": "s027-validity-window-dependency",
+  "date": "2026-09-11T18:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "b540e13",
+  "branch": "s027",
+  "experiment_commit": "94533fe",
+  "description": "Validate whether adding fact validity-window dependencies (validFrom/validTo -> fact node) and correct member-first/fixpoint reconsideration reduces R \\ closure to zero across the known failure corpus.",
+  "result_summary": "HOLD. Added the S026 missing class to the reverse index (fact.validFrom/validTo -> fact.id). In this design the reset-to-NEITHER supplies member-first scheduling, so V1 IS V3 and V0 IS V2. RESULTS (400 prefixes per canon): verrin V0 mismatch=0 R\\closure=6 -> V1 mismatch=0 R\\closure=0; ordos V0 mismatch=186 R\\closure=353 -> V1 mismatch=38 R\\closure=67. So the validity-window dependency is NECESSARY and SUFFICIENT for verrin (incremental Phase A becomes exact) but on ordos only REDUCES the residue. At least one further authoritative dependency class is missing from the index (hypotheses, not measured: overriddenCells -> fact node, retracted -> fact node, node-set changes). S021's aggregate remains exact; the gap is entirely in the dependency index. No incremental engine, no second evaluator, no heuristic edges.",
+  "variant_results": {
+    "verrin_V0_old_closure": {"mismatch": 0, "rOutsideClosure": 6},
+    "verrin_V1_validity_aware": {"mismatch": 0, "rOutsideClosure": 0},
+    "ordos_V0_old_closure": {"mismatch": 186, "rOutsideClosure": 353},
+    "ordos_V1_validity_aware": {"mismatch": 38, "rOutsideClosure": 67}
+  },
+  "note_v2_v3": "In this design the reset-to-NEITHER supplies member-first scheduling, so V1 IS V3 and V0 IS V2; a design where scheduling is independent of reset was not built.",
+  "remaining_boundary": "at least one further authoritative dependency class is missing for ordos (hypotheses: overriddenCells -> fact node, retracted -> fact node, node-set changes)",
+  "next_experiment": "systematically enumerate and add the remaining authoritative Phase-A dependency classes (overriddenCells -> fact node, retracted -> fact node, node-set changes) and re-run the V1 differential; if R \\ closure reaches 0 on ordos the boundary is compact (class A).",
+  "limitations": [
+    "800 prefixes total; no S024 synthetic corpus, no long horizon, no ordering-policy sweep, no queue metrics.",
+    "V2/V3 collapse into V0/V1 by construction in this design.",
+    "The remaining missing class is hypothesised, not measured.",
+    "Empirical only; no proof."
+  ],
+  "references": ["experiments/s027/REPORT.md", "experiments/s027/probe.ts", "S026 report / req-026", "S025 report / req-025"]
+}
