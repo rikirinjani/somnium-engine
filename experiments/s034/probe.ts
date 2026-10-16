@@ -494,15 +494,15 @@ console.log("\n=== S034 — Phase 3: adversarial histories ===\n");
     const facts = canon.facts;
     const cells = [...new Set(facts.map((f) => `${f.subject}|${f.predicate}`))];
     for (const cell of cells.slice(0, 5)) {
-      const [subject, predicate] = cell.split("|");
+      const [subject, predicate] = cell.split("|") as [string, string];
       const objs = facts.filter((f) => f.subject === subject && f.predicate === predicate).map((f) => f.object);
       if (objs.length < 2) continue;
       // set → retract → set with different objects
       const chain: Intervention[] = [
-        setFact(subject, predicate, objs[0], "adv1"),
-        setFact(subject, predicate, objs[1], "adv2"),
+        setFact(subject, predicate, objs[0]!, "adv1"),
+        setFact(subject, predicate, objs[1]!, "adv2"),
         retractFact(facts.find((f) => f.subject === subject && f.predicate === predicate)!.id, "adv3"),
-        setFact(subject, predicate, objs[0], "adv4"),
+        setFact(subject, predicate, objs[0]!, "adv4"),
       ];
       let incModel = buildModel(canon, []);
       for (const iv of chain) incModel = incrementalApply(canon, incModel, iv);

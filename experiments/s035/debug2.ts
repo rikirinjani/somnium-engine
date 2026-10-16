@@ -15,8 +15,8 @@ function rng(seed: number): () => number {
 function history(canon: any, h: number, seed: number): Intervention[] {
   const evs = canon.entities.filter((e: any) => e.kind === "Event").map((e: any) => e.id).sort();
   const ents = canon.entities.filter((e: any) => e.kind !== "Event" && e.kind !== "EventType").map((e: any) => e.id).sort();
-  const preds = [...new Set(canon.facts.map((f: any) => f.predicate))].sort();
-  const objs = [...new Set(canon.facts.map((f: any) => f.object))];
+  const preds: string[] = [...new Set(canon.facts.map((f: any) => f.predicate))].sort() as string[];
+  const objs: any[] = [...new Set(canon.facts.map((f: any) => f.object))];
   const factIds = canon.facts.map((f: any) => f.id).sort();
   const edges = [...canon.edges].sort((a: any, b: any) => a.id.localeCompare(b.id));
   const rand = rng(seed);

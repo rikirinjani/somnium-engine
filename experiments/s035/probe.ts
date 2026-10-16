@@ -559,7 +559,7 @@ console.log("=== S035 — Phase 2: ownership / mutation contract ===\n");
   // Test 2: clone independence — two branches from same point diverge
   {
     let base = buildModel(canon, []);
-    for (let i = 0; i < 5; i++) base = incrementalApply(canon, base, h[i]!).model ? incrementalApply(canon, base, h[i]!) : base;
+    for (let i = 0; i < 5; i++) base = (incrementalApply(canon, base, h[i]!) as any).model ? incrementalApply(canon, base, h[i]!) : base;
     // Deep clone via serialize/restore
     const snap = serialize(base);
     let branchA = restore(canon, snap);
