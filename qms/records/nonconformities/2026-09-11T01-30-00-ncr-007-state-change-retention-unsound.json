@@ -1,0 +1,31 @@
+{
+  "ncr_id": "ncr-007",
+  "title": "State-change retention is unsound: the semantic state omits the fold's accumulators",
+  "category": "nonconformities/design",
+  "source": "S010 experiment (oracle-guided retention, M-H)",
+  "trace_id": "s010-fold-derived-history",
+  "date": "2026-09-11T01:30:00Z",
+  "severity": "high",
+  "status": "open",
+  "found_in": "experiments/s010/retain.ts (retainByStateChange), the S010 candidate mechanism for fold-derived retention",
+  "requirement_violated": "A retained history R is sufficient for H iff semanticState(derive(H)) == semanticState(derive(R)), stateHash equal, worldDiff empty. M-H violates this.",
+  "description": "M-H keeps an intervention iff applying it changes the semantic world, using derive as the oracle. This assumes the semantic state captures everything a later intervention depends on. It does not: the fold's accumulators (negated, forcedBy, retracted, overriddenCells) are NOT part of effectiveSemanticState. An intervention can be a semantic no-op while still setting an accumulator entry that changes what a later intervention means.",
+  "minimal_counterexample": {
+    "canon": "verrin (SEED canon, not synthetic)",
+    "history": ["forceEvent(ev/maren-return)", "negateEvent(ev/maren-return)"],
+    "retained_by_M_H": ["negateEvent(ev/maren-return)"],
+    "legacy_result": "ev/maren-return = CONTRADICTORY, with contradiction contra:ev/maren-return:force-vs-negate",
+    "retained_result": "ev/maren-return = EXCLUDED, no contradiction",
+    "cause": "forceEvent on an already-ESTABLISHED root event does not change the semantic state, so M-H drops it. But buildModel sets forcedBy[ev/maren-return]; a later negateEvent then yields a force-vs-negate contradiction (CONTRADICTORY) rather than EXCLUDED."
+  },
+  "scope": "Not limited to the seed canon or to events. Every accumulator (negated/forcedBy/retracted/overriddenCells) has the same property. M-H failed 238/517 (verrin) and 220/517 (ordos) differential cases across every operation. The failure is a property of the retention CRITERION, not of any single operation.",
+  "relationship_to_ncr_006": "Same structural failure class as NCR-006 (a no-op operation whose accumulator entry becomes observable later), but on the EVENT-STATUS dimension instead of fact identity, and with a shorter witness (2 interventions vs 3). NCR-006 breaks accumulator-only retention (M-B); NCR-007 breaks state-change retention (M-H). Together they show neither observable is sufficient.",
+  "proposed_correction": "Have the authoritative fold emit, per intervention, whether it changed the FOLD STATE (accumulators + effective facts), not merely the semantic state. A retention driven by that flag is sound by construction and introduces no second semantic authority, because the flag is produced by the fold itself. This requires a src/ change and is left for a separate productionization task.",
+  "recommendation": "Do not adopt any state-change-based retention. Do not adopt accumulator-only retention (incomplete, NCR-006). The target architecture (full history -> fold -> retained history) is not realizable from the current fold's public outputs.",
+  "evidence": [
+    "experiments/s010/probe.ts",
+    "experiments/s010/probe-mh.ts",
+    "experiments/s010/probe-mh-random.ts",
+    "experiments/s010/REPORT.md §9"
+  ]
+}
