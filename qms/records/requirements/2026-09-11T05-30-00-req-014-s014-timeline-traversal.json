@@ -1,0 +1,23 @@
+{
+  "requirement_id": "req-014",
+  "title": "S014 — Fold-state delta / long-horizon timeline traversal",
+  "category": "requirements/experiment",
+  "source": "S014 experiment specification (2026-09-11)",
+  "trace_id": "s014-timeline-traversal",
+  "date": "2026-09-11T05:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "dabc4a1",
+  "branch": "s014",
+  "experiment_commit": "59ba2c2",
+  "description": "Test whether S012's validated FoldStateDelta retention can make long-horizon timeline traversal cheaper while preserving EXACT derive() semantics for every prefix (not just the terminal state).",
+  "result_summary": "Promising but experimental. Retained traversal (keep H[j] iff foldStateDeltas components non-empty) is exactly prefix-correct: 0 mismatches on all 1001 prefixes at H=1000, all 3001 at H=3000, 302 sampled at H=10000, and the S009/S010 witnesses. Branch isolation and determinism pass; derive() remains the sole semantic authority. Performance is workload-dependent: sparse retention (0.6-0.7%) gives 6.88x/6.69x speedup; medium/dense (~47% retention) gives 0.87x-1.10x (no benefit); H=10000 gives 1.12x/1.46x. The bottleneck is the per-prefix propagation fixpoint (O(model)), which retention does not touch. H=50k/100k not run (O(H^2) traversal without incremental propagation).",
+  "bottleneck": "per-prefix propagation fixpoint (propagateJudgments), O(model), unchanged by retention",
+  "next_experiment": "incremental propagation - recompute only the affected subgraph of the fixpoint per step; that is what would let retention's chain reduction become an end-to-end traversal speedup for dense timelines.",
+  "limitations": [
+    "H=50k/100k not measured (O(H^2) traversal without incremental propagation).",
+    "Medium and dense workloads coincide (~47% retention) in this generator.",
+    "Harness slice/filter bookkeeping is included in retained timings and slightly penalises it.",
+    "Empirical only; no Big-O proof."
+  ],
+  "references": ["experiments/s014/REPORT.md", "experiments/s014/results/results.json", "S012 report / req-012", "S013 report / req-013"]
+}
