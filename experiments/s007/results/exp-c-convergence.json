@@ -1,0 +1,194 @@
+{
+  "env": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 4,
+    "cpuModel": "AMD Ryzen 3 4300U with Radeon Graphics         ",
+    "totalMemBytes": 7916294144,
+    "freeMemBytes": 1528143872,
+    "nodeVersion": "v22.23.2",
+    "tsVersion": "5.9.3",
+    "commit": "443d3d9aba8565900ba156e5cef5bd1ff4b9ee70",
+    "timestamp": "2026-09-10T15:48:01.491Z"
+  },
+  "groups": [
+    {
+      "canon": "verrin",
+      "label": "setFact-idempotent:char/tomas:instance_of",
+      "histories": 3,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "verrin",
+      "label": "negate-idempotent:ev/maren-return",
+      "histories": 2,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "verrin",
+      "label": "commute:char/kael.affiliated_with|char/maren.based_in",
+      "histories": 2,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "verrin",
+      "label": "redundant-8-rewrites:fact/academy-in-valdar",
+      "histories": 2,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "verrin",
+      "label": "convergent-repetition:fact/vara-in-valdar",
+      "histories": 10,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "ordos",
+      "label": "setFact-idempotent:char/petronius:made_of",
+      "histories": 3,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "ordos",
+      "label": "negate-idempotent:ev/old-warden-dies",
+      "histories": 2,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "ordos",
+      "label": "commute:char/anselm.chartered_by|char/galen.grants_veto_to",
+      "histories": 2,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "ordos",
+      "label": "redundant-8-rewrites:fact/chapter-chartered",
+      "histories": 2,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    },
+    {
+      "canon": "ordos",
+      "label": "convergent-repetition:fact/seal-held-anselm",
+      "histories": 10,
+      "distinctHashes": 1,
+      "converged": true,
+      "pairwiseDiffEmpty": true
+    }
+  ],
+  "atScale": [
+    {
+      "canon": "verrin",
+      "histories": 10,
+      "horizon": 10,
+      "distinctStates": 10,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 439320576,
+      "totalMs": 5.175000000017462,
+      "status": "ok"
+    },
+    {
+      "canon": "verrin",
+      "histories": 100,
+      "horizon": 10,
+      "distinctStates": 100,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 439709696,
+      "totalMs": 53.78190000000177,
+      "status": "ok"
+    },
+    {
+      "canon": "verrin",
+      "histories": 1000,
+      "horizon": 10,
+      "distinctStates": 1000,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 443916288,
+      "totalMs": 490.68979999999283,
+      "status": "ok"
+    },
+    {
+      "canon": "verrin",
+      "histories": 5000,
+      "horizon": 10,
+      "distinctStates": 5000,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 277602304,
+      "totalMs": 2445.7636999999813,
+      "status": "ok"
+    },
+    {
+      "canon": "ordos",
+      "histories": 10,
+      "horizon": 10,
+      "distinctStates": 10,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 277602304,
+      "totalMs": 4.856300000014016,
+      "status": "ok"
+    },
+    {
+      "canon": "ordos",
+      "histories": 100,
+      "horizon": 10,
+      "distinctStates": 100,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 277626880,
+      "totalMs": 53.38279999999213,
+      "status": "ok"
+    },
+    {
+      "canon": "ordos",
+      "histories": 1000,
+      "horizon": 10,
+      "distinctStates": 1000,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 277413888,
+      "totalMs": 515.3633000000264,
+      "status": "ok"
+    },
+    {
+      "canon": "ordos",
+      "histories": 5000,
+      "horizon": 10,
+      "distinctStates": 5000,
+      "convergenceRatio": 1,
+      "maxHistoriesPerState": 1,
+      "medianHistoriesPerState": 1,
+      "peakRssBytes": 277590016,
+      "totalMs": 2471.0826000000234,
+      "status": "ok"
+    }
+  ]
+}

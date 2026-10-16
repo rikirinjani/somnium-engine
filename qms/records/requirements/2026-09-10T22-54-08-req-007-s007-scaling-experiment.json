@@ -1,0 +1,40 @@
+{
+  "requirement_id": "req-007",
+  "title": "S007 — Long-horizon semantic state scaling experiment",
+  "category": "requirements/experiment",
+  "source": "S007 experiment specification (2026-09-10)",
+  "trace_id": "s007-scaling-experiment",
+  "date": "2026-09-10T22:54:08Z",
+  "status": "complete",
+  "ancestor_commit": "443d3d9",
+  "branch": "s007",
+  "description": "Empirically measure how the corrected P-007 semantic-state architecture behaves under extreme long-horizon counterfactual workloads. Specifically: does the canonical semantic representation remain computationally and memory-efficient as intervention history and world branching grow? P-007 is frozen and must not be modified; all experiment code is isolated.",
+  "constraints": [
+    "Do not modify P-005, S006, frozen P-007, canonical acceptance fixtures, frozen canon hashes, or production semantics.",
+    "Record the exact P-007 ancestor commit (443d3d9).",
+    "All experiment-specific changes remain isolated to the experiment branch.",
+    "Every experiment reproducible from (seed, canon, configuration, software commit).",
+    "Do not optimise prematurely; measure first.",
+    "The experiment succeeds even if Somnium scales badly, provided the limit is identified and explained."
+  ],
+  "experiments": [
+    "A — linear horizon: W0 -> I1 -> W1 -> ... -> WH at H = 10, 100, 1000, 10000, 100000.",
+    "B — branching: controlled branch factors and depths; trajectories vs unique states.",
+    "C — convergence/collision: different histories reaching equivalent effective worlds.",
+    "D — WorldDiff cost: equal / small-delta / large-delta pairwise comparisons.",
+    "E — parallel scaling: 1..16 workers, throughput/speedup/efficiency, determinism preserved."
+  ],
+  "acceptance_criteria": [
+    "Baseline recorded: test count, pass count, frozen canon hashes, commit, runtime.",
+    "Wall-clock, throughput, per-phase timings (canonicalization/representation/hashing/diff/branch-gen), peak RSS, representation size, diff size, branches, unique states, convergent states, genealogy depth, divergence distribution measured where applicable.",
+    "Determinism verified: equivalent runs produce identical semantic results and hashes.",
+    "Report produced with sections 1-12 (environment, baseline, linear, branching, convergence, WorldDiff, parallel, bottleneck, complexity, resource envelope, findings, recommendation).",
+    "Frozen P-007 untouched; src/ has zero diff vs 443d3d9."
+  ],
+  "result_summary": "Canonical semantic representation is BOUNDED (~50KB verrin / ~39KB ordos) and flat from H=1000 to H=100000: stateHash and worldDiff are history-independent. Single-derive is O(H); the chain walk is O(H^2). Parallel scaling peaks at 1.10x on 4 cores and degrades beyond. The only architectural bottleneck is non-incremental derivation.",
+  "references": [
+    "experiments/s007/REPORT.md",
+    "experiments/s007/results/*.json",
+    "docs/P007-CONVERGENCE.md"
+  ]
+}
