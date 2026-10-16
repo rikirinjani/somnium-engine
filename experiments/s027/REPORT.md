@@ -128,4 +128,4 @@ P-007 and frozen S021–S026 untouched; nothing merged.
 | | |
 |---|---|
 | Ancestor | `b540e13` |
-| S027 experiment commit | `{{S027_COMMIT}}` |
+| S027 experiment commit | `94533fe` |
