@@ -175,4 +175,4 @@ No production semantics changed, no incremental engine merged. P-007 and frozen 
 | | |
 |---|---|
 | Ancestor | `19f6c98` |
-| S025 experiment commit | `{{S025_COMMIT}}` |
+| S025 experiment commit | `d1d6f66` |
