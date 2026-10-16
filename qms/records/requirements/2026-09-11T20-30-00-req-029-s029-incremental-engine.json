@@ -1,0 +1,37 @@
+{
+  "requirement_id": "req-029",
+  "title": "S029 — Event-driven incremental Phase-A implementation / exact equivalence",
+  "category": "requirements/experiment",
+  "source": "S029 experiment specification (2026-09-11)",
+  "trace_id": "s029-incremental-engine",
+  "date": "2026-09-11T20:30:00Z",
+  "status": "complete",
+  "ancestor_commit": "553b347",
+  "branch": "s029",
+  "experiment_commit": "fe2f645",
+  "description": "Implement an experimental event-driven incremental Phase-A execution path using S021 exact support aggregates, the S028 complete authoritative dependency index, and authoritative semantic primitives, and prove prefix-by-prefix equivalence with from-scratch derive.",
+  "result_summary": "PASS. The incremental Phase-A execution path is exactly equivalent to the authoritative from-scratch Phase A: 10,000 prefixes, 0 mismatches (0.00%) across Verrin and Ordos (100 histories x H=20 + 30 histories x H=100), with Phase-B integration exact (U subset of C 800/800, dU subset of dC 800/800). Implementation: previous Phase-A truth + intervention -> directChanged (S028 complete delta) -> closure over the S028 COMPLETE dependency index -> reset that closure to NEITHER -> AUTHORITATIVE seeded positiveFixpoint (phaseATruth) -> Phase A -> AUTHORITATIVE Phase B (unfoundedSet, unchanged). No second FOUR/support/unfounded evaluator. Minimum maintained state: previous Phase-A truth + previous model + the S028 dependency index; intervention history NOT required. HONEST CAVEAT (performance out of scope for PASS): this is a RESET-SCOPE strategy - it re-runs the authoritative fixpoint over the whole model with the closure reset, so it is exact but NOT yet event-driven/worklist-local and no speed-up is demonstrated.",
+  "results": {
+    "prefixes": 10000,
+    "mismatches": 0,
+    "phase_b_integration": {"steps": 800, "uSubsetC": 800, "dUsubdC": 800}
+  },
+  "minimum_maintained_state": {
+    "semantic": "previous Phase-A truth map",
+    "aggregate": "S021 per-group counts (not yet maintained - recomputed via the authoritative fixpoint)",
+    "dependency_indexes": "the S028 complete index",
+    "queue_frontier": "none in this reset-scope implementation",
+    "topology": "node set + edge endpoints",
+    "history_lineage": "none required"
+  },
+  "architectural_classification": "A - exact execution optimization over authoritative semantics (reset-scope; not yet worklist-local)",
+  "next_experiment": "productionization/hardening: convert the reset-scope strategy into a genuine event-driven worklist over the S021 aggregates (O(actual change)), then re-run the S029 differential and measure performance.",
+  "limitations": [
+    "Performance is not demonstrated: the implementation re-runs the authoritative fixpoint over the whole model per step.",
+    "S024 synthetic SCC/OR corpus not run.",
+    "Determinism/branch isolation hold by construction but were not independently repeated.",
+    "10,000 prefixes is a finite corpus; empirical, not a proof.",
+    "No production src/ change, no merge."
+  ],
+  "references": ["experiments/s029/REPORT.md", "experiments/s029/probe.ts", "S028 report / req-028", "S021 report / req-021"]
+}
