@@ -139,4 +139,4 @@ P-007 and frozen S021–S031 untouched; nothing merged.
 | | |
 |---|---|
 | Ancestor | `ad8340d` |
-| S032 experiment commit | `{{S032_COMMIT}}` |
+| S032 experiment commit | `c064ab4` |
